@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
-import './screens/departScreen.dart'; // Import the DepartmentScreen
-
-void main() {
-  runApp(const MyApp());
-}
+import 'main_layout.dart'; // Correct import
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -15,8 +11,14 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.indigo,
+        useMaterial3: true,
       ),
-      home: const DepartmentScreen(),
+      home: const MainLayout(),
     );
   }
+}
+
+// Add this entry point:
+void main() {
+  runApp(const MyApp());
 }

@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
-import '../components/cards/searchBar.dart'; // Import your component
+import '../components/cards/searchBar.dart';
 
-class DepartmentScreen extends StatelessWidget {
+class DepartmentScreen extends StatefulWidget {
   const DepartmentScreen({super.key});
 
   @override
+  State<DepartmentScreen> createState() => _DepartmentScreenState();
+}
 
+class _DepartmentScreenState extends State<DepartmentScreen> {
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Departments")),
+      appBar: AppBar(
+        title: const Text("Departments"),
+        backgroundColor: Colors.indigo.shade100,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -30,4 +37,3 @@ class DepartmentScreen extends StatelessWidget {
     );
   }
 }
-
