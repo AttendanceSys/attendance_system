@@ -1,180 +1,139 @@
 import 'package:flutter/material.dart';
 
 class AdminSidebar extends StatelessWidget {
+  final Function(int) onItemSelected;
   final int selectedIndex;
-  final ValueChanged<int> onDestinationSelected;
-  final String userName;
-  final String userInitial;
-
-  final List<_SidebarItem> _items = const [
-    _SidebarItem('Dashboard', Icons.dashboard_outlined),
-    _SidebarItem('Faculties', Icons.account_tree_outlined),
-    _SidebarItem('Teachers', Icons.person_pin_outlined),
-    _SidebarItem('Admins', Icons.group_outlined),
-    _SidebarItem('User Handling', Icons.manage_accounts),
-  ];
+  final bool collapsed;
 
   const AdminSidebar({
-    super.key,
+    Key? key,
+    required this.onItemSelected,
     required this.selectedIndex,
-    required this.onDestinationSelected,
-    this.userName = 'Admin User',
-    this.userInitial = 'A',
-  });
+    this.collapsed = false,
+  }) : super(key: key);
 
-  Widget _buildSidebar(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: 220,
-      color: Colors.indigo.shade700,
+      width: collapsed ? 60 : 220,
+      color: const Color(0xFF3B4B9B),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Center(
-              child: Text(
-                userName,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-                overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 30),
+          if (!collapsed)
+            const Text(
+              "Xasan Cali",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          if (!collapsed) const SizedBox(height: 10),
+          CircleAvatar(
+            radius: 25,
+            backgroundColor: const Color(0xFF70C2FF),
+            child: Text(
+              "X",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          Center(
-            child: CircleAvatar(
-              radius: 22,
-              backgroundColor: Colors.indigo.shade400,
-              child: Text(
-                userInitial,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+          const SizedBox(height: 20),
+          SidebarItem(
+            icon: Icons.home_outlined,
+            title: "Dashboard",
+            isSelected: selectedIndex == 0,
+            onTap: () => onItemSelected(0),
+            collapsed: collapsed,
           ),
-          const SizedBox(height: 16),
-          const Divider(color: Colors.white24, thickness: 1),
-          ...List.generate(_items.length, (index) {
-            final item = _items[index];
-            final isSelected = selectedIndex == index;
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              child: Material(
-                color: isSelected ? Colors.indigo : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => onDestinationSelected(index),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                    child: Row(
-                      children: [
-                        Icon(item.icon, color: isSelected ? Colors.white : Colors.white70),
-                        const SizedBox(width: 12),
-                        Text(
-                          item.title,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.white70,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: ElevatedButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Logout pressed')),
-                );
-              },
-              icon: const Icon(Icons.logout, color: Colors.white),
-              label: const Text('Logout', style: TextStyle(color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.indigo.shade400,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              ),
-            ),
+          SidebarItem(
+            icon: Icons.account_tree_outlined,
+            title: "Faculties",
+            isSelected: selectedIndex == 1,
+            onTap: () => onItemSelected(1),
+            collapsed: collapsed,
           ),
-          const SizedBox(height: 12),
+          SidebarItem(
+            icon: Icons.school_outlined,
+            title: "Teachers",
+            isSelected: selectedIndex == 2,
+            onTap: () => onItemSelected(2),
+            collapsed: collapsed,
+          ),
+          SidebarItem(
+            icon: Icons.groups_outlined,
+            title: "Admins",
+            isSelected: selectedIndex == 3,
+            onTap: () => onItemSelected(3),
+            collapsed: collapsed,
+          ),
+          SidebarItem(
+            icon: Icons.person,
+            title: "User Handling",
+            isSelected: selectedIndex == 4,
+            onTap: () => onItemSelected(4),
+            collapsed: collapsed,
+          ),
         ],
       ),
     );
   }
+}
+
+class SidebarItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final bool collapsed;
+
+  const SidebarItem({
+    Key? key,
+    required this.icon,
+    required this.title,
+    required this.isSelected,
+    required this.onTap,
+    this.collapsed = false,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    // Responsive: show Drawer on small screens, sidebar on large screens
-    final isMobile = MediaQuery.of(context).size.width < 600;
-    if (isMobile) {
-      return Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(color: Colors.indigo.shade700),
-              child: Column(
-                children: [
-                  Text(
-                    userName,
-                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: Colors.indigo.shade400,
-                    child: Text(
-                      userInitial,
-                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+    return Material(
+      color: isSelected ? Colors.white.withOpacity(0.15) : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: EdgeInsets.symmetric(
+            horizontal: collapsed ? 0 : 24,
+            vertical: 12,
+          ),
+          child: Row(
+            mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 22),
+              if (!collapsed) ...[
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
                     ),
                   ),
-                ],
-              ),
-            ),
-            ...List.generate(_items.length, (index) {
-              final item = _items[index];
-              return ListTile(
-                leading: Icon(item.icon, color: Colors.indigo),
-                title: Text(item.title),
-                selected: selectedIndex == index,
-                onTap: () => onDestinationSelected(index),
-              );
-            }),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.indigo),
-              title: const Text('Logout'),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Logout pressed')),
-                );
-              },
-            ),
-          ],
+                ),
+              ],
+            ],
+          ),
         ),
-      );
-    } else {
-      return _buildSidebar(context);
-    }
+      ),
+    );
   }
-}
-
-class _SidebarItem {
-  final String title;
-  final IconData icon;
-  const _SidebarItem(this.title, this.icon);
 }
