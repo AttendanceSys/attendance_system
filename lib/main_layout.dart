@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'components/admin_sidebar.dart';
-import 'screens/departScreen.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -28,38 +26,101 @@ class _MainLayoutState extends State<MainLayout> {
     Center(child: Text('User Handling Page')),
   ];
 
+  // Use icons that closely match the image (outlined, thin, and relevant)
   final List<IconData> _icons = [
-    Icons.dashboard_outlined,
-    Icons.account_tree_outlined,
-    Icons.person_pin_outlined,
-    Icons.group_outlined,
-    Icons.manage_accounts,
+    Icons.home_outlined, // Dashboard
+    Icons.account_tree_outlined, // Faculties
+    Icons
+        .cast_for_education_outlined, // Teachers (or use Icons.school_outlined)
+    Icons.groups_outlined, // Admins
+    Icons.person_outline, // User Handling
   ];
 
-  Widget buildMenuList({required bool isMobile}) {
+  Widget buildSidebarContent({required bool isMobile}) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ...List.generate(_titles.length, (index) {
-          return ListTile(
-            leading: Icon(_icons[index], color: Colors.white),
-            title: Text(
-              _titles[index],
-              style: const TextStyle(color: Colors.white),
+        const SizedBox(height: 24),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Center(
+            child: Text(
+              'Admin User',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
-            selected: _selectedIndex == index,
-            selectedTileColor: Colors.indigo,
-            onTap: () {
-              setState(() {
-                _selectedIndex = index;
-                if (isMobile) Navigator.pop(context);
-              });
-            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: CircleAvatar(
+            radius: 22,
+            backgroundColor: Colors.indigo.shade400,
+            child: const Text(
+              'A',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Divider(color: Colors.white24, thickness: 1),
+        ...List.generate(_titles.length, (index) {
+          final isSelected = _selectedIndex == index;
+          return Container(
+            margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+            decoration: isSelected
+                ? BoxDecoration(
+                    color: const Color(0xFF4E589A),
+                    borderRadius: BorderRadius.circular(8),
+                  )
+                : null,
+            child: ListTile(
+              leading: Icon(_icons[index], color: Colors.white, size: 28),
+              title: Text(
+                _titles[index],
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 2,
+              ),
+              selected: isSelected,
+              selectedTileColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              onTap: () {
+                setState(() {
+                  _selectedIndex = index;
+                  if (isMobile) Navigator.pop(context);
+                });
+              },
+            ),
           );
         }),
         const Divider(color: Colors.white24),
         ListTile(
-          leading: const Icon(Icons.logout, color: Colors.white),
-          title: const Text('Logout', style: TextStyle(color: Colors.white)),
+          leading: const Icon(Icons.logout, color: Colors.white, size: 28),
+          title: const Text(
+            'Logout',
+            style: TextStyle(color: Colors.white, fontSize: 17),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 2,
+          ),
           onTap: () {
             ScaffoldMessenger.of(
               context,
@@ -90,42 +151,10 @@ class _MainLayoutState extends State<MainLayout> {
       drawer: isMobile
           ? Drawer(
               child: Container(
-                color: Colors.indigo.shade700,
+                color: const Color(0xFF3B438D),
                 child: ListView(
                   padding: EdgeInsets.zero,
-                  children: [
-                    DrawerHeader(
-                      decoration: BoxDecoration(color: Colors.indigo.shade700),
-                      child: Column(
-                        children: [
-                          Center(
-                            child: Text(
-                              'Admin User',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          CircleAvatar(
-                            radius: 22,
-                            backgroundColor: Colors.indigo.shade400,
-                            child: const Text(
-                              'A',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    buildMenuList(isMobile: true),
-                  ],
+                  children: [buildSidebarContent(isMobile: true)],
                 ),
               ),
             )
@@ -135,45 +164,8 @@ class _MainLayoutState extends State<MainLayout> {
           if (!isMobile)
             Container(
               width: 220,
-              color: Colors.indigo.shade700,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Center(
-                      child: Text(
-                        'Admin User',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Center(
-                    child: CircleAvatar(
-                      radius: 22,
-                      backgroundColor: Colors.indigo.shade400,
-                      child: const Text(
-                        'A',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(color: Colors.white24, thickness: 1),
-                  Expanded(child: buildMenuList(isMobile: false)),
-                ],
-              ),
+              color: const Color(0xFF3B438D),
+              child: buildSidebarContent(isMobile: false),
             ),
           if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
           Expanded(
