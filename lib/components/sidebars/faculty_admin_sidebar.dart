@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
-
-class AdminSidebar extends StatelessWidget {
+class FacultyAdminSidebar extends StatelessWidget {
   final Function(int) onItemSelected;
   final int selectedIndex;
   final bool collapsed;
 
-  const AdminSidebar({
+  const FacultyAdminSidebar({
     Key? key,
     required this.onItemSelected,
     required this.selectedIndex,
@@ -22,12 +22,11 @@ class AdminSidebar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 24),
-          // Profile Section
           if (!collapsed)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Text(
-                "Xasan Cali",
+                "Axmed Faarax",
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -42,7 +41,7 @@ class AdminSidebar extends StatelessWidget {
             radius: 25,
             backgroundColor: const Color(0xFF70C2FF),
             child: const Text(
-              "X",
+              "A",
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 22,
@@ -51,45 +50,64 @@ class AdminSidebar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          // Sidebar Items
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
-              shrinkWrap: true,
               children: [
-                SidebarItem(
+                _SidebarItem(
                   icon: Icons.home_outlined,
                   title: "Dashboard",
                   isSelected: selectedIndex == 0,
                   onTap: () => onItemSelected(0),
                   collapsed: collapsed,
                 ),
-                SidebarItem(
-                  icon: Icons.account_tree_outlined,
-                  title: "Faculties",
+                _SidebarItem(
+                  icon: LucideIcons.settings,
+                  title: "Departments",
                   isSelected: selectedIndex == 1,
                   onTap: () => onItemSelected(1),
                   collapsed: collapsed,
                 ),
-                SidebarItem(
-                  icon: Icons.school_outlined,
-                  title: "Teachers",
+                _SidebarItem(
+                  icon: LucideIcons.user2,
+                  title: "Students",
                   isSelected: selectedIndex == 2,
                   onTap: () => onItemSelected(2),
                   collapsed: collapsed,
                 ),
-                SidebarItem(
-                  icon: Icons.groups_outlined,
-                  title: "Admins",
+                _SidebarItem(
+                  icon: LucideIcons.bookOpen,
+                  title: "Subjects",
                   isSelected: selectedIndex == 3,
                   onTap: () => onItemSelected(3),
                   collapsed: collapsed,
                 ),
-                SidebarItem(
-                  icon: Icons.person,
-                  title: "User Handling",
+                _SidebarItem(
+                  icon: LucideIcons.users2,
+                  title: "Classes",
                   isSelected: selectedIndex == 4,
                   onTap: () => onItemSelected(4),
+                  collapsed: collapsed,
+                ),
+                _SidebarItem(
+                  icon: LucideIcons.clipboardList,
+                  title: "Attendance",
+                  isSelected: selectedIndex == 5,
+                  onTap: () => onItemSelected(5),
+                  collapsed: collapsed,
+                ),
+                _SidebarItem(
+                  icon: LucideIcons.calendarDays,
+                  title: "TimeTable",
+                  isSelected: selectedIndex == 6,
+                  onTap: () => onItemSelected(6),
+                  collapsed: collapsed,
+                ),
+                _SidebarItem(
+                  icon: Icons.person,
+                  title: "User Handling",
+                  isSelected: selectedIndex == 7,
+                  onTap: () => onItemSelected(7),
                   collapsed: collapsed,
                 ),
               ],
@@ -101,20 +119,20 @@ class AdminSidebar extends StatelessWidget {
   }
 }
 
-class SidebarItem extends StatelessWidget {
+class _SidebarItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final bool isSelected;
   final VoidCallback onTap;
   final bool collapsed;
 
-  const SidebarItem({
+  const _SidebarItem({
     Key? key,
     required this.icon,
     required this.title,
     required this.isSelected,
     required this.onTap,
-    this.collapsed = false,
+    required this.collapsed,
   }) : super(key: key);
 
   @override
@@ -129,7 +147,8 @@ class SidebarItem extends StatelessWidget {
             vertical: 12,
           ),
           child: Row(
-            mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+            mainAxisAlignment:
+                collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
             children: [
               Icon(icon, color: Colors.white, size: 22),
               if (!collapsed) ...[
