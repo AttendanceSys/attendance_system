@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'main_layout.dart'; // Correct import
 import 'faculty_admin_layout.dart';
+import 'teacher_layout.dart';
+import 'components/popup/success_popup.dart';
+// add error popup import
+import 'components/popup/error_popup.dart'; // Import for error popup
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -14,7 +19,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.indigo,
         useMaterial3: true,
       ),
-      home: const FacultyAdminLayout(),
+      home: const ErrorPopupDemoPage(),
     );
   }
 }
