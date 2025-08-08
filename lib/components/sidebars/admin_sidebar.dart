@@ -119,26 +119,43 @@ class SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color selectedBg = Colors.white.withOpacity(0.13);
+    final Color selectedText = Colors.white;
+    final Color unselectedText = Colors.white;
+    final Color selectedIcon = Colors.white;
+    final Color unselectedIcon = Colors.white;
     return Material(
-      color: isSelected ? const Color(0x33FFFFFF) : Colors.transparent,
+      color: isSelected ? selectedBg : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      elevation: isSelected ? 2 : 0,
       child: InkWell(
+        borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: collapsed ? 0 : 16,
             vertical: 12,
           ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: isSelected ? selectedBg : Colors.transparent,
+          ),
           child: Row(
             mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
             children: [
-              Icon(icon, color: Colors.white, size: 22),
+              Icon(
+                icon,
+                color: isSelected ? selectedIcon : unselectedIcon,
+                size: 24,
+              ),
               if (!collapsed) ...[
                 const SizedBox(width: 12),
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
+                  style: TextStyle(
+                    color: isSelected ? selectedText : unselectedText,
+                    fontSize: 16,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
               ],

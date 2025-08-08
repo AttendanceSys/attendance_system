@@ -62,42 +62,42 @@ class FacultyAdminSidebar extends StatelessWidget {
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
-                  icon: LucideIcons.settings,
+                  icon: Icons.settings,
                   title: "Departments",
                   isSelected: selectedIndex == 1,
                   onTap: () => onItemSelected(1),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
-                  icon: LucideIcons.user2,
+                  icon: Icons.people_outline,
                   title: "Students",
                   isSelected: selectedIndex == 2,
                   onTap: () => onItemSelected(2),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
-                  icon: LucideIcons.bookOpen,
+                  icon: Icons.menu_book_outlined,
                   title: "Subjects",
                   isSelected: selectedIndex == 3,
                   onTap: () => onItemSelected(3),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
-                  icon: LucideIcons.users2,
+                  icon: Icons.class_outlined,
                   title: "Classes",
                   isSelected: selectedIndex == 4,
                   onTap: () => onItemSelected(4),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
-                  icon: LucideIcons.clipboardList,
+                  icon: Icons.assignment_outlined,
                   title: "Attendance",
                   isSelected: selectedIndex == 5,
                   onTap: () => onItemSelected(5),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
-                  icon: LucideIcons.calendarDays,
+                  icon: Icons.calendar_today_outlined,
                   title: "TimeTable",
                   isSelected: selectedIndex == 6,
                   onTap: () => onItemSelected(6),
@@ -139,26 +139,30 @@ class _SidebarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: isSelected ? const Color(0x33FFFFFF) : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
+        borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: Container(
           padding: EdgeInsets.symmetric(
             horizontal: collapsed ? 0 : 16,
             vertical: 12,
           ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: isSelected ? const Color(0x33FFFFFF) : Colors.transparent,
+          ),
           child: Row(
-            mainAxisAlignment:
-                collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+            mainAxisAlignment: collapsed
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
               Icon(icon, color: Colors.white, size: 22),
               if (!collapsed) ...[
                 const SizedBox(width: 12),
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
                 ),
               ],
             ],
