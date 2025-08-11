@@ -1,0 +1,200 @@
+import 'package:flutter/material.dart';
+
+class AddFacultyPopupDemoPage extends StatelessWidget {
+  const AddFacultyPopupDemoPage({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Add Faculty Popup Demo')),
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () async {
+            final result = await showDialog(
+              context: context,
+              builder: (context) => const AddFacultyPopup(),
+            );
+            if (result != null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    "Faculty Added: ${result['facultyCode']} (${result['facultyName']})",
+                  ),
+                ),
+              );
+            }
+          },
+          child: const Text('Show Add Faculty Popup'),
+        ),
+      ),
+    );
+  }
+}
+
+class AddFacultyPopup extends StatefulWidget {
+  const AddFacultyPopup({super.key});
+
+  @override
+  State<AddFacultyPopup> createState() => _AddFacultyPopupState();
+}
+
+class _AddFacultyPopupState extends State<AddFacultyPopup> {
+  final _formKey = GlobalKey<FormState>();
+  String? _facultyCode;
+  String? _facultyName;
+  DateTime? _establishmentDate;
+
+  @override
+  Widget build(BuildContext context) {
+    final double dialogWidth = MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
+
+    return Dialog(
+      elevation: 8,
+      backgroundColor: Colors.transparent,
+      child: Center(
+        child: Container(
+          width: dialogWidth,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.blue[100]!, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start, // Left align title
+              children: [
+                const Text(
+                  "Add Faculty",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.left,
+                ),
+                const SizedBox(height: 24),
+                TextFormField(
+                  decoration: const InputDecoration(
+                    hintText: "Faculty Code",
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) => _facultyCode = val,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter faculty code" : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  decoration: const InputDecoration(
+                    hintText: "Faculty Name",
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) => _facultyName = val,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter faculty name" : null,
+                ),
+                const SizedBox(height: 16),
+                GestureDetector(
+                  onTap: () async {
+                    final pickedDate = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(1900),
+                      lastDate: DateTime.now(),
+                    );
+                    if (pickedDate != null) {
+                      setState(() {
+                        _establishmentDate = pickedDate;
+                      });
+                    }
+                  },
+                  child: AbsorbPointer(
+                    child: TextFormField(
+                      decoration: InputDecoration(
+                        hintText: "Establishment Date",
+                        border: const OutlineInputBorder(),
+                        suffixIcon: const Icon(Icons.calendar_today),
+                      ),
+                      controller: TextEditingController(
+                        text: _establishmentDate == null
+                            ? ""
+                            : "${_establishmentDate!.year}-${_establishmentDate!.month.toString().padLeft(2, '0')}-${_establishmentDate!.day.toString().padLeft(2, '0')}",
+                      ),
+                      validator: (val) =>
+                          _establishmentDate == null ? "Select establishment date" : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    SizedBox(
+                      height: 40,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.black54),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          minimumSize: const Size(90, 40),
+                        ),
+                        child: const Text(
+                          "Cancel",
+                          style: TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 40,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (_formKey.currentState!.validate()) {
+                            Navigator.of(context).pop({
+                              "facultyCode": _facultyCode,
+                              "facultyName": _facultyName,
+                              "establishmentDate": _establishmentDate,
+                            });
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[900],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          minimumSize: const Size(90, 40),
+                        ),
+                        child: const Text(
+                          "Save",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
