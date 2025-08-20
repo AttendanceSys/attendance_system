@@ -13,6 +13,7 @@ import 'components/popup/add_department_popup.dart';
 import 'components/popup/add_admin_popup.dart';
 import 'components/popup/add_teacher_popup.dart';
 import 'components/popup/add_faculty_popup.dart';
+import 'DashboardStatsGrid.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -26,7 +27,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.indigo,
         useMaterial3: true,
       ),
-      home: const AddTeacherPopupDemoPage(),
+      home: const DashboardPage(),
     );
   }
 }
