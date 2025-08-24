@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'components/sidebars/admin_sidebar.dart';
+import 'screens/adminsScreen.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -12,12 +13,12 @@ class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
   bool _collapsed = true; // Start collapsed
 
-  final List<Widget> _pages = const [
-    Center(child: Text('Dashboard Page')),
-    Center(child: Text('fucalties Page')),
-    Center(child: Text('Teachers Page')),
-    Center(child: Text('Admins Page')),
-    Center(child: Text('User Handling Page')),
+  final List<Widget> _pages = [
+    const Center(child: Text('Dashboard Page')),
+    const Center(child: Text('fucalties Page')),
+    const Center(child: Text('Teachers Page')),
+    AdminsScreen(),
+    const Center(child: Text('User Handling Page')),
   ];
 
   @override
