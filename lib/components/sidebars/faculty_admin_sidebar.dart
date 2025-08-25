@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-
 class FacultyAdminSidebar extends StatelessWidget {
   final Function(int) onItemSelected;
   final int selectedIndex;

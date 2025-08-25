@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
-import 'components/sidebars/admin_sidebar.dart';
+import '../components/sidebars/faculty_admin_sidebar.dart';
 
-class MainLayout extends StatefulWidget {
-  const MainLayout({super.key});
+class FacultyAdminLayout extends StatefulWidget {
+  const FacultyAdminLayout({super.key});
 
   @override
-  State<MainLayout> createState() => _MainLayoutState();
+  State<FacultyAdminLayout> createState() => _FacultyAdminLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
   int _selectedIndex = 0;
-  bool _collapsed = true; // Start collapsed
+  bool _collapsed = true;
 
   final List<Widget> _pages = const [
-    Center(child: Text('Dashboard Page')),
-    Center(child: Text('fucalties Page')),
-    Center(child: Text('Teachers Page')),
-    Center(child: Text('Admins Page')),
-    Center(child: Text('User Handling Page')),
+    Center(child: Text('Dashboard')),
+    Center(child: Text('Departments')),
+    Center(child: Text('Students')),
+    Center(child: Text('Subjects')),
+    Center(child: Text('Classes')),
+    Center(child: Text('Attendance')),
+    Center(child: Text('TimeTable')),
+    Center(child: Text('User Handling')),
   ];
 
   @override
@@ -28,7 +31,7 @@ class _MainLayoutState extends State<MainLayout> {
     return Scaffold(
       appBar: isMobile
           ? AppBar(
-              title: const Text('Admin Panel'),
+              title: const Text('Faculty Admin Panel'),
               backgroundColor: Colors.indigo.shade100,
               leading: Builder(
                 builder: (context) => IconButton(
@@ -40,7 +43,7 @@ class _MainLayoutState extends State<MainLayout> {
           : null,
       drawer: isMobile
           ? Drawer(
-              child: AdminSidebar(
+              child: FacultyAdminSidebar(
                 selectedIndex: _selectedIndex,
                 onItemSelected: (index) {
                   setState(() {
@@ -59,7 +62,6 @@ class _MainLayoutState extends State<MainLayout> {
               color: sidebarColor,
               child: Column(
                 children: [
-                  // Only show menu icon when collapsed
                   if (_collapsed)
                     Container(
                       color: sidebarColor,
@@ -81,15 +83,14 @@ class _MainLayoutState extends State<MainLayout> {
                         ),
                       ),
                     ),
-                  // Sidebar
                   if (!_collapsed || _collapsed)
                     Expanded(
-                      child: AdminSidebar(
+                      child: FacultyAdminSidebar(
                         selectedIndex: _selectedIndex,
                         onItemSelected: (index) {
                           setState(() {
                             _selectedIndex = index;
-                            _collapsed = true; // Auto-collapse after selection
+                            _collapsed = true;
                           });
                         },
                         collapsed: _collapsed,
@@ -99,7 +100,6 @@ class _MainLayoutState extends State<MainLayout> {
               ),
             ),
           if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
-          // Main content with tap-to-collapse
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,

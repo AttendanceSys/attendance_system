@@ -1,7 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:attendance_system/screens/super_admin_page.dart'; // Adjust import path!
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  String? _errorMessage;
+
+  void _handleLogin() {
+    String username = _usernameController.text.trim();
+    String password = _passwordController.text;
+
+    // Example credentials
+    if (username == 'admin' && password == 'admin123') {
+      // Navigate to SuperAdminPage
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const SuperAdminPage()),
+      );
+    } else {
+      setState(() {
+        _errorMessage = 'Invalid username or password';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,8 +41,8 @@ class LoginScreen extends StatelessWidget {
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFF9D83D7), // Top (Purple)
-              Color(0xFF4D91D6), // Bottom (Blue)
+              Color(0xFF9D83D7),
+              Color(0xFF4D91D6),
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -45,16 +74,22 @@ class LoginScreen extends StatelessWidget {
           ),
           const SizedBox(height: 32),
           _buildInputField(
+            controller: _usernameController,
             icon: Icons.person,
             hint: "Username",
             obscure: false,
           ),
           const SizedBox(height: 16),
           _buildInputField(
+            controller: _passwordController,
             icon: Icons.lock,
             hint: "Password",
             obscure: true,
           ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 12),
+            Text(_errorMessage!, style: TextStyle(color: Colors.red)),
+          ],
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -66,7 +101,7 @@ class LoginScreen extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              onPressed: () {},
+              onPressed: _handleLogin,
               child: const Text(
                 "Login",
                 style: TextStyle(fontSize: 18, color: Colors.white),
@@ -108,6 +143,7 @@ class LoginScreen extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             _buildInputField(
+              controller: _usernameController,
               icon: Icons.person,
               hint: "Username",
               obscure: false,
@@ -116,12 +152,17 @@ class LoginScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             _buildInputField(
+              controller: _passwordController,
               icon: Icons.lock,
               hint: "Password",
               obscure: true,
               fillColor: Colors.grey[100],
               textColor: Colors.black87,
             ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(_errorMessage!, style: TextStyle(color: Colors.red)),
+            ],
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -133,7 +174,7 @@ class LoginScreen extends StatelessWidget {
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                onPressed: () {},
+                onPressed: _handleLogin,
                 child: const Text(
                   "Login",
                   style: TextStyle(fontSize: 18, color: Colors.white),
@@ -147,6 +188,7 @@ class LoginScreen extends StatelessWidget {
   }
 
   Widget _buildInputField({
+    required TextEditingController controller,
     required IconData icon,
     required String hint,
     required bool obscure,
@@ -154,6 +196,7 @@ class LoginScreen extends StatelessWidget {
     Color? textColor,
   }) {
     return TextField(
+      controller: controller,
       obscureText: obscure,
       style: TextStyle(color: textColor ?? Colors.white),
       decoration: InputDecoration(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'super_admin_layout.dart'; // Correct import
-import 'faculty_admin_layout.dart';
-import 'teacher_layout.dart';
+import 'layouts/super_admin_layout.dart'; // Correct import
+import 'layouts/faculty_admin_layout.dart';
+import 'layouts/teacher_layout.dart';
 import 'screens/departScreen.dart';
 import 'components/popup/success_popup.dart';
 import 'components/popup/error_popup.dart'; // Import for error popup
@@ -13,7 +13,9 @@ import 'components/popup/add_department_popup.dart';
 import 'components/popup/add_admin_popup.dart';
 import 'components/popup/add_teacher_popup.dart';
 import 'components/popup/add_faculty_popup.dart';
-import 'DashboardStatsGrid.dart';
+import 'layouts/faculty_DashboardStatsGrid.dart';
+import 'layouts/AdminDashboardStatsGrid .dart';
+import 'screens/super_admin_page.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -27,7 +29,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.indigo,
         useMaterial3: true,
       ),
-      home: const DashboardPage(),
+      home: const LoginScreen(),
     );
   }
 }

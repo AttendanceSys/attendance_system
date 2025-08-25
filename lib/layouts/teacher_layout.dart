@@ -1,26 +1,20 @@
 import 'package:flutter/material.dart';
-import 'components/sidebars/faculty_admin_sidebar.dart';
+import '../components/sidebars/teacher_sidebar.dart';
 
-class FacultyAdminLayout extends StatefulWidget {
-  const FacultyAdminLayout({super.key});
+class TeacherLayout extends StatefulWidget {
+  const TeacherLayout({super.key});
 
   @override
-  State<FacultyAdminLayout> createState() => _FacultyAdminLayoutState();
+  State<TeacherLayout> createState() => _TeacherLayoutState();
 }
 
-class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
+class _TeacherLayoutState extends State<TeacherLayout> {
   int _selectedIndex = 0;
   bool _collapsed = true;
 
   final List<Widget> _pages = const [
-    Center(child: Text('Dashboard')),
-    Center(child: Text('Departments')),
-    Center(child: Text('Students')),
-    Center(child: Text('Subjects')),
-    Center(child: Text('Classes')),
+    Center(child: Text('QR Generation')),
     Center(child: Text('Attendance')),
-    Center(child: Text('TimeTable')),
-    Center(child: Text('User Handling')),
   ];
 
   @override
@@ -31,7 +25,7 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
     return Scaffold(
       appBar: isMobile
           ? AppBar(
-              title: const Text('Faculty Admin Panel'),
+              title: const Text('Teacher Panel'),
               backgroundColor: Colors.indigo.shade100,
               leading: Builder(
                 builder: (context) => IconButton(
@@ -43,7 +37,7 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
           : null,
       drawer: isMobile
           ? Drawer(
-              child: FacultyAdminSidebar(
+              child: TeacherSidebar(
                 selectedIndex: _selectedIndex,
                 onItemSelected: (index) {
                   setState(() {
@@ -85,7 +79,7 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                     ),
                   if (!_collapsed || _collapsed)
                     Expanded(
-                      child: FacultyAdminSidebar(
+                      child: TeacherSidebar(
                         selectedIndex: _selectedIndex,
                         onItemSelected: (index) {
                           setState(() {

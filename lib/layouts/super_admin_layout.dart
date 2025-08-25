@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
-import 'components/sidebars/teacher_sidebar.dart';
+import '../components/sidebars/admin_sidebar.dart';
 
-class TeacherLayout extends StatefulWidget {
-  const TeacherLayout({super.key});
+class MainLayout extends StatefulWidget {
+  const MainLayout({super.key});
 
   @override
-  State<TeacherLayout> createState() => _TeacherLayoutState();
+  State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _TeacherLayoutState extends State<TeacherLayout> {
+class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
-  bool _collapsed = true;
+  bool _collapsed = true; // Start collapsed
 
   final List<Widget> _pages = const [
-    Center(child: Text('QR Generation')),
-    Center(child: Text('Attendance')),
+    Center(child: Text('Dashboard Page')),
+    Center(child: Text('fucalties Page')),
+    Center(child: Text('Teachers Page')),
+    Center(child: Text('Admins Page')),
+    Center(child: Text('User Handling Page')),
   ];
 
   @override
@@ -25,7 +28,7 @@ class _TeacherLayoutState extends State<TeacherLayout> {
     return Scaffold(
       appBar: isMobile
           ? AppBar(
-              title: const Text('Teacher Panel'),
+              title: const Text('Admin Panel'),
               backgroundColor: Colors.indigo.shade100,
               leading: Builder(
                 builder: (context) => IconButton(
@@ -37,7 +40,7 @@ class _TeacherLayoutState extends State<TeacherLayout> {
           : null,
       drawer: isMobile
           ? Drawer(
-              child: TeacherSidebar(
+              child: AdminSidebar(
                 selectedIndex: _selectedIndex,
                 onItemSelected: (index) {
                   setState(() {
@@ -56,6 +59,7 @@ class _TeacherLayoutState extends State<TeacherLayout> {
               color: sidebarColor,
               child: Column(
                 children: [
+                  // Only show menu icon when collapsed
                   if (_collapsed)
                     Container(
                       color: sidebarColor,
@@ -77,14 +81,15 @@ class _TeacherLayoutState extends State<TeacherLayout> {
                         ),
                       ),
                     ),
+                  // Sidebar
                   if (!_collapsed || _collapsed)
                     Expanded(
-                      child: TeacherSidebar(
+                      child: AdminSidebar(
                         selectedIndex: _selectedIndex,
                         onItemSelected: (index) {
                           setState(() {
                             _selectedIndex = index;
-                            _collapsed = true;
+                            _collapsed = true; // Auto-collapse after selection
                           });
                         },
                         collapsed: _collapsed,
@@ -94,6 +99,7 @@ class _TeacherLayoutState extends State<TeacherLayout> {
               ),
             ),
           if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
+          // Main content with tap-to-collapse
           Expanded(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
