@@ -20,19 +20,19 @@ class AdminDashboardStatsGrid extends StatelessWidget {
         _StatsCard(
           icon: Icons.account_tree_outlined,
           label: "Faculties",
-          value: "11",
+          value: "4",
           color: Color(0xFFB9EEB6),
         ),
         _StatsCard(
           icon: Icons.groups,
           label: "Admins",
-          value: "11",
+          value: "0",
           color: Color(0xFFF7B345),
         ),
         _StatsCard(
           icon: Icons.school_outlined,
-          label: "Teachers",
-          value: "30",
+          label: "Lecturers",
+          value: "4",
           color: Color(0xFF31B9C1),
         ),
       ],

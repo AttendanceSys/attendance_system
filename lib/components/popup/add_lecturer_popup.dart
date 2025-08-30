@@ -1,57 +1,27 @@
 import 'package:flutter/material.dart';
-import '../../models/faculty.dart';
+import '../../models/lecturer.dart';
 
-class AddFacultyPopupDemoPage extends StatelessWidget {
-  const AddFacultyPopupDemoPage({Key? key}) : super(key: key);
+class AddLecturerPopup extends StatefulWidget {
+  final Lecturer? lecturer;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Faculty Popup Demo')),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () async {
-            final result = await showDialog(
-              context: context,
-              builder: (context) => const AddFacultyPopup(),
-            );
-            if (result != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    "Faculty Added: ${result['facultyCode']} (${result['facultyName']})",
-                  ),
-                ),
-              );
-            }
-          },
-          child: const Text('Show Add Faculty Popup'),
-        ),
-      ),
-    );
-  }
-}
-
-class AddFacultyPopup extends StatefulWidget {
-  final Faculty? faculty;
-  const AddFacultyPopup({Key? key, this.faculty}) : super(key: key);
+  const AddLecturerPopup({Key? key, this.lecturer}) : super(key: key);
 
   @override
-  State<AddFacultyPopup> createState() => _AddFacultyPopupState();
+  State<AddLecturerPopup> createState() => _AddLecturerPopupState();
 }
 
-class _AddFacultyPopupState extends State<AddFacultyPopup> {
+class _AddLecturerPopupState extends State<AddLecturerPopup> {
   final _formKey = GlobalKey<FormState>();
-  String? _facultyCode;
-  String? _facultyName;
-  DateTime? _establishmentDate;
+  String? _lecturerName;
+  String? _lecturerId;
+  String? _password;
 
   @override
   void initState() {
     super.initState();
-    _facultyCode = widget.faculty?.code;
-    _facultyName = widget.faculty?.name;
-    _establishmentDate = widget.faculty?.createdAt;
+    _lecturerName = widget.lecturer?.name;
+    _lecturerId = widget.lecturer?.id;
+    _password = widget.lecturer?.password;
   }
 
   @override
@@ -83,70 +53,48 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start, // Left align title
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.faculty == null ? "Add Faculty" : "Edit Faculty",
+                  widget.lecturer == null ? "Add Lecturer" : "Edit Lecturer",
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.left,
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: _facultyCode,
+                  initialValue: _lecturerName,
                   decoration: const InputDecoration(
-                    hintText: "Faculty Code",
+                    hintText: "Lecturer Name",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _facultyCode = val,
+                  onChanged: (val) => _lecturerName = val,
                   validator: (val) =>
-                      val == null || val.isEmpty ? "Enter faculty code" : null,
+                      val == null || val.isEmpty ? "Enter lecturer name" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  initialValue: _facultyName,
+                  initialValue: _lecturerId,
                   decoration: const InputDecoration(
-                    hintText: "Faculty Name",
+                    hintText: "Lecturer ID",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _facultyName = val,
+                  onChanged: (val) => _lecturerId = val,
                   validator: (val) =>
-                      val == null || val.isEmpty ? "Enter faculty name" : null,
+                      val == null || val.isEmpty ? "Enter lecturer ID" : null,
                 ),
                 const SizedBox(height: 16),
-                GestureDetector(
-                  onTap: () async {
-                    final pickedDate = await showDatePicker(
-                      context: context,
-                      initialDate: _establishmentDate ?? DateTime.now(),
-                      firstDate: DateTime(1900),
-                      lastDate: DateTime.now(),
-                    );
-                    if (pickedDate != null) {
-                      setState(() {
-                        _establishmentDate = pickedDate;
-                      });
-                    }
-                  },
-                  child: AbsorbPointer(
-                    child: TextFormField(
-                      decoration: InputDecoration(
-                        hintText: "Establishment Date",
-                        border: const OutlineInputBorder(),
-                        suffixIcon: const Icon(Icons.calendar_today),
-                      ),
-                      controller: TextEditingController(
-                        text: _establishmentDate == null
-                            ? ""
-                            : "${_establishmentDate!.year}-${_establishmentDate!.month.toString().padLeft(2, '0')}-${_establishmentDate!.day.toString().padLeft(2, '0')}",
-                      ),
-                      validator: (val) => _establishmentDate == null
-                          ? "Select establishment date"
-                          : null,
-                    ),
+                TextFormField(
+                  initialValue: _password,
+                  decoration: const InputDecoration(
+                    hintText: "Password",
+                    border: OutlineInputBorder(),
                   ),
+                  obscureText: true,
+                  onChanged: (val) => _password = val,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter password" : null,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -180,10 +128,10 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
                             Navigator.of(context).pop(
-                              Faculty(
-                                code: _facultyCode!,
-                                name: _facultyName!,
-                                createdAt: _establishmentDate!,
+                              Lecturer(
+                                id: _lecturerId!,
+                                name: _lecturerName!,
+                                password: _password!,
                               ),
                             );
                           }
