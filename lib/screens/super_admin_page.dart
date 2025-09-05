@@ -1,9 +1,11 @@
+import 'package:attendance_system/components/pages/admins_page.dart';
 import 'package:flutter/material.dart';
 import '../components/sidebars/admin_sidebar.dart';
 import '../components/admin_stats_grid.dart';
 import 'login_screen.dart';
 import 'package:attendance_system/components/pages/faculties_page.dart';
 import 'package:attendance_system/components/pages/lecturer_page.dart';
+import 'package:attendance_system/components/pages/user_handling_page.dart';
 
 // ---- Logout confirmation popup matching your design ----
 Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
@@ -15,7 +17,9 @@ Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
       backgroundColor: Colors.transparent,
       child: Center(
         child: Container(
-          width: MediaQuery.of(context).size.width > 400 ? 340 : double.infinity,
+          width: MediaQuery.of(context).size.width > 400
+              ? 340
+              : double.infinity,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
@@ -131,8 +135,8 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
     ),
     FacultiesPage(),
     LecturersPage(),
-    const Center(child: Text('Admins Page')),
-    const Center(child: Text('User Handling Page')),
+    AdminsPage(),
+    UserHandlingPage(),
   ];
 
   // --- This method now shows the confirmation popup before logging out ---

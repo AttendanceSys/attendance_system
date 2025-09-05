@@ -1,35 +1,31 @@
 import 'package:flutter/material.dart';
-import '../../models/admin.dart';
+import '../../models/user.dart';
 
-class AddAdminPopup extends StatefulWidget {
-  final Admin? admin;
-  final List<String> facultyNames;
-
-  const AddAdminPopup({Key? key, this.admin, required this.facultyNames}) : super(key: key);
+class EditUserPopup extends StatefulWidget {
+  final User user;
+  const EditUserPopup({Key? key, required this.user}) : super(key: key);
 
   @override
-  State<AddAdminPopup> createState() => _AddAdminPopupState();
+  State<EditUserPopup> createState() => _EditUserPopupState();
 }
 
-class _AddAdminPopupState extends State<AddAdminPopup> {
+class _EditUserPopupState extends State<EditUserPopup> {
   final _formKey = GlobalKey<FormState>();
-  String? _adminId;
-  String? _fullName;
-  String? _facultyName;
-  String? _password;
+  late String _username;
+  late String _password;
 
   @override
   void initState() {
     super.initState();
-    _adminId = widget.admin?.id;
-    _fullName = widget.admin?.fullName;
-    _facultyName = widget.admin?.facultyName ?? (widget.facultyNames.isNotEmpty ? widget.facultyNames[0] : null);
-    _password = widget.admin?.password;
+    _username = widget.user.username;
+    _password = widget.user.password;
   }
 
   @override
   Widget build(BuildContext context) {
-    final double dialogWidth = MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
+    final double dialogWidth = MediaQuery.of(context).size.width > 600
+        ? 400
+        : double.infinity;
 
     return Dialog(
       elevation: 8,
@@ -56,48 +52,20 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  widget.admin == null ? "Add Admin" : "Edit Admin",
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
+                const Text(
+                  "Edit Users",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: _adminId,
+                  initialValue: _username,
                   decoration: const InputDecoration(
-                    hintText: "Admin ID",
+                    hintText: "Username",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _adminId = val,
-                  validator: (val) => val == null || val.isEmpty ? "Enter admin ID" : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  initialValue: _fullName,
-                  decoration: const InputDecoration(
-                    hintText: "Full Name",
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) => _fullName = val,
-                  validator: (val) => val == null || val.isEmpty ? "Enter full name" : null,
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _facultyName,
-                  decoration: const InputDecoration(
-                    hintText: "Faculty Name",
-                    border: OutlineInputBorder(),
-                  ),
-                  items: widget.facultyNames
-                      .map((name) => DropdownMenuItem(
-                            value: name,
-                            child: Text(name),
-                          ))
-                      .toList(),
-                  onChanged: (val) => setState(() => _facultyName = val),
-                  validator: (val) => val == null || val.isEmpty ? "Select faculty name" : null,
+                  onChanged: (val) => _username = val,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter username" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -108,7 +76,8 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                   ),
                   obscureText: true,
                   onChanged: (val) => _password = val,
-                  validator: (val) => val == null || val.isEmpty ? "Enter password" : null,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter password" : null,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -142,11 +111,9 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
                             Navigator.of(context).pop(
-                              Admin(
-                                id: _adminId!,
-                                fullName: _fullName!,
-                                facultyName: _facultyName!,
-                                password: _password!,
+                              widget.user.copyWith(
+                                username: _username,
+                                password: _password,
                               ),
                             );
                           }
