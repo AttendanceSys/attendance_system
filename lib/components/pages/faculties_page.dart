@@ -19,6 +19,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
   ];
 
   String _searchText = '';
+  int? _selectedIndex;
 
   List<Faculty> get _filteredFaculties => _faculties
       .where(
@@ -36,12 +37,14 @@ class _FacultiesPageState extends State<FacultiesPage> {
     if (result != null) {
       setState(() {
         _faculties.add(result);
+        _selectedIndex = null;
       });
     }
   }
 
-  Future<void> _showEditFacultyPopup(int index) async {
-    final faculty = _filteredFaculties[index];
+  Future<void> _showEditFacultyPopup() async {
+    if (_selectedIndex == null) return;
+    final faculty = _filteredFaculties[_selectedIndex!];
     final result = await showDialog<Faculty>(
       context: context,
       builder: (context) => AddFacultyPopup(faculty: faculty),
@@ -54,8 +57,9 @@ class _FacultiesPageState extends State<FacultiesPage> {
     }
   }
 
-  Future<void> _confirmDeleteFaculty(int index) async {
-    final faculty = _filteredFaculties[index];
+  Future<void> _confirmDeleteFaculty() async {
+    if (_selectedIndex == null) return;
+    final faculty = _filteredFaculties[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -77,31 +81,29 @@ class _FacultiesPageState extends State<FacultiesPage> {
     if (confirm == true) {
       setState(() {
         _faculties.remove(faculty);
+        _selectedIndex = null;
       });
     }
   }
 
   String _monthString(int month) {
     const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
     return months[month - 1];
   }
 
+  void _handleRowTap(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool isMobile = MediaQuery.of(context).size.width < 600;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isDesktop = screenWidth > 800;
 
     return Padding(
       padding: const EdgeInsets.all(32.0),
@@ -118,213 +120,191 @@ class _FacultiesPageState extends State<FacultiesPage> {
             ),
           ),
           const SizedBox(height: 24),
-          SearchAddBar(
-            hintText: "Search Faculty...",
-            buttonText: "Add Faculty",
-            onAddPressed: _showAddFacultyPopup,
-            onChanged: (value) => setState(() => _searchText = value),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SearchAddBar(
+                      hintText: "Search Faculty...",
+                      buttonText: "Add Faculty",
+                      onAddPressed: _showAddFacultyPopup,
+                      onChanged: (value) {
+                        setState(() {
+                          _searchText = value;
+                          _selectedIndex = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          height: 36,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                            ),
+                            onPressed: _selectedIndex == null ? null : _showEditFacultyPopup,
+                            child: const Text(
+                              "Edit",
+                              style: TextStyle(fontSize: 15, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 80,
+                          height: 36,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                            ),
+                            onPressed: _selectedIndex == null ? null : _confirmDeleteFaculty,
+                            child: const Text(
+                              "Delete",
+                              style: TextStyle(fontSize: 15, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Expanded(
             child: Container(
               width: double.infinity,
               color: Colors.transparent,
-              child: isMobile
-                  // On mobile, allow horizontal scroll for overflow
-                  ? SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columnSpacing: 24,
-                        headingRowHeight: 48,
-                        dataRowHeight: 44,
-                        columns: const [
-                          DataColumn(
-                            label: Text(
-                              "No",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Faculty Code",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Faculty Name",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Created At",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          DataColumn(label: Text("")),
-                        ],
-                        rows: List.generate(_filteredFaculties.length, (index) {
-                          final faculty = _filteredFaculties[index];
-                          return DataRow(
-                            cells: [
-                              DataCell(Text('${index + 1}')),
-                              DataCell(Text(faculty.code)),
-                              DataCell(Text(faculty.name)),
-                              DataCell(
-                                Text(
-                                  "${faculty.createdAt.day.toString().padLeft(2, '0')} "
-                                  "${_monthString(faculty.createdAt.month)} "
-                                  "${faculty.createdAt.year}",
-                                ),
-                              ),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green,
-                                        minimumSize: const Size(32, 28),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                        ),
-                                      ),
-                                      onPressed: () =>
-                                          _showEditFacultyPopup(index),
-                                      child: const Text(
-                                        "Edit",
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.red,
-                                        minimumSize: const Size(32, 28),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                        ),
-                                      ),
-                                      onPressed: () =>
-                                          _confirmDeleteFaculty(index),
-                                      child: const Text(
-                                        "Delete",
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }),
-                      ),
-                    )
-                  // On web/desktop, use vertical scroll only (no horizontal scroll)
+              child: isDesktop
+                  ? _buildDesktopTable()
                   : SingleChildScrollView(
                       scrollDirection: Axis.vertical,
-                      child: DataTable(
-                        columnSpacing: 24,
-                        headingRowHeight: 48,
-                        dataRowHeight: 44,
-                        columns: const [
-                          DataColumn(
-                            label: Text(
-                              "No",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Faculty Code",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Faculty Name",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          DataColumn(
-                            label: Text(
-                              "Created At",
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          DataColumn(label: Text("")),
-                        ],
-                        rows: List.generate(_filteredFaculties.length, (index) {
-                          final faculty = _filteredFaculties[index];
-                          return DataRow(
-                            cells: [
-                              DataCell(Text('${index + 1}')),
-                              DataCell(Text(faculty.code)),
-                              DataCell(Text(faculty.name)),
-                              DataCell(
-                                Text(
-                                  "${faculty.createdAt.day.toString().padLeft(2, '0')} "
-                                  "${_monthString(faculty.createdAt.month)} "
-                                  "${faculty.createdAt.year}",
-                                ),
-                              ),
-                              DataCell(
-                                Row(
-                                  children: [
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green,
-                                        minimumSize: const Size(32, 28),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                        ),
-                                      ),
-                                      onPressed: () =>
-                                          _showEditFacultyPopup(index),
-                                      child: const Text(
-                                        "Edit",
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.red,
-                                        minimumSize: const Size(32, 28),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                        ),
-                                      ),
-                                      onPressed: () =>
-                                          _confirmDeleteFaculty(index),
-                                      child: const Text(
-                                        "Delete",
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        }),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: _buildMobileTable(),
                       ),
                     ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopTable() {
+    return Table(
+      columnWidths: const {
+        0: FixedColumnWidth(64),   // No
+        1: FixedColumnWidth(120),  // Faculty Code
+        2: FixedColumnWidth(180),  // Faculty Name
+        3: FixedColumnWidth(130),  // Created At
+      },
+      border: TableBorder(
+        horizontalInside: BorderSide(color: Colors.grey.shade300),
+      ),
+      children: [
+        TableRow(
+          children: [
+            _tableHeaderCell("No"),
+            _tableHeaderCell("Faculty Code"),
+            _tableHeaderCell("Faculty Name"),
+            _tableHeaderCell("Created At"),
+          ],
+        ),
+        for (int index = 0; index < _filteredFaculties.length; index++)
+          TableRow(
+            decoration: BoxDecoration(
+              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+            ),
+            children: [
+              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredFaculties[index].code, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredFaculties[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                "${_filteredFaculties[index].createdAt.day.toString().padLeft(2, '0')} "
+                "${_monthString(_filteredFaculties[index].createdAt.month)} "
+                "${_filteredFaculties[index].createdAt.year}",
+                onTap: () => _handleRowTap(index),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMobileTable() {
+    return Table(
+      defaultColumnWidth: const IntrinsicColumnWidth(),
+      border: TableBorder(
+        horizontalInside: BorderSide(color: Colors.grey.shade300),
+      ),
+      children: [
+        TableRow(
+          children: [
+            _tableHeaderCell("No"),
+            _tableHeaderCell("Faculty Code"),
+            _tableHeaderCell("Faculty Name"),
+            _tableHeaderCell("Created At"),
+          ],
+        ),
+        for (int index = 0; index < _filteredFaculties.length; index++)
+          TableRow(
+            decoration: BoxDecoration(
+              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+            ),
+            children: [
+              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredFaculties[index].code, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredFaculties[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                "${_filteredFaculties[index].createdAt.day.toString().padLeft(2, '0')} "
+                "${_monthString(_filteredFaculties[index].createdAt.month)} "
+                "${_filteredFaculties[index].createdAt.year}",
+                onTap: () => _handleRowTap(index),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _tableHeaderCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+        textAlign: TextAlign.left,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _tableBodyCell(String text, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        child: Text(
+          text,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
     );
   }

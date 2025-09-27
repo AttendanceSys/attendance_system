@@ -1,76 +1,83 @@
 import 'package:flutter/material.dart';
-import '../../models/admin.dart';
-import '../popup/add_admin_popup.dart';
+import '../../models/student.dart';
+import '../popup/add_student_popup.dart';
 import '../cards/searchBar.dart';
 
-class AdminsPage extends StatefulWidget {
-  const AdminsPage({Key? key}) : super(key: key);
+class StudentsPage extends StatefulWidget {
+  const StudentsPage({Key? key}) : super(key: key);
 
   @override
-  State<AdminsPage> createState() => _AdminsPageState();
+  State<StudentsPage> createState() => _StudentsPageState();
 }
 
-class _AdminsPageState extends State<AdminsPage> {
-  final List<Admin> _admins = [
-    Admin(id: 'SNU1234', fullName: 'Cali', facultyName: 'ENG', password: '*******'),
-    Admin(id: 'SNU5678', fullName: 'Amina', facultyName: 'ENG', password: '*******'),
-    Admin(id: 'SNU9101', fullName: 'Yusuf', facultyName: 'ENG', password: '*******'),
-    Admin(id: 'SNU1121', fullName: 'Fatima', facultyName: 'ENG', password: '*******'),
+class _StudentsPageState extends State<StudentsPage> {
+  final List<Student> _students = [
+    Student(id: 'B3SC600', fullName: 'Cali', gender: 'Male', department: 'CS', className: 'B1SC CS', password: '*******'),
+    Student(id: 'B3SC600', fullName: 'Cali', gender: 'Male', department: 'GEO', className: 'B2SC GEO', password: '*******'),
+    Student(id: 'B3SC600', fullName: 'Cali', gender: 'Male', department: 'Math', className: 'B2SC math', password: '*******'),
   ];
 
-  final List<String> _facultyNames = [
-    'ENG',
-    'SCI',
-    'MED',
-    'EDU',
-  ];
+  final List<String> _genders = ['Male', 'Female'];
+  final List<String> _departments = ['CS', 'GEO', 'Math', 'BIO', 'CHEM'];
+  final List<String> _classes = ['B1SC CS', 'B2SC GEO', 'B2SC math', 'B3SC BIO', 'B4SC CHEM'];
 
   String _searchText = '';
   int? _selectedIndex;
 
-  List<Admin> get _filteredAdmins => _admins
-      .where((admin) =>
-          admin.id.toLowerCase().contains(_searchText.toLowerCase()) ||
-          admin.fullName.toLowerCase().contains(_searchText.toLowerCase()) ||
-          admin.facultyName.toLowerCase().contains(_searchText.toLowerCase()))
+  List<Student> get _filteredStudents => _students
+      .where((student) =>
+          student.id.toLowerCase().contains(_searchText.toLowerCase()) ||
+          student.fullName.toLowerCase().contains(_searchText.toLowerCase()) ||
+          student.gender.toLowerCase().contains(_searchText.toLowerCase()) ||
+          student.department.toLowerCase().contains(_searchText.toLowerCase()) ||
+          student.className.toLowerCase().contains(_searchText.toLowerCase()))
       .toList();
 
-  Future<void> _showAddAdminPopup() async {
-    final result = await showDialog<Admin>(
+  Future<void> _showAddStudentPopup() async {
+    final result = await showDialog<Student>(
       context: context,
-      builder: (context) => AddAdminPopup(facultyNames: _facultyNames),
+      builder: (context) => AddStudentPopup(
+        genders: _genders,
+        departments: _departments,
+        classes: _classes,
+      ),
     );
     if (result != null) {
       setState(() {
-        _admins.add(result);
+        _students.add(result);
         _selectedIndex = null;
       });
     }
   }
 
-  Future<void> _showEditAdminPopup() async {
+  Future<void> _showEditStudentPopup() async {
     if (_selectedIndex == null) return;
-    final admin = _filteredAdmins[_selectedIndex!];
-    final result = await showDialog<Admin>(
+    final student = _filteredStudents[_selectedIndex!];
+    final result = await showDialog<Student>(
       context: context,
-      builder: (context) => AddAdminPopup(admin: admin, facultyNames: _facultyNames),
+      builder: (context) => AddStudentPopup(
+        student: student,
+        genders: _genders,
+        departments: _departments,
+        classes: _classes,
+      ),
     );
     if (result != null) {
-      int mainIndex = _admins.indexOf(admin);
+      int mainIndex = _students.indexOf(student);
       setState(() {
-        _admins[mainIndex] = result;
+        _students[mainIndex] = result;
       });
     }
   }
 
-  Future<void> _confirmDeleteAdmin() async {
+  Future<void> _confirmDeleteStudent() async {
     if (_selectedIndex == null) return;
-    final admin = _filteredAdmins[_selectedIndex!];
+    final student = _filteredStudents[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Admin"),
-        content: Text("Are you sure you want to delete '${admin.fullName}'?"),
+        title: const Text("Delete Student"),
+        content: Text("Are you sure you want to delete '${student.fullName}'?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -86,7 +93,7 @@ class _AdminsPageState extends State<AdminsPage> {
     );
     if (confirm == true) {
       setState(() {
-        _admins.remove(admin);
+        _students.remove(student);
         _selectedIndex = null;
       });
     }
@@ -104,13 +111,13 @@ class _AdminsPageState extends State<AdminsPage> {
     final bool isDesktop = screenWidth > 800;
 
     return Padding(
-      padding: const EdgeInsets.all(32.0),
+      padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
           const Text(
-            "Admins",
+            "Students",
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -126,9 +133,9 @@ class _AdminsPageState extends State<AdminsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SearchAddBar(
-                      hintText: "Search Admin...",
-                      buttonText: "Add Admin",
-                      onAddPressed: _showAddAdminPopup,
+                      hintText: "Search students...",
+                      buttonText: "Add Students",
+                      onAddPressed: _showAddStudentPopup,
                       onChanged: (value) {
                         setState(() {
                           _searchText = value;
@@ -149,12 +156,20 @@ class _AdminsPageState extends State<AdminsPage> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _showEditAdminPopup,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _showEditStudentPopup,
                             child: const Text(
                               "Edit",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -168,12 +183,20 @@ class _AdminsPageState extends State<AdminsPage> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _confirmDeleteAdmin,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _confirmDeleteStudent,
                             child: const Text(
                               "Delete",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -205,14 +228,16 @@ class _AdminsPageState extends State<AdminsPage> {
     );
   }
 
+  // Desktop/tablet: clean, wide fixed column design (like Departments screenshot)
   Widget _buildDesktopTable() {
     return Table(
       columnWidths: const {
-        0: FixedColumnWidth(64),    // No
-        1: FixedColumnWidth(120),   // Admin ID
-        2: FixedColumnWidth(140),   // Full Name
-        3: FixedColumnWidth(120),   // Faculty Name
-        4: FixedColumnWidth(120),   // Password
+        0: FixedColumnWidth(50),   // No
+        1: FixedColumnWidth(120),  // ID
+        2: FixedColumnWidth(160),  // Name
+        3: FixedColumnWidth(100),  // Gender
+        4: FixedColumnWidth(120),  // Department
+        5: FixedColumnWidth(120),  // Class
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -221,29 +246,32 @@ class _AdminsPageState extends State<AdminsPage> {
         TableRow(
           children: [
             _tableHeaderCell("No"),
-            _tableHeaderCell("Admin ID"),
-            _tableHeaderCell("Full Name"),
-            _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Password"),
+            _tableHeaderCell("ID"),
+            _tableHeaderCell("Student name"),
+            _tableHeaderCell("Gender"),
+            _tableHeaderCell("Department"),
+            _tableHeaderCell("Class"),
           ],
         ),
-        for (int index = 0; index < _filteredAdmins.length; index++)
+        for (int index = 0; index < _filteredStudents.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].id, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].fullName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].facultyName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].id, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].fullName, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].gender, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].department, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].className, onTap: () => _handleRowTap(index)),
             ],
           ),
       ],
     );
   }
 
+  // Mobile: keep existing scrollable table
   Widget _buildMobileTable() {
     return Table(
       defaultColumnWidth: const IntrinsicColumnWidth(),
@@ -254,23 +282,25 @@ class _AdminsPageState extends State<AdminsPage> {
         TableRow(
           children: [
             _tableHeaderCell("No"),
-            _tableHeaderCell("Admin ID"),
-            _tableHeaderCell("Full Name"),
-            _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Password"),
+            _tableHeaderCell("ID"),
+            _tableHeaderCell("Student name"),
+            _tableHeaderCell("Gender"),
+            _tableHeaderCell("Department"),
+            _tableHeaderCell("Class"),
           ],
         ),
-        for (int index = 0; index < _filteredAdmins.length; index++)
+        for (int index = 0; index < _filteredStudents.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].id, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].fullName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].facultyName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].id, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].fullName, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].gender, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].department, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredStudents[index].className, onTap: () => _handleRowTap(index)),
             ],
           ),
       ],

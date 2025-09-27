@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 class DashboardStatsGrid extends StatelessWidget {
   const DashboardStatsGrid({Key? key}) : super(key: key);
 
-  // The stats data is now internal to the widget!
   static final List<DashboardStat> _stats = [
     DashboardStat(
       icon: Icons.account_tree,
@@ -34,7 +33,7 @@ class DashboardStatsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    double aspectRatio = screenWidth < 500 ? 1.2 : 1.8;
+    double aspectRatio = screenWidth < 500 ? 1.4 : 2.4;
 
     return GridView.count(
       shrinkWrap: true,
@@ -99,7 +98,7 @@ class _DashboardStatCard extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: 10),
+          SizedBox(height: 12),
           Padding(
             padding: EdgeInsets.only(left: numberLeftPadding),
             child: Text(

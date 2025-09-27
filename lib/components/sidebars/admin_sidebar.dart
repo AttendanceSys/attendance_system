@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-
 class AdminSidebar extends StatelessWidget {
   final Function(int) onItemSelected;
   final int selectedIndex;
@@ -124,42 +123,48 @@ class SidebarItem extends StatelessWidget {
     final Color unselectedText = Colors.white;
     final Color selectedIcon = Colors.white;
     final Color unselectedIcon = Colors.white;
-    return Material(
-      color: isSelected ? selectedBg : Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
-      elevation: isSelected ? 2 : 0,
-      child: InkWell(
+    return Tooltip(
+      message: collapsed ? title : "",
+      verticalOffset: 0,
+      preferBelow: false,
+      waitDuration: const Duration(milliseconds: 300),
+      child: Material(
+        color: isSelected ? selectedBg : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: collapsed ? 0 : 16,
-            vertical: 12,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: isSelected ? selectedBg : Colors.transparent,
-          ),
-          child: Row(
-            mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
-            children: [
-              Icon(
-                icon,
-                color: isSelected ? selectedIcon : unselectedIcon,
-                size: 24,
-              ),
-              if (!collapsed) ...[
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: isSelected ? selectedText : unselectedText,
-                    fontSize: 16,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
+        elevation: isSelected ? 2 : 0,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: collapsed ? 0 : 16,
+              vertical: 12,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: isSelected ? selectedBg : Colors.transparent,
+            ),
+            child: Row(
+              mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? selectedIcon : unselectedIcon,
+                  size: 24,
                 ),
+                if (!collapsed) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: isSelected ? selectedText : unselectedText,
+                      fontSize: 16,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

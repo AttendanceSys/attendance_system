@@ -19,6 +19,7 @@ class _LecturersPageState extends State<LecturersPage> {
   ];
 
   String _searchText = '';
+  int? _selectedIndex;
 
   List<Lecturer> get _filteredLecturers => _lecturers
       .where((lecturer) =>
@@ -34,12 +35,14 @@ class _LecturersPageState extends State<LecturersPage> {
     if (result != null) {
       setState(() {
         _lecturers.add(result);
+        _selectedIndex = null;
       });
     }
   }
 
-  Future<void> _showEditLecturerPopup(int index) async {
-    final lecturer = _filteredLecturers[index];
+  Future<void> _showEditLecturerPopup() async {
+    if (_selectedIndex == null) return;
+    final lecturer = _filteredLecturers[_selectedIndex!];
     final result = await showDialog<Lecturer>(
       context: context,
       builder: (context) => AddLecturerPopup(lecturer: lecturer),
@@ -52,8 +55,9 @@ class _LecturersPageState extends State<LecturersPage> {
     }
   }
 
-  Future<void> _confirmDeleteLecturer(int index) async {
-    final lecturer = _filteredLecturers[index];
+  Future<void> _confirmDeleteLecturer() async {
+    if (_selectedIndex == null) return;
+    final lecturer = _filteredLecturers[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -66,9 +70,7 @@ class _LecturersPageState extends State<LecturersPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text("Delete"),
           ),
         ],
@@ -77,13 +79,21 @@ class _LecturersPageState extends State<LecturersPage> {
     if (confirm == true) {
       setState(() {
         _lecturers.remove(lecturer);
+        _selectedIndex = null;
       });
     }
   }
 
+  void _handleRowTap(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bool isMobile = MediaQuery.of(context).size.width < 600;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool isDesktop = screenWidth > 800;
 
     return Padding(
       padding: const EdgeInsets.all(32.0),
@@ -100,165 +110,181 @@ class _LecturersPageState extends State<LecturersPage> {
             ),
           ),
           const SizedBox(height: 24),
-          SearchAddBar(
-            hintText: "Search Lecturer...",
-            buttonText: "Add Lecturer",
-            onAddPressed: _showAddLecturerPopup,
-            onChanged: (value) => setState(() => _searchText = value),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SearchAddBar(
+                      hintText: "Search Lecturer...",
+                      buttonText: "Add Lecturer",
+                      onAddPressed: _showAddLecturerPopup,
+                      onChanged: (value) {
+                        setState(() {
+                          _searchText = value;
+                          _selectedIndex = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          height: 36,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                            ),
+                            onPressed: _selectedIndex == null ? null : _showEditLecturerPopup,
+                            child: const Text(
+                              "Edit",
+                              style: TextStyle(fontSize: 15, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 80,
+                          height: 36,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                            ),
+                            onPressed: _selectedIndex == null ? null : _confirmDeleteLecturer,
+                            child: const Text(
+                              "Delete",
+                              style: TextStyle(fontSize: 15, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Expanded(
             child: Container(
               width: double.infinity,
               color: Colors.transparent,
-              child: isMobile
-                  // On mobile, allow horizontal scroll for overflow
-                  ? SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columnSpacing: 24,
-                        headingRowHeight: 48,
-                        dataRowHeight: 44,
-                        columns: const [
-                          DataColumn(
-                              label: Text(
-                            "No",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          )),
-                          DataColumn(
-                              label: Text(
-                            "Lecturer ID",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          )),
-                          DataColumn(
-                              label: Text(
-                            "Lecturer Name",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          )),
-                          DataColumn(
-                              label: Text(
-                            "Password",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          )),
-                          DataColumn(label: Text("")),
-                        ],
-                        rows: List.generate(_filteredLecturers.length, (index) {
-                          final lecturer = _filteredLecturers[index];
-                          return DataRow(cells: [
-                            DataCell(Text('${index + 1}')),
-                            DataCell(Text(lecturer.id)),
-                            DataCell(Text(lecturer.name)),
-                            DataCell(Text(lecturer.password)),
-                            DataCell(
-                              Row(
-                                children: [
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      minimumSize: const Size(32, 28),
-                                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                                    ),
-                                    onPressed: () => _showEditLecturerPopup(index),
-                                    child: const Text(
-                                      "Edit",
-                                      style: TextStyle(fontSize: 13, color: Colors.white),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      minimumSize: const Size(32, 28),
-                                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                                    ),
-                                    onPressed: () => _confirmDeleteLecturer(index),
-                                    child: const Text(
-                                      "Delete",
-                                      style: TextStyle(fontSize: 13, color: Colors.white),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ]);
-                        }),
-                      ),
-                    )
-                  // On web/desktop, use vertical scroll only (no horizontal scroll)
+              child: isDesktop
+                  ? _buildDesktopTable()
                   : SingleChildScrollView(
                       scrollDirection: Axis.vertical,
-                      child: DataTable(
-                        columnSpacing: 24,
-                        headingRowHeight: 48,
-                        dataRowHeight: 44,
-                        columns: const [
-                          DataColumn(
-                              label: Text(
-                            "No",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          )),
-                          DataColumn(
-                              label: Text(
-                            "Lecturer ID",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          )),
-                          DataColumn(
-                              label: Text(
-                            "Lecturer Name",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          )),
-                          DataColumn(
-                              label: Text(
-                            "Password",
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          )),
-                          DataColumn(label: Text("")),
-                        ],
-                        rows: List.generate(_filteredLecturers.length, (index) {
-                          final lecturer = _filteredLecturers[index];
-                          return DataRow(cells: [
-                            DataCell(Text('${index + 1}')),
-                            DataCell(Text(lecturer.id)),
-                            DataCell(Text(lecturer.name)),
-                            DataCell(Text(lecturer.password)),
-                            DataCell(
-                              Row(
-                                children: [
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.green,
-                                      minimumSize: const Size(32, 28),
-                                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                                    ),
-                                    onPressed: () => _showEditLecturerPopup(index),
-                                    child: const Text(
-                                      "Edit",
-                                      style: TextStyle(fontSize: 13, color: Colors.white),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.red,
-                                      minimumSize: const Size(32, 28),
-                                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                                    ),
-                                    onPressed: () => _confirmDeleteLecturer(index),
-                                    child: const Text(
-                                      "Delete",
-                                      style: TextStyle(fontSize: 13, color: Colors.white),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ]);
-                        }),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: _buildMobileTable(),
                       ),
                     ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopTable() {
+    return Table(
+      columnWidths: const {
+        0: FixedColumnWidth(64),   // No
+        1: FixedColumnWidth(140),  // Lecturer ID
+        2: FixedColumnWidth(140),  // Lecturer Name
+        3: FixedColumnWidth(120),  // Password
+      },
+      border: TableBorder(
+        horizontalInside: BorderSide(color: Colors.grey.shade300),
+      ),
+      children: [
+        TableRow(
+          children: [
+            _tableHeaderCell("No"),
+            _tableHeaderCell("Lecturer ID"),
+            _tableHeaderCell("Lecturer Name"),
+            _tableHeaderCell("Password"),
+          ],
+        ),
+        for (int index = 0; index < _filteredLecturers.length; index++)
+          TableRow(
+            decoration: BoxDecoration(
+              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+            ),
+            children: [
+              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredLecturers[index].id, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredLecturers[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMobileTable() {
+    return Table(
+      defaultColumnWidth: const IntrinsicColumnWidth(),
+      border: TableBorder(
+        horizontalInside: BorderSide(color: Colors.grey.shade300),
+      ),
+      children: [
+        TableRow(
+          children: [
+            _tableHeaderCell("No"),
+            _tableHeaderCell("Lecturer ID"),
+            _tableHeaderCell("Lecturer Name"),
+            _tableHeaderCell("Password"),
+          ],
+        ),
+        for (int index = 0; index < _filteredLecturers.length; index++)
+          TableRow(
+            decoration: BoxDecoration(
+              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+            ),
+            children: [
+              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredLecturers[index].id, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredLecturers[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _tableHeaderCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+        textAlign: TextAlign.left,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _tableBodyCell(String text, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        child: Text(
+          text,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
     );
   }

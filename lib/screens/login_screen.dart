@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:attendance_system/screens/super_admin_page.dart'; // Adjust import path!
-
+import 'package:attendance_system/screens/super_admin_page.dart';
+import 'package:attendance_system/screens/faculty_admin_page.dart';
+import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
+import 'package:attendance_system/components/pages/teacher_attendance_page.dart'; // <-- Import your teacher page!
+import 'package:attendance_system/screens/teacher_main_page.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -13,23 +16,73 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   String? _errorMessage;
+  bool _isLoggingIn = false;
 
   void _handleLogin() {
+    if (_isLoggingIn) return;
+    setState(() {
+      _isLoggingIn = true;
+    });
+
     String username = _usernameController.text.trim();
     String password = _passwordController.text;
+    final bool isMobile = MediaQuery.of(context).size.width < 600;
 
     // Example credentials
     if (username == 'admin' && password == 'admin123') {
-      // Navigate to SuperAdminPage
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const SuperAdminPage()),
-      );
-    } else {
-      setState(() {
-        _errorMessage = 'Invalid username or password';
+      ).then((_) {
+        if (mounted) setState(() => _isLoggingIn = false);
+      });
+    } else if (username == 'a' && password == 'b') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const FacultyAdminPage()),
+      ).then((_) {
+        if (mounted) setState(() => _isLoggingIn = false);
+      });
+    } else if (username == 'student' && password == 'student123') {
+      if (!isMobile) {
+        // Only allow student login on mobile devices
+        setState(() {
+          _errorMessage = 'Student login is allowed on mobile devices only.';
+          _isLoggingIn = false;
+        });
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const StudentViewAttendanceMobile()),
+        ).then((_) {
+          if (mounted) setState(() => _isLoggingIn = false);
+        });
+      }
+    }
+    // Teacher login
+    else if (username == 'teacher' && password == 'teacher123') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const TeacherMainPage()),
+      ).then((_) {
+        if (mounted) setState(() => _isLoggingIn = false);
       });
     }
+    else {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Invalid username or password';
+          _isLoggingIn = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -40,18 +93,13 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFF9D83D7),
-              Color(0xFF4D91D6),
-            ],
+            colors: [Color(0xFF9D83D7), Color(0xFF4D91D6)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
         ),
         child: Center(
-          child: isMobile
-              ? _buildMobileForm(context)
-              : _buildWebForm(context),
+          child: isMobile ? _buildMobileForm(context) : _buildWebForm(context),
         ),
       ),
     );
@@ -205,7 +253,10 @@ class _LoginScreenState extends State<LoginScreen> {
         prefixIcon: Icon(icon, color: textColor ?? Colors.white),
         hintText: hint,
         hintStyle: TextStyle(color: textColor ?? Colors.white70),
-        contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 18,
+          horizontal: 20,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(24),
           borderSide: BorderSide.none,

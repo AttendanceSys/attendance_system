@@ -5,102 +5,11 @@ import '../components/admin_stats_grid.dart';
 import 'login_screen.dart';
 import 'package:attendance_system/components/pages/faculties_page.dart';
 import 'package:attendance_system/components/pages/lecturer_page.dart';
-import 'package:attendance_system/components/pages/user_handling_page.dart';
+import 'package:attendance_system/components/pages/Admin_user_handling_page.dart';
+import 'package:attendance_system/components/popup/logout_confirmation_popup.dart';
 
 // ---- Logout confirmation popup matching your design ----
-Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
-  return showDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => Dialog(
-      elevation: 8,
-      backgroundColor: Colors.transparent,
-      child: Center(
-        child: Container(
-          width: MediaQuery.of(context).size.width > 400
-              ? 340
-              : double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.blue[100]!, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                "Are you sure you want to logout",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    height: 40,
-                    width: 100,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF1991EB)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        "Cancel",
-                        style: TextStyle(
-                          color: Color(0xFF1991EB),
-                          fontWeight: FontWeight.w500,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  SizedBox(
-                    height: 40,
-                    width: 100,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        "Logout",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
-}
+// Use reusable popup from components/popup/logout_confirmation_popup.dart
 
 class SuperAdminPage extends StatefulWidget {
   const SuperAdminPage({super.key});
@@ -129,7 +38,7 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
             ),
           ),
           const SizedBox(height: 32),
-          AdminDashboardStatsGrid(),
+          Expanded(child: AdminDashboardStatsGrid()),
         ],
       ),
     ),
@@ -141,14 +50,17 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
 
   // --- This method now shows the confirmation popup before logging out ---
   void _logout(BuildContext context) async {
-    final confirmed = await showLogoutConfirmationPopup(context);
-    if (confirmed == true) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
+    try {
+      final confirmed = await showLogoutConfirmationPopup(context);
+      if (confirmed == true) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+    } catch (e) {
+      print("Logout failed: $e");
     }
-    // If cancelled, do nothing
   }
 
   @override

@@ -6,7 +6,7 @@ class AdminDashboardStatsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    double aspectRatio = screenWidth < 500 ? 1.4 : 2.2;
+    double aspectRatio = screenWidth < 500 ? 1.4 : 2.4;
 
     // Always 2 columns, so 3rd card starts second line
     return GridView.count(

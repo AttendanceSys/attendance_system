@@ -64,17 +64,6 @@ class _AddLecturerPopupState extends State<AddLecturerPopup> {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: _lecturerName,
-                  decoration: const InputDecoration(
-                    hintText: "Lecturer Name",
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) => _lecturerName = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter lecturer name" : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
                   initialValue: _lecturerId,
                   decoration: const InputDecoration(
                     hintText: "Lecturer ID",
@@ -83,6 +72,17 @@ class _AddLecturerPopupState extends State<AddLecturerPopup> {
                   onChanged: (val) => _lecturerId = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter lecturer ID" : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  initialValue: _lecturerName,
+                  decoration: const InputDecoration(
+                    hintText: "Lecturer Name",
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) => _lecturerName = val,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter lecturer name" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(

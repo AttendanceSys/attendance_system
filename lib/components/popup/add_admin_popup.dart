@@ -5,7 +5,8 @@ class AddAdminPopup extends StatefulWidget {
   final Admin? admin;
   final List<String> facultyNames;
 
-  const AddAdminPopup({Key? key, this.admin, required this.facultyNames}) : super(key: key);
+  const AddAdminPopup({Key? key, this.admin, required this.facultyNames})
+    : super(key: key);
 
   @override
   State<AddAdminPopup> createState() => _AddAdminPopupState();
@@ -23,13 +24,15 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
     super.initState();
     _adminId = widget.admin?.id;
     _fullName = widget.admin?.fullName;
-    _facultyName = widget.admin?.facultyName ?? (widget.facultyNames.isNotEmpty ? widget.facultyNames[0] : null);
+    _facultyName = widget.admin?.facultyName;
     _password = widget.admin?.password;
   }
 
   @override
   Widget build(BuildContext context) {
-    final double dialogWidth = MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
+    final double dialogWidth = MediaQuery.of(context).size.width > 600
+        ? 400
+        : double.infinity;
 
     return Dialog(
       elevation: 8,
@@ -71,7 +74,8 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (val) => _adminId = val,
-                  validator: (val) => val == null || val.isEmpty ? "Enter admin ID" : null,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter admin ID" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -81,7 +85,8 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (val) => _fullName = val,
-                  validator: (val) => val == null || val.isEmpty ? "Enter full name" : null,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter full name" : null,
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
@@ -90,14 +95,19 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                     hintText: "Faculty Name",
                     border: OutlineInputBorder(),
                   ),
-                  items: widget.facultyNames
-                      .map((name) => DropdownMenuItem(
-                            value: name,
-                            child: Text(name),
-                          ))
-                      .toList(),
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text("Select One"),
+                    ),
+                    ...widget.facultyNames.map(
+                      (name) =>
+                          DropdownMenuItem(value: name, child: Text(name)),
+                    ),
+                  ],
                   onChanged: (val) => setState(() => _facultyName = val),
-                  validator: (val) => val == null || val.isEmpty ? "Select faculty name" : null,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Select faculty name" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -108,7 +118,8 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                   ),
                   obscureText: true,
                   onChanged: (val) => _password = val,
-                  validator: (val) => val == null || val.isEmpty ? "Enter password" : null,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter password" : null,
                 ),
                 const SizedBox(height: 24),
                 Row(

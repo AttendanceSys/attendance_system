@@ -1,34 +1,30 @@
 import 'package:flutter/material.dart';
-import '../../models/department.dart';
 
-class AddDepartmentPopup extends StatefulWidget {
-  final Department? department;
-  final List<String> statusOptions;
+class AddEditAttendancePopup extends StatefulWidget {
+  final Map<String, dynamic>? attendance;
 
-  const AddDepartmentPopup({
-    Key? key,
-    this.department,
-    required this.statusOptions,
-  }) : super(key: key);
+  const AddEditAttendancePopup({Key? key, this.attendance}) : super(key: key);
 
   @override
-  State<AddDepartmentPopup> createState() => _AddDepartmentPopupState();
+  State<AddEditAttendancePopup> createState() => _AddEditAttendancePopupState();
 }
 
-class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
+class _AddEditAttendancePopupState extends State<AddEditAttendancePopup> {
   final _formKey = GlobalKey<FormState>();
-  String? _name;
-  String? _code;
-  String? _head;
-  String? _status;
+  String? _studentName;
+  String? _department;
+  String? _className;
+  bool _status = true;
 
   @override
   void initState() {
     super.initState();
-    _name = widget.department?.name;
-    _code = widget.department?.code;
-    _head = widget.department?.head;
-    _status = widget.department?.status;
+    if (widget.attendance != null) {
+      _studentName = widget.attendance!['name'];
+      _department = widget.attendance!['department'];
+      _className = widget.attendance!['class'];
+      _status = widget.attendance!['status'];
+    }
   }
 
   @override
@@ -63,7 +59,9 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.department == null ? "Add Department" : "Edit Department",
+                  widget.attendance == null
+                      ? "Add Attendance"
+                      : "Edit Attendance",
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -71,53 +69,49 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: _name,
+                  initialValue: _studentName,
                   decoration: const InputDecoration(
-                    hintText: "Department Name",
+                    hintText: "Student Name",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _name = val,
+                  onChanged: (val) => _studentName = val,
                   validator: (val) =>
-                      val == null || val.isEmpty ? "Enter department name" : null,
+                      val == null || val.isEmpty ? "Enter student name" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  initialValue: _code,
+                  initialValue: _department,
                   decoration: const InputDecoration(
-                    hintText: "Department Code",
+                    hintText: "Department",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _code = val,
+                  onChanged: (val) => _department = val,
                   validator: (val) =>
-                      val == null || val.isEmpty ? "Enter department code" : null,
+                      val == null || val.isEmpty ? "Enter department" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  initialValue: _head,
+                  initialValue: _className,
                   decoration: const InputDecoration(
-                    hintText: "Head of Department",
+                    hintText: "Class",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _head = val,
+                  onChanged: (val) => _className = val,
                   validator: (val) =>
-                      val == null || val.isEmpty ? "Enter head of department" : null,
+                      val == null || val.isEmpty ? "Enter class" : null,
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _status,
-                  decoration: const InputDecoration(
-                    hintText: "Status",
-                    border: OutlineInputBorder(),
-                  ),
-                  items: widget.statusOptions
-                      .map((status) => DropdownMenuItem(
-                            value: status,
-                            child: Text(status),
-                          ))
-                      .toList(),
-                  onChanged: (val) => setState(() => _status = val),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Select status" : null,
+                Row(
+                  children: [
+                    const Text("Status:"),
+                    const SizedBox(width: 12),
+                    Switch(
+                      value: _status,
+                      onChanged: (val) => setState(() => _status = val),
+                      activeColor: Colors.green,
+                      inactiveThumbColor: Colors.red,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -150,14 +144,12 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                       child: ElevatedButton(
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop(
-                              Department(
-                                code: _code!,
-                                name: _name!,
-                                head: _head!,
-                                status: _status!,
-                              ),
-                            );
+                            Navigator.of(context).pop({
+                              'name': _studentName,
+                              'department': _department,
+                              'class': _className,
+                              'status': _status,
+                            });
                           }
                         },
                         style: ElevatedButton.styleFrom(

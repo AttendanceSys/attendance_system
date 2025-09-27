@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/user.dart';
 
 class EditUserPopup extends StatefulWidget {
-  final User user;
+  final AppUser user;
   const EditUserPopup({Key? key, required this.user}) : super(key: key);
 
   @override
@@ -60,24 +60,22 @@ class _EditUserPopupState extends State<EditUserPopup> {
                 TextFormField(
                   initialValue: _username,
                   decoration: const InputDecoration(
-                    hintText: "Username",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _username = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter username" : null,
+                  onChanged: (val) => _username = val,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _password,
                   decoration: const InputDecoration(
-                    hintText: "Password",
                     border: OutlineInputBorder(),
                   ),
-                  obscureText: true,
-                  onChanged: (val) => _password = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter password" : null,
+                  obscureText: true,
+                  onChanged: (val) => _password = val,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -111,8 +109,9 @@ class _EditUserPopupState extends State<EditUserPopup> {
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
                             Navigator.of(context).pop(
-                              widget.user.copyWith(
+                              AppUser(
                                 username: _username,
+                                role: widget.user.role,
                                 password: _password,
                               ),
                             );

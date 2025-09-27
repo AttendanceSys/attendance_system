@@ -1,76 +1,77 @@
 import 'package:flutter/material.dart';
-import '../../models/admin.dart';
-import '../popup/add_admin_popup.dart';
+import '../../models/classes.dart';
+import '../popup/add_class_popup.dart';
 import '../cards/searchBar.dart';
 
-class AdminsPage extends StatefulWidget {
-  const AdminsPage({Key? key}) : super(key: key);
+class ClassesPage extends StatefulWidget {
+  const ClassesPage({Key? key}) : super(key: key);
 
   @override
-  State<AdminsPage> createState() => _AdminsPageState();
+  State<ClassesPage> createState() => _ClassesPageState();
 }
 
-class _AdminsPageState extends State<AdminsPage> {
-  final List<Admin> _admins = [
-    Admin(id: 'SNU1234', fullName: 'Cali', facultyName: 'ENG', password: '*******'),
-    Admin(id: 'SNU5678', fullName: 'Amina', facultyName: 'ENG', password: '*******'),
-    Admin(id: 'SNU9101', fullName: 'Yusuf', facultyName: 'ENG', password: '*******'),
-    Admin(id: 'SNU1121', fullName: 'Fatima', facultyName: 'ENG', password: '*******'),
+class _ClassesPageState extends State<ClassesPage> {
+  final List<SchoolClass> _classes = [
+    SchoolClass(name: 'B3SC A', department: 'CS', section: 'A', isActive: true),
+    SchoolClass(name: 'B2SC', department: 'CS', section: '', isActive: false),
+    SchoolClass(name: 'B4SC', department: 'MATH', section: '', isActive: true),
+    SchoolClass(name: 'B5SC', department: 'GEO', section: '', isActive: true),
   ];
 
-  final List<String> _facultyNames = [
-    'ENG',
-    'SCI',
-    'MED',
-    'EDU',
-  ];
+  final List<String> departments = ['CS', 'MATH', 'GEO', 'BIO', 'CHEM'];
+  final List<String> sections = ['A', 'B', 'C', 'D', ''];
 
   String _searchText = '';
   int? _selectedIndex;
 
-  List<Admin> get _filteredAdmins => _admins
-      .where((admin) =>
-          admin.id.toLowerCase().contains(_searchText.toLowerCase()) ||
-          admin.fullName.toLowerCase().contains(_searchText.toLowerCase()) ||
-          admin.facultyName.toLowerCase().contains(_searchText.toLowerCase()))
-      .toList();
+  List<SchoolClass> get _filteredClasses => _classes.where((cls) =>
+    cls.name.toLowerCase().contains(_searchText.toLowerCase()) ||
+    cls.department.toLowerCase().contains(_searchText.toLowerCase())
+  ).toList();
 
-  Future<void> _showAddAdminPopup() async {
-    final result = await showDialog<Admin>(
+  Future<void> _showAddClassPopup() async {
+    final result = await showDialog<SchoolClass>(
       context: context,
-      builder: (context) => AddAdminPopup(facultyNames: _facultyNames),
+      builder: (context) => AddClassPopup(
+        departments: departments,
+        sections: sections,
+      ),
     );
     if (result != null) {
       setState(() {
-        _admins.add(result);
+        _classes.add(result);
         _selectedIndex = null;
       });
     }
   }
 
-  Future<void> _showEditAdminPopup() async {
+  Future<void> _showEditClassPopup() async {
     if (_selectedIndex == null) return;
-    final admin = _filteredAdmins[_selectedIndex!];
-    final result = await showDialog<Admin>(
+    final schoolClass = _filteredClasses[_selectedIndex!];
+    final result = await showDialog<SchoolClass>(
       context: context,
-      builder: (context) => AddAdminPopup(admin: admin, facultyNames: _facultyNames),
+      builder: (context) => AddClassPopup(
+        schoolClass: schoolClass,
+        departments: departments,
+        sections: sections,
+      ),
     );
     if (result != null) {
-      int mainIndex = _admins.indexOf(admin);
+      int mainIndex = _classes.indexOf(schoolClass);
       setState(() {
-        _admins[mainIndex] = result;
+        _classes[mainIndex] = result;
       });
     }
   }
 
-  Future<void> _confirmDeleteAdmin() async {
+  Future<void> _confirmDeleteClass() async {
     if (_selectedIndex == null) return;
-    final admin = _filteredAdmins[_selectedIndex!];
+    final schoolClass = _filteredClasses[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Admin"),
-        content: Text("Are you sure you want to delete '${admin.fullName}'?"),
+        title: const Text("Delete Class"),
+        content: Text("Are you sure you want to delete '${schoolClass.name}'?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -86,7 +87,7 @@ class _AdminsPageState extends State<AdminsPage> {
     );
     if (confirm == true) {
       setState(() {
-        _admins.remove(admin);
+        _classes.remove(schoolClass);
         _selectedIndex = null;
       });
     }
@@ -95,6 +96,15 @@ class _AdminsPageState extends State<AdminsPage> {
   void _handleRowTap(int index) {
     setState(() {
       _selectedIndex = index;
+    });
+  }
+
+  void _toggleActive(int index, bool value) {
+    setState(() {
+      _filteredClasses[index].isActive = value;
+      // Optionally, also update the main list if needed:
+      int mainIndex = _classes.indexOf(_filteredClasses[index]);
+      _classes[mainIndex].isActive = value;
     });
   }
 
@@ -110,7 +120,7 @@ class _AdminsPageState extends State<AdminsPage> {
         children: [
           const SizedBox(height: 8),
           const Text(
-            "Admins",
+            "Classes",
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -126,9 +136,9 @@ class _AdminsPageState extends State<AdminsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SearchAddBar(
-                      hintText: "Search Admin...",
-                      buttonText: "Add Admin",
-                      onAddPressed: _showAddAdminPopup,
+                      hintText: "Search Class...",
+                      buttonText: "Add Class",
+                      onAddPressed: _showAddClassPopup,
                       onChanged: (value) {
                         setState(() {
                           _searchText = value;
@@ -151,11 +161,8 @@ class _AdminsPageState extends State<AdminsPage> {
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
                             ),
-                            onPressed: _selectedIndex == null ? null : _showEditAdminPopup,
-                            child: const Text(
-                              "Edit",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
-                            ),
+                            onPressed: _selectedIndex == null ? null : _showEditClassPopup,
+                            child: const Text("Edit", style: TextStyle(fontSize: 15, color: Colors.white)),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -170,11 +177,8 @@ class _AdminsPageState extends State<AdminsPage> {
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
                             ),
-                            onPressed: _selectedIndex == null ? null : _confirmDeleteAdmin,
-                            child: const Text(
-                              "Delete",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
-                            ),
+                            onPressed: _selectedIndex == null ? null : _confirmDeleteClass,
+                            child: const Text("Delete", style: TextStyle(fontSize: 15, color: Colors.white)),
                           ),
                         ),
                       ],
@@ -208,11 +212,10 @@ class _AdminsPageState extends State<AdminsPage> {
   Widget _buildDesktopTable() {
     return Table(
       columnWidths: const {
-        0: FixedColumnWidth(64),    // No
-        1: FixedColumnWidth(120),   // Admin ID
-        2: FixedColumnWidth(140),   // Full Name
-        3: FixedColumnWidth(120),   // Faculty Name
-        4: FixedColumnWidth(120),   // Password
+        0: FixedColumnWidth(64),   // No
+        1: FixedColumnWidth(140),  // Class name
+        2: FixedColumnWidth(120),  // Department
+        3: FixedColumnWidth(170),  // Active/Inactive
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -221,23 +224,29 @@ class _AdminsPageState extends State<AdminsPage> {
         TableRow(
           children: [
             _tableHeaderCell("No"),
-            _tableHeaderCell("Admin ID"),
-            _tableHeaderCell("Full Name"),
-            _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Password"),
+            _tableHeaderCell("Class name"),
+            _tableHeaderCell("Department"),
+            _tableHeaderCell("Active/Inactive"),
           ],
         ),
-        for (int index = 0; index < _filteredAdmins.length; index++)
+        for (int index = 0; index < _filteredClasses.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].id, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].fullName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].facultyName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredClasses[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredClasses[index].department, onTap: () => _handleRowTap(index)),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: Switch(
+                  value: _filteredClasses[index].isActive,
+                  onChanged: (value) => _toggleActive(index, value),
+                  activeColor: Colors.green,
+                  inactiveThumbColor: Colors.red,
+                ),
+              ),
             ],
           ),
       ],
@@ -254,23 +263,29 @@ class _AdminsPageState extends State<AdminsPage> {
         TableRow(
           children: [
             _tableHeaderCell("No"),
-            _tableHeaderCell("Admin ID"),
-            _tableHeaderCell("Full Name"),
-            _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Password"),
+            _tableHeaderCell("Class name"),
+            _tableHeaderCell("Department"),
+            _tableHeaderCell("Active/Inactive"),
           ],
         ),
-        for (int index = 0; index < _filteredAdmins.length; index++)
+        for (int index = 0; index < _filteredClasses.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].id, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].fullName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].facultyName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredClasses[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_filteredClasses[index].department, onTap: () => _handleRowTap(index)),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                child: Switch(
+                  value: _filteredClasses[index].isActive,
+                  onChanged: (value) => _toggleActive(index, value),
+                  activeColor: Colors.green,
+                  inactiveThumbColor: Colors.red,
+                ),
+              ),
             ],
           ),
       ],
