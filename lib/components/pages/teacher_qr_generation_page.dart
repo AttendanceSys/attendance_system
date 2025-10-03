@@ -5,16 +5,35 @@ class TeacherQRGenerationPage extends StatefulWidget {
   const TeacherQRGenerationPage({Key? key}) : super(key: key);
 
   @override
-  State<TeacherQRGenerationPage> createState() => _TeacherQRGenerationPageState();
+  State<TeacherQRGenerationPage> createState() =>
+      _TeacherQRGenerationPageState();
 }
 
 class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
-  String department = "CS";
-  String className = "B3SC";
-  String section = "A";
-  String subject = "Cloud Computing";
+  final List<String> subjectList = [
+    "Cloud Computing",
+    "Software Engineering",
+    "Databases",
+  ];
+  final List<String> departmentList = ["CS", "IT", "SE"];
+  final List<String> classNameList = ["B3SC", "B2IT", "B1SE"];
+  final List<String> sectionList = ["A", "B", "C"];
+
+  late String subject;
+  late String department;
+  late String className;
+  late String section;
 
   String? qrCodeData;
+
+  @override
+  void initState() {
+    super.initState();
+    subject = subjectList.first;
+    department = departmentList.first;
+    className = classNameList.first;
+    section = sectionList.first;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,26 +52,26 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
             runSpacing: 12,
             alignment: WrapAlignment.start,
             children: [
-              _dropdown(subject, [
-                "Cloud Computing",
-                "Software Engineering",
-                "Databases",
-              ], (v) => setState(() => subject = v ?? subject)),
-              _dropdown(department, [
-                "CS",
-                "IT",
-                "SE",
-              ], (v) => setState(() => department = v ?? department)),
-              _dropdown(className, [
-                "B3SC",
-                "B2IT",
-                "B1SE",
-              ], (v) => setState(() => className = v ?? className)),
-              _dropdown(section, [
-                "A",
-                "B",
-                "C",
-              ], (v) => setState(() => section = v ?? section)),
+              _dropdown(
+                subject,
+                subjectList,
+                (v) => setState(() => subject = v ?? subject),
+              ),
+              _dropdown(
+                department,
+                departmentList,
+                (v) => setState(() => department = v ?? department),
+              ),
+              _dropdown(
+                className,
+                classNameList,
+                (v) => setState(() => className = v ?? className),
+              ),
+              _dropdown(
+                section,
+                sectionList,
+                (v) => setState(() => section = v ?? section),
+              ),
               const SizedBox(width: 18),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(

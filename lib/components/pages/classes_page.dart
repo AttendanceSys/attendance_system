@@ -226,7 +226,7 @@ class _ClassesPageState extends State<ClassesPage> {
             _tableHeaderCell("No"),
             _tableHeaderCell("Class name"),
             _tableHeaderCell("Department"),
-            _tableHeaderCell("Active/Inactive"),
+            _tableHeaderCell("Status"),
           ],
         ),
         for (int index = 0; index < _filteredClasses.length; index++)
