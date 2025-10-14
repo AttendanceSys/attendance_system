@@ -7,11 +7,11 @@ class FacultyAdminSidebar extends StatelessWidget {
   final bool collapsed;
 
   const FacultyAdminSidebar({
-    Key? key,
+    super.key,
     required this.onItemSelected,
     required this.selectedIndex,
     this.collapsed = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -127,13 +127,13 @@ class _SidebarItem extends StatelessWidget {
   final bool collapsed;
 
   const _SidebarItem({
-    Key? key,
+    super.key,
     required this.icon,
     required this.title,
     required this.isSelected,
     required this.onTap,
     required this.collapsed,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

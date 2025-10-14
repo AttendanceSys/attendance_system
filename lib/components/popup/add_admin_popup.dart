@@ -5,8 +5,7 @@ class AddAdminPopup extends StatefulWidget {
   final Admin? admin;
   final List<String> facultyNames;
 
-  const AddAdminPopup({Key? key, this.admin, required this.facultyNames})
-    : super(key: key);
+  const AddAdminPopup({super.key, this.admin, required this.facultyNames});
 
   @override
   State<AddAdminPopup> createState() => _AddAdminPopupState();

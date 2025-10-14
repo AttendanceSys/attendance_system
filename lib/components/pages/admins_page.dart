@@ -4,7 +4,7 @@ import '../popup/add_admin_popup.dart';
 import '../cards/searchBar.dart';
 
 class AdminsPage extends StatefulWidget {
-  const AdminsPage({Key? key}) : super(key: key);
+  const AdminsPage({super.key});
 
   @override
   State<AdminsPage> createState() => _AdminsPageState();

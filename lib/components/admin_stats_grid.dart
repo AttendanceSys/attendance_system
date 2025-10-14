@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AdminDashboardStatsGrid extends StatelessWidget {
-  const AdminDashboardStatsGrid({Key? key}) : super(key: key);
+  const AdminDashboardStatsGrid({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -47,12 +47,12 @@ class _StatsCard extends StatelessWidget {
   final Color color;
 
   const _StatsCard({
-    Key? key,
+    super.key,
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

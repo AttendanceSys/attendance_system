@@ -9,14 +9,14 @@ class StudentDetailsPanel extends StatefulWidget {
   final Function(List<Map<String, dynamic>>) onEdit;
 
   const StudentDetailsPanel({
-    Key? key,
+    super.key,
     required this.studentId,
     this.selectedDate,
     required this.attendanceRecords,
     required this.searchText,
     this.onBack,
     required this.onEdit,
-  }) : super(key: key);
+  });
 
   @override
   State<StudentDetailsPanel> createState() => _StudentDetailsPanelState();

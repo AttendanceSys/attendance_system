@@ -6,11 +6,11 @@ class SuccessPopup extends StatelessWidget {
   final String time;
 
   const SuccessPopup({
-    Key? key,
+    super.key,
     required this.subject,
     required this.date,
     required this.time,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
