@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/faculty.dart';
 
 class AddFacultyPopupDemoPage extends StatelessWidget {
-  const AddFacultyPopupDemoPage({super.key});
+  const AddFacultyPopupDemoPage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +34,7 @@ class AddFacultyPopupDemoPage extends StatelessWidget {
 
 class AddFacultyPopup extends StatefulWidget {
   final Faculty? faculty;
-  const AddFacultyPopup({super.key, this.faculty});
+  const AddFacultyPopup({Key? key, this.faculty}) : super(key: key);
 
   @override
   State<AddFacultyPopup> createState() => _AddFacultyPopupState();

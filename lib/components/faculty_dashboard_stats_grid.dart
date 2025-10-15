@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class DashboardStatsGrid extends StatelessWidget {
-  const DashboardStatsGrid({super.key});
+  const DashboardStatsGrid({Key? key}) : super(key: key);
 
   static final List<DashboardStat> _stats = [
     DashboardStat(
@@ -62,7 +62,7 @@ class DashboardStat {
 
 class _DashboardStatCard extends StatelessWidget {
   final DashboardStat stat;
-  const _DashboardStatCard({super.key, required this.stat});
+  const _DashboardStatCard({Key? key, required this.stat}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

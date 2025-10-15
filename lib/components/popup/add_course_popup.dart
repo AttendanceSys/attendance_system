@@ -7,11 +7,11 @@ class AddCoursePopup extends StatefulWidget {
   final List<String> classes;
 
   const AddCoursePopup({
-    super.key,
+    Key? key,
     this.course,
     required this.teachers,
     required this.classes,
-  });
+  }) : super(key: key);
 
   @override
   State<AddCoursePopup> createState() => _AddCoursePopupState();

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class AddEditAttendancePopup extends StatefulWidget {
   final Map<String, dynamic>? attendance;
 
-  const AddEditAttendancePopup({super.key, this.attendance});
+  const AddEditAttendancePopup({Key? key, this.attendance}) : super(key: key);
 
   @override
   State<AddEditAttendancePopup> createState() => _AddEditAttendancePopupState();

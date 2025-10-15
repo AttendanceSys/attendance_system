@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../components/faculty_dashboard_stats_grid.dart';
 
 class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key});
+  const DashboardPage({Key? key}) : super(key: key);
 
    @override
   Widget build(BuildContext context) {

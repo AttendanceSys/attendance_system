@@ -6,10 +6,10 @@ class AddDepartmentPopup extends StatefulWidget {
   final List<String> statusOptions;
 
   const AddDepartmentPopup({
-    super.key,
+    Key? key,
     this.department,
     required this.statusOptions,
-  });
+  }) : super(key: key);
 
   @override
   State<AddDepartmentPopup> createState() => _AddDepartmentPopupState();

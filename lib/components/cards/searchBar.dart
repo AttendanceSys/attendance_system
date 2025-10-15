@@ -36,7 +36,7 @@ class SearchAddBar extends StatelessWidget {
             ),
           ),
         ),
-        if (buttonText.isNotEmpty) ...[
+        if (buttonText.isNotEmpty && onAddPressed != null) ...[
           const SizedBox(width: 12),
           ElevatedButton.icon(
             onPressed: onAddPressed,

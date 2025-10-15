@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class TeacherQRGenerationPage extends StatefulWidget {
-  const TeacherQRGenerationPage({super.key});
+  const TeacherQRGenerationPage({Key? key}) : super(key: key);
 
   @override
   State<TeacherQRGenerationPage> createState() =>
@@ -10,12 +10,30 @@ class TeacherQRGenerationPage extends StatefulWidget {
 }
 
 class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
-  String? department;
-  String? className;
-  String? section;
-  String? subject;
+  final List<String> subjectList = [
+    "Cloud Computing",
+    "Software Engineering",
+    "Databases",
+  ];
+  final List<String> departmentList = ["CS", "IT", "SE"];
+  final List<String> classNameList = ["B3SC", "B2IT", "B1SE"];
+  final List<String> sectionList = ["A", "B", "C"];
+
+  late String subject;
+  late String department;
+  late String className;
+  late String section;
 
   String? qrCodeData;
+
+  @override
+  void initState() {
+    super.initState();
+    subject = subjectList.first;
+    department = departmentList.first;
+    className = classNameList.first;
+    section = sectionList.first;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,28 +53,24 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
             alignment: WrapAlignment.start,
             children: [
               _dropdown(
+                subject,
+                subjectList,
+                (v) => setState(() => subject = v ?? subject),
+              ),
+              _dropdown(
                 department,
-                ["CS", "IT", "SE"],
-                (v) => setState(() => department = v),
-                "Select Department",
+                departmentList,
+                (v) => setState(() => department = v ?? department),
               ),
               _dropdown(
                 className,
-                ["B3SC", "B2IT", "B1SE"],
-                (v) => setState(() => className = v),
-                "Select Class",
+                classNameList,
+                (v) => setState(() => className = v ?? className),
               ),
               _dropdown(
                 section,
-                ["A", "B", "C"],
-                (v) => setState(() => section = v),
-                "Select Section",
-              ),
-              _dropdown(
-                subject,
-                ["Cloud Computing", "Software Engineering", "Databases"],
-                (v) => setState(() => subject = v),
-                "Select Subject",
+                sectionList,
+                (v) => setState(() => section = v ?? section),
               ),
               const SizedBox(width: 18),
               ElevatedButton(
@@ -137,22 +151,15 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   }
 
   Widget _dropdown(
-    String? value,
+    String value,
     List<String> items,
     ValueChanged<String?> onChanged,
-    String hint,
   ) {
     return DropdownButton<String>(
       value: value,
-      items: [
-        DropdownMenuItem(
-          value: null,
-          child: Text(hint, style: const TextStyle(color: Colors.grey)),
-        ),
-        ...items
-            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-            .toList(),
-      ],
+      items: items
+          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+          .toList(),
       onChanged: onChanged,
       style: const TextStyle(fontSize: 18, color: Colors.black87),
       underline: const SizedBox(),

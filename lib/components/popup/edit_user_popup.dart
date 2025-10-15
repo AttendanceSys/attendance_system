@@ -3,7 +3,7 @@ import '../../models/user.dart';
 
 class EditUserPopup extends StatefulWidget {
   final AppUser user;
-  const EditUserPopup({super.key, required this.user});
+  const EditUserPopup({Key? key, required this.user}) : super(key: key);
 
   @override
   State<EditUserPopup> createState() => _EditUserPopupState();

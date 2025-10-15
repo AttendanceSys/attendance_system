@@ -6,11 +6,11 @@ class AttendanceDuplicatePopup extends StatelessWidget {
   final String time;
 
   const AttendanceDuplicatePopup({
-    super.key,
+    Key? key,
     required this.subject,
     required this.date,
     required this.time,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

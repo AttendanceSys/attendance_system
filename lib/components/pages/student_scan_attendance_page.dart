@@ -3,7 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'student_view_attendance_page.dart'; // <-- Import your View Attendance page!
 
 class StudentScanAttendancePage extends StatefulWidget {
-  const StudentScanAttendancePage({super.key});
+  const StudentScanAttendancePage({Key? key}) : super(key: key);
 
   @override
   State<StudentScanAttendancePage> createState() =>

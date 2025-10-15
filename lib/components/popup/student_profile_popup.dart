@@ -10,14 +10,14 @@ class StudentProfilePopup extends StatelessWidget {
   final String avatarLetter;
 
   const StudentProfilePopup({
-    super.key,
+    Key? key,
     required this.name,
     required this.className,
     required this.semester,
     required this.gender,
     required this.id,
     required this.avatarLetter,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

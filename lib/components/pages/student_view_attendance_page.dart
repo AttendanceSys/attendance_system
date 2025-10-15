@@ -3,7 +3,7 @@ import '../popup/student_profile_popup.dart';
 import 'student_scan_attendance_page.dart';
 
 class StudentViewAttendanceMobile extends StatelessWidget {
-  const StudentViewAttendanceMobile({super.key});
+  const StudentViewAttendanceMobile({Key? key}) : super(key: key);
 
   final List<Map<String, dynamic>> attendance = const [
     {'course': 'Cloud', 'present': 11, 'absent': 0},

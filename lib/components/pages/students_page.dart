@@ -4,7 +4,7 @@ import '../popup/add_student_popup.dart';
 import '../cards/searchBar.dart';
 
 class StudentsPage extends StatefulWidget {
-  const StudentsPage({super.key});
+  const StudentsPage({Key? key}) : super(key: key);
 
   @override
   State<StudentsPage> createState() => _StudentsPageState();

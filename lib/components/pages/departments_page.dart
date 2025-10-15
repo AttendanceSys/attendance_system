@@ -4,7 +4,7 @@ import '../popup/add_department_popup.dart';
 import '../cards/searchBar.dart';
 
 class DepartmentsPage extends StatefulWidget {
-  const DepartmentsPage({super.key});
+  const DepartmentsPage({Key? key}) : super(key: key);
 
   @override
   State<DepartmentsPage> createState() => _DepartmentsPageState();
