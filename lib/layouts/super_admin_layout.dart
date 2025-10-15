@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'components/sidebars/admin_sidebar.dart';
-import 'screens/adminsScreen.dart';
+import '../components/sidebars/admin_sidebar.dart';
+import '../screens/adminsScreen.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});

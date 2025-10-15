@@ -1,45 +1,15 @@
 import 'package:flutter/material.dart';
-
-class AddDepartmentPopupDemoPage extends StatelessWidget {
-  const AddDepartmentPopupDemoPage({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Department Popup Demo')),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () async {
-            final result = await showDialog(
-              context: context,
-              builder: (context) => AddDepartmentPopup(
-                statuses: ["Active", "Inactive"],
-              ),
-            );
-            if (result != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    "Department Added: ${result['departmentName']} (${result['departmentCode']})",
-                  ),
-                ),
-              );
-            }
-          },
-          child: const Text('Show Add Department Popup'),
-        ),
-      ),
-    );
-  }
-}
+import '../../models/department.dart';
 
 class AddDepartmentPopup extends StatefulWidget {
-  final List<String> statuses;
+  final Department? department;
+  final List<String> statusOptions;
 
   const AddDepartmentPopup({
-    super.key,
-    required this.statuses,
-  });
+    Key? key,
+    this.department,
+    required this.statusOptions,
+  }) : super(key: key);
 
   @override
   State<AddDepartmentPopup> createState() => _AddDepartmentPopupState();
@@ -47,14 +17,25 @@ class AddDepartmentPopup extends StatefulWidget {
 
 class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
   final _formKey = GlobalKey<FormState>();
-  String? _departmentName;
-  String? _departmentCode;
-  String? _headOfDepartment;
-  String? _selectedStatus;
+  String? _name;
+  String? _code;
+  String? _head;
+  String? _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = widget.department?.name;
+    _code = widget.department?.code;
+    _head = widget.department?.head;
+    _status = widget.department?.status;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final double dialogWidth = MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
+    final double dialogWidth = MediaQuery.of(context).size.width > 600
+        ? 400
+        : MediaQuery.of(context).size.width * 0.95;
 
     return Dialog(
       elevation: 8,
@@ -79,61 +60,64 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start, // Left align title
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Add Department",
-                  style: TextStyle(
+                Text(
+                  widget.department == null ? "Add Department" : "Edit Department",
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.left,
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
+                  initialValue: _name,
                   decoration: const InputDecoration(
                     hintText: "Department Name",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _departmentName = val,
+                  onChanged: (val) => _name = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter department name" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  initialValue: _code,
                   decoration: const InputDecoration(
                     hintText: "Department Code",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _departmentCode = val,
+                  onChanged: (val) => _code = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter department code" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  initialValue: _head,
                   decoration: const InputDecoration(
                     hintText: "Head of Department",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _headOfDepartment = val,
+                  onChanged: (val) => _head = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter head of department" : null,
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
+                  value: _status,
                   decoration: const InputDecoration(
                     hintText: "Status",
                     border: OutlineInputBorder(),
                   ),
-                  items: widget.statuses
+                  items: widget.statusOptions
                       .map((status) => DropdownMenuItem(
                             value: status,
                             child: Text(status),
                           ))
                       .toList(),
-                  onChanged: (val) => _selectedStatus = val,
+                  onChanged: (val) => setState(() => _status = val),
                   validator: (val) =>
-                      val == null ? "Select status" : null,
+                      val == null || val.isEmpty ? "Select status" : null,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -166,12 +150,14 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                       child: ElevatedButton(
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop({
-                              "departmentName": _departmentName,
-                              "departmentCode": _departmentCode,
-                              "headOfDepartment": _headOfDepartment,
-                              "status": _selectedStatus,
-                            });
+                            Navigator.of(context).pop(
+                              Department(
+                                code: _code!,
+                                name: _name!,
+                                head: _head!,
+                                status: _status!,
+                              ),
+                            );
                           }
                         },
                         style: ElevatedButton.styleFrom(

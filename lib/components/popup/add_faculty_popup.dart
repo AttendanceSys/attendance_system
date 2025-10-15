@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/faculty.dart';
 
 class AddFacultyPopupDemoPage extends StatelessWidget {
   const AddFacultyPopupDemoPage({Key? key}) : super(key: key);
@@ -32,7 +33,8 @@ class AddFacultyPopupDemoPage extends StatelessWidget {
 }
 
 class AddFacultyPopup extends StatefulWidget {
-  const AddFacultyPopup({super.key});
+  final Faculty? faculty;
+  const AddFacultyPopup({Key? key, this.faculty}) : super(key: key);
 
   @override
   State<AddFacultyPopup> createState() => _AddFacultyPopupState();
@@ -45,8 +47,18 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
   DateTime? _establishmentDate;
 
   @override
+  void initState() {
+    super.initState();
+    _facultyCode = widget.faculty?.code;
+    _facultyName = widget.faculty?.name;
+    _establishmentDate = widget.faculty?.createdAt;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final double dialogWidth = MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
+    final double dialogWidth = MediaQuery.of(context).size.width > 600
+        ? 400
+        : double.infinity;
 
     return Dialog(
       elevation: 8,
@@ -73,9 +85,9 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start, // Left align title
               children: [
-                const Text(
-                  "Add Faculty",
-                  style: TextStyle(
+                Text(
+                  widget.faculty == null ? "Add Faculty" : "Edit Faculty",
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
@@ -83,6 +95,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
+                  initialValue: _facultyCode,
                   decoration: const InputDecoration(
                     hintText: "Faculty Code",
                     border: OutlineInputBorder(),
@@ -93,6 +106,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  initialValue: _facultyName,
                   decoration: const InputDecoration(
                     hintText: "Faculty Name",
                     border: OutlineInputBorder(),
@@ -106,7 +120,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                   onTap: () async {
                     final pickedDate = await showDatePicker(
                       context: context,
-                      initialDate: DateTime.now(),
+                      initialDate: _establishmentDate ?? DateTime.now(),
                       firstDate: DateTime(1900),
                       lastDate: DateTime.now(),
                     );
@@ -128,8 +142,9 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                             ? ""
                             : "${_establishmentDate!.year}-${_establishmentDate!.month.toString().padLeft(2, '0')}-${_establishmentDate!.day.toString().padLeft(2, '0')}",
                       ),
-                      validator: (val) =>
-                          _establishmentDate == null ? "Select establishment date" : null,
+                      validator: (val) => _establishmentDate == null
+                          ? "Select establishment date"
+                          : null,
                     ),
                   ),
                 ),
@@ -164,11 +179,13 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                       child: ElevatedButton(
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop({
-                              "facultyCode": _facultyCode,
-                              "facultyName": _facultyName,
-                              "establishmentDate": _establishmentDate,
-                            });
+                            Navigator.of(context).pop(
+                              Faculty(
+                                code: _facultyCode!,
+                                name: _facultyName!,
+                                createdAt: _establishmentDate!,
+                              ),
+                            );
                           }
                         },
                         style: ElevatedButton.styleFrom(

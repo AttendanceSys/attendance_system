@@ -1,44 +1,16 @@
 import 'package:flutter/material.dart';
-
-class AddClassPopupDemoPage extends StatelessWidget {
-  const AddClassPopupDemoPage({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Class Popup Demo')),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () async {
-            final result = await showDialog(
-              context: context,
-              builder: (context) => AddClassPopup(
-                departments: ["Science", "Arts", "Commerce"],
-                sections: ["A", "B", "C"],
-              ),
-            );
-            if (result != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Class Added: ${result['className']} (${result['department']}, ${result['section']})")),
-              );
-            }
-          },
-          child: const Text('Show Add Class Popup'),
-        ),
-      ),
-    );
-  }
-}
+import '../../models/classes.dart';
 
 class AddClassPopup extends StatefulWidget {
+  final SchoolClass? schoolClass;
   final List<String> departments;
   final List<String> sections;
-
   const AddClassPopup({
-    super.key,
+    Key? key,
+    this.schoolClass,
     required this.departments,
     required this.sections,
-  });
+  }) : super(key: key);
 
   @override
   State<AddClassPopup> createState() => _AddClassPopupState();
@@ -46,13 +18,53 @@ class AddClassPopup extends StatefulWidget {
 
 class _AddClassPopupState extends State<AddClassPopup> {
   final _formKey = GlobalKey<FormState>();
-  String? _className;
-  String? _selectedDepartment;
-  String? _selectedSection;
+  String? _baseName;
+  String? _department;
+  String? _section;
+
+  String get _combinedClassName {
+    if ((_baseName ?? '').isEmpty) return '';
+    if (_section != null && _section!.isNotEmpty) {
+      return "${_baseName!} ${_section!}";
+    }
+    return _baseName!;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // If editing, split class name into base and section if possible
+    if (widget.schoolClass != null) {
+      final parts = widget.schoolClass!.name.split(' ');
+      if (parts.length > 1 && widget.sections.contains(parts.last)) {
+        _baseName = parts.sublist(0, parts.length - 1).join(' ');
+        _section = parts.last;
+      } else {
+        _baseName = widget.schoolClass!.name;
+        _section = widget.schoolClass!.section;
+      }
+      _department = widget.schoolClass!.department;
+    }
+  }
+
+  void _save() {
+    if (_formKey.currentState!.validate()) {
+      Navigator.of(context).pop(
+        SchoolClass(
+          name: _combinedClassName,
+          department: _department!,
+          section: _section ?? '',
+          isActive: widget.schoolClass?.isActive ?? true,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final double dialogWidth = MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
+    final double dialogWidth = MediaQuery.of(context).size.width > 600
+        ? 400
+        : MediaQuery.of(context).size.width * 0.95;
 
     return Dialog(
       elevation: 8,
@@ -62,7 +74,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
           width: dialogWidth,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: Colors.blue[100]!, width: 2),
             boxShadow: [
               BoxShadow(
@@ -77,28 +89,29 @@ class _AddClassPopupState extends State<AddClassPopup> {
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start, // Left align title
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Add Class",
-                  style: TextStyle(
+                Text(
+                  widget.schoolClass == null ? "Add Class" : "Edit Class",
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.left,
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
+                  initialValue: _baseName,
                   decoration: const InputDecoration(
-                    hintText: "Class Name",
+                    hintText: "Base Class Name (e.g. B3SC)",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _className = val,
+                  onChanged: (val) => setState(() => _baseName = val),
                   validator: (val) =>
-                      val == null || val.isEmpty ? "Enter class name" : null,
+                      val == null || val.isEmpty ? "Enter base class name" : null,
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
+                  value: _department,
                   decoration: const InputDecoration(
                     hintText: "Department",
                     border: OutlineInputBorder(),
@@ -109,12 +122,13 @@ class _AddClassPopupState extends State<AddClassPopup> {
                             child: Text(dep),
                           ))
                       .toList(),
-                  onChanged: (val) => _selectedDepartment = val,
+                  onChanged: (val) => setState(() => _department = val),
                   validator: (val) =>
-                      val == null ? "Select department" : null,
+                      val == null || val.isEmpty ? "Select department" : null,
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
+                  value: _section,
                   decoration: const InputDecoration(
                     hintText: "Section",
                     border: OutlineInputBorder(),
@@ -122,13 +136,23 @@ class _AddClassPopupState extends State<AddClassPopup> {
                   items: widget.sections
                       .map((sec) => DropdownMenuItem(
                             value: sec,
-                            child: Text(sec),
+                            child: Text(sec.isNotEmpty ? sec : "(none)"),
                           ))
                       .toList(),
-                  onChanged: (val) => _selectedSection = val,
+                  onChanged: (val) => setState(() => _section = val),
                   validator: (val) =>
                       val == null ? "Select section" : null,
                 ),
+                const SizedBox(height: 12),
+                // Preview field
+                if (_combinedClassName.isNotEmpty)
+                  Text(
+                    "Class Name: $_combinedClassName",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blueGrey,
+                    ),
+                  ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -158,17 +182,9 @@ class _AddClassPopupState extends State<AddClassPopup> {
                     SizedBox(
                       height: 40,
                       child: ElevatedButton(
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop({
-                              "className": _className,
-                              "department": _selectedDepartment,
-                              "section": _selectedSection,
-                            });
-                          }
-                        },
+                        onPressed: _save,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[700],
+                          backgroundColor: Colors.blue[900],
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),

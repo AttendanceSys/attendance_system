@@ -1,45 +1,16 @@
 import 'package:flutter/material.dart';
-
-class AddAdminPopupDemoPage extends StatelessWidget {
-  const AddAdminPopupDemoPage({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Admin Popup Demo')),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () async {
-            final result = await showDialog(
-              context: context,
-              builder: (context) => AddAdminPopup(
-                faculties: ["Science", "Arts", "Commerce", "Engineering"],
-              ),
-            );
-            if (result != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    "Admin Added: ${result['adminId']} (${result['fullName']})",
-                  ),
-                ),
-              );
-            }
-          },
-          child: const Text('Show Add Admin Popup'),
-        ),
-      ),
-    );
-  }
-}
+import '../../models/admin.dart';
+import 'success_snacbar.dart'; // <-- import your snackbar component
 
 class AddAdminPopup extends StatefulWidget {
-  final List<String> faculties;
+  final Admin? admin;
+  final List<String> facultyNames;
 
   const AddAdminPopup({
-    super.key,
-    required this.faculties,
-  });
+    Key? key,
+    this.admin,
+    required this.facultyNames,
+  }) : super(key: key);
 
   @override
   State<AddAdminPopup> createState() => _AddAdminPopupState();
@@ -49,12 +20,23 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
   final _formKey = GlobalKey<FormState>();
   String? _adminId;
   String? _fullName;
-  String? _selectedFaculty;
+  String? _facultyName;
   String? _password;
+  bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _adminId = widget.admin?.id;
+    _fullName = widget.admin?.fullName;
+    _facultyName = widget.admin?.facultyName;
+    _password = widget.admin?.password;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final double dialogWidth = MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
+    final double dialogWidth =
+        MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
 
     return Dialog(
       elevation: 8,
@@ -79,28 +61,29 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start, // Left align title
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Add Admin",
-                  style: TextStyle(
+                Text(
+                  widget.admin == null ? "Add Admin" : "Edit Admin",
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.left,
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
+                  initialValue: _adminId,
                   decoration: const InputDecoration(
                     hintText: "Admin ID",
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (val) => _adminId = val,
                   validator: (val) =>
-                      val == null || val.isEmpty ? "Enter Admin ID" : null,
+                      val == null || val.isEmpty ? "Enter admin ID" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
+                  initialValue: _fullName,
                   decoration: const InputDecoration(
                     hintText: "Full Name",
                     border: OutlineInputBorder(),
@@ -111,30 +94,56 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
+                  value: _facultyName,
                   decoration: const InputDecoration(
-                    hintText: "Faculty  Name",
+                    hintText: "Faculty Name",
                     border: OutlineInputBorder(),
                   ),
-                  items: widget.faculties
-                      .map((faculty) => DropdownMenuItem(
-                            value: faculty,
-                            child: Text(faculty),
-                          ))
-                      .toList(),
-                  onChanged: (val) => _selectedFaculty = val,
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text("Select One"),
+                    ),
+                    ...widget.facultyNames.map(
+                      (name) =>
+                          DropdownMenuItem(value: name, child: Text(name)),
+                    ),
+                  ],
+                  onChanged: (val) => setState(() => _facultyName = val),
                   validator: (val) =>
-                      val == null ? "Select faculty" : null,
+                      val == null || val.isEmpty ? "Select faculty name" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  decoration: const InputDecoration(
+                  initialValue: _password,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
                     hintText: "Password",
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: Colors.grey[700],
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
                   ),
-                  obscureText: true,
                   onChanged: (val) => _password = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter password" : null,
+                  validator: (val) {
+                    if (val == null || val.isEmpty) {
+                      return "Enter password";
+                    }
+                    if (val.length < 6) {
+                      return "Password must be at least 6 characters";
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -167,12 +176,16 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                       child: ElevatedButton(
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop({
-                              "adminId": _adminId,
-                              "fullName": _fullName,
-                              "faculty": _selectedFaculty,
-                              "password": _password,
-                            });
+                            Navigator.of(context).pop(
+                              Admin(
+                                id: _adminId!,
+                                fullName: _fullName!,
+                                facultyName: _facultyName!,
+                                password: _password!,
+                              ),
+                            );
+                            // Show success snackbar after saving
+                            SuccessSnackbar.show(context, message: "Successfully Saved");
                           }
                         },
                         style: ElevatedButton.styleFrom(

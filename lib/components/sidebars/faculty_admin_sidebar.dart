@@ -137,35 +137,41 @@ class _SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: isSelected ? const Color(0x33FFFFFF) : Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
+    return Tooltip(
+      message: collapsed ? title : "", // Only show tooltip when collapsed
+      verticalOffset: 0,
+      preferBelow: false,
+      waitDuration: const Duration(milliseconds: 300),
+      child: Material(
+        color: isSelected ? const Color(0x33FFFFFF) : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: collapsed ? 0 : 16,
-            vertical: 12,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: isSelected ? const Color(0x33FFFFFF) : Colors.transparent,
-          ),
-          child: Row(
-            mainAxisAlignment: collapsed
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
-            children: [
-              Icon(icon, color: Colors.white, size: 22),
-              if (!collapsed) ...[
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: collapsed ? 0 : 16,
+              vertical: 12,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: isSelected ? const Color(0x33FFFFFF) : Colors.transparent,
+            ),
+            child: Row(
+              mainAxisAlignment: collapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
+              children: [
+                Icon(icon, color: Colors.white, size: 22),
+                if (!collapsed) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    title,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
