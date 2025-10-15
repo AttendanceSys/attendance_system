@@ -1,68 +1,17 @@
-// ...existing code...
 import 'package:flutter/material.dart';
-import '../hooks/use_admins.dart';
-import '../hooks/use_lectureres.dart';
-import '../hooks/use_faculties.dart';
 
-class AdminDashboardStatsGrid extends StatefulWidget {
-  const AdminDashboardStatsGrid({Key? key}) : super(key: key);
-
-  @override
-  State<AdminDashboardStatsGrid> createState() => _AdminDashboardStatsGridState();
-}
-
-class _AdminDashboardStatsGridState extends State<AdminDashboardStatsGrid> {
-  int facultyCount = 0;
-  int adminCount = 0;
-  int lecturerCount = 0;
-  bool loading = true;
-
-  final _facilities = UseFaculties();
-  final _admins = UseAdmins();
-  final _teachers = UseTeachers();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCounts();
-  }
-
-  Future<void> _loadCounts() async {
-    setState(() => loading = true);
-    try {
-      final faculties = await _facilities.fetchFaculties();
-      final admins = await _admins.fetchAdmins();
-      final teachers = await _teachers.fetchTeachers();
-
-      setState(() {
-        facultyCount = faculties.length;
-        adminCount = admins.length;
-        lecturerCount = teachers.length;
-        loading = false;
-      });
-    } catch (e) {
-      // On error keep counts at 0 and stop loading.
-      setState(() {
-        facultyCount = 0;
-        adminCount = 0;
-        lecturerCount = 0;
-        loading = false;
-      });
-    }
-  }
+class AdminDashboardStatsGrid extends StatelessWidget {
+  const AdminDashboardStatsGrid({super.key});
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     double aspectRatio = screenWidth < 500 ? 1.4 : 2.4;
 
-    String facultiesValue = loading ? '...' : facultyCount.toString();
-    String adminsValue = loading ? '...' : adminCount.toString();
-    String lecturersValue = loading ? '...' : lecturerCount.toString();
-
+    // Always 2 columns, so 3rd card starts second line
     return GridView.count(
       shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+      physics: NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
       crossAxisSpacing: 16,
       mainAxisSpacing: 16,
@@ -71,20 +20,20 @@ class _AdminDashboardStatsGridState extends State<AdminDashboardStatsGrid> {
         _StatsCard(
           icon: Icons.account_tree_outlined,
           label: "Faculties",
-          value: facultiesValue,
-          color: const Color(0xFFB9EEB6),
+          value: "4",
+          color: Color(0xFFB9EEB6),
         ),
         _StatsCard(
           icon: Icons.groups,
           label: "Admins",
-          value: adminsValue,
-          color: const Color(0xFFF7B345),
+          value: "0",
+          color: Color(0xFFF7B345),
         ),
         _StatsCard(
           icon: Icons.school_outlined,
           label: "Lecturers",
-          value: lecturersValue,
-          color: const Color(0xFF31B9C1),
+          value: "4",
+          color: Color(0xFF31B9C1),
         ),
       ],
     );
@@ -98,36 +47,34 @@ class _StatsCard extends StatelessWidget {
   final Color color;
 
   const _StatsCard({
-    Key? key,
+    super.key,
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
-  }) : super(key: key);
+  });
 
-  @override
-// ...existing code...
   @override
   Widget build(BuildContext context) {
     const double numberLeftPadding = 39.0;
     final screenWidth = MediaQuery.of(context).size.width;
-    double labelFont = screenWidth < 500 ? 20 : 29;
-    double numberFont = screenWidth < 500 ? 36 : 50;
+    double labelFont = screenWidth < 500 ? 16 : 19;
+    double numberFont = screenWidth < 500 ? 28 : 36;
 
     return Container(
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(18),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      padding: EdgeInsets.symmetric(horizontal: 22, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(icon, color: Colors.white, size: 50),
-              const SizedBox(width: 10),
+              Icon(icon, color: Colors.white, size: 29),
+              SizedBox(width: 10),
               Text(
                 label,
                 style: TextStyle(
@@ -138,20 +85,18 @@ class _StatsCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // centered value (both vertically and horizontally)
-          Expanded(
-            child: Center(
-              child: Text(
-                value,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: numberFont,
-                  fontWeight: FontWeight.bold,
-                  height: 1,
-                ),
-                textAlign: TextAlign.center,
+          SizedBox(height: 12),
+          Padding(
+            padding: EdgeInsets.only(left: numberLeftPadding),
+            child: Text(
+              value,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: numberFont,
+                fontWeight: FontWeight.bold,
+                height: 1,
               ),
+              textAlign: TextAlign.left,
             ),
           ),
         ],
@@ -159,4 +104,3 @@ class _StatsCard extends StatelessWidget {
     );
   }
 }
-// ...existing code...

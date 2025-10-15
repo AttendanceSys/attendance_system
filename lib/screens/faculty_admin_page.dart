@@ -7,8 +7,10 @@ import '../layouts/faculty_admin_layout.dart';
 import '../components/faculty_dashboard_stats_grid.dart';
 import '../components/pages/faculty_user_handling_page.dart';
 import '../components/pages/attendance_page.dart';
+import '../components/pages/timetable_page.dart';
+
 class FacultyAdminPage extends StatelessWidget {
-  const FacultyAdminPage({Key? key}) : super(key: key);
+  const FacultyAdminPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +47,7 @@ class FacultyAdminPage extends StatelessWidget {
         // 5: Attendance
         AttendanceUnifiedPage(),
         // 6: TimeTable
-        Center(child: Text('TimeTable Page', style: TextStyle(fontSize: 24))),
+        TimetablePage(),
         // 7: User Handling
         FacultyUserHandlingPage(),
       ],

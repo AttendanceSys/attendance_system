@@ -5,7 +5,7 @@ import '../components/pages/teacher_attendance_page.dart';
 import '../components/popup/logout_confirmation_popup.dart'; // <-- reusable popup
 import 'login_screen.dart';
 class TeacherMainPage extends StatefulWidget {
-  const TeacherMainPage({Key? key}) : super(key: key);
+  const TeacherMainPage({super.key});
 
   @override
   State<TeacherMainPage> createState() => _TeacherMainPageState();

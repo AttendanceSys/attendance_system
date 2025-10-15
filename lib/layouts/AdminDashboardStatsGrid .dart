@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../components/admin_stats_grid.dart';
 
 class AdminStatsPage extends StatelessWidget {
-  const AdminStatsPage({Key? key}) : super(key: key);
+  const AdminStatsPage({super.key});
 
   @override
   Widget build(BuildContext context) {

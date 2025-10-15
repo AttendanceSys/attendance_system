@@ -4,7 +4,7 @@ import '../../models/lecturer.dart';
 class AddLecturerPopup extends StatefulWidget {
   final Lecturer? lecturer;
 
-  const AddLecturerPopup({Key? key, this.lecturer}) : super(key: key);
+  const AddLecturerPopup({super.key, this.lecturer});
 
   @override
   State<AddLecturerPopup> createState() => _AddLecturerPopupState();

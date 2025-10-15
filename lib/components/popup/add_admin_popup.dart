@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../models/admin.dart';
-import 'success_snacbar.dart'; // <-- import your snackbar component
 
 class AddAdminPopup extends StatefulWidget {
   final Admin? admin;
   final List<String> facultyNames;
 
-  const AddAdminPopup({
-    Key? key,
-    this.admin,
-    required this.facultyNames,
-  }) : super(key: key);
+  const AddAdminPopup({super.key, this.admin, required this.facultyNames});
 
   @override
   State<AddAdminPopup> createState() => _AddAdminPopupState();
@@ -22,7 +17,6 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
   String? _fullName;
   String? _facultyName;
   String? _password;
-  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -35,8 +29,9 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
 
   @override
   Widget build(BuildContext context) {
-    final double dialogWidth =
-        MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
+    final double dialogWidth = MediaQuery.of(context).size.width > 600
+        ? 400
+        : double.infinity;
 
     return Dialog(
       elevation: 8,
@@ -116,34 +111,14 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _password,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: "Password",
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: Colors.grey[700],
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
+                    border: OutlineInputBorder(),
                   ),
+                  obscureText: true,
                   onChanged: (val) => _password = val,
-                  validator: (val) {
-                    if (val == null || val.isEmpty) {
-                      return "Enter password";
-                    }
-                    if (val.length < 6) {
-                      return "Password must be at least 6 characters";
-                    }
-                    return null;
-                  },
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter password" : null,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -184,8 +159,6 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                                 password: _password!,
                               ),
                             );
-                            // Show success snackbar after saving
-                            SuccessSnackbar.show(context, message: "Successfully Saved");
                           }
                         },
                         style: ElevatedButton.styleFrom(
