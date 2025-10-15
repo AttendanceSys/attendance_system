@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:attendance_system/screens/super_admin_page.dart';
 import 'package:attendance_system/screens/faculty_admin_page.dart';
 import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
-import 'package:attendance_system/components/pages/teacher_attendance_page.dart'; // <-- Import your teacher page!
+// import 'package:attendance_system/components/pages/teacher_attendance_page.dart';
 import 'package:attendance_system/screens/teacher_main_page.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -15,8 +16,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  final FocusNode _usernameFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
+
   String? _errorMessage;
   bool _isLoggingIn = false;
+  bool _obscurePassword = true;
 
   void _handleLogin() {
     if (_isLoggingIn) return;
@@ -28,7 +33,6 @@ class _LoginScreenState extends State<LoginScreen> {
     String password = _passwordController.text;
     final bool isMobile = MediaQuery.of(context).size.width < 600;
 
-    // Example credentials
     if (username == 'admin' && password == 'admin123') {
       Navigator.pushReplacement(
         context,
@@ -45,7 +49,6 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     } else if (username == 'student' && password == 'student123') {
       if (!isMobile) {
-        // Only allow student login on mobile devices
         setState(() {
           _errorMessage = 'Student login is allowed on mobile devices only.';
           _isLoggingIn = false;
@@ -58,17 +61,14 @@ class _LoginScreenState extends State<LoginScreen> {
           if (mounted) setState(() => _isLoggingIn = false);
         });
       }
-    }
-    // Teacher login
-    else if (username == 'teacher' && password == 'teacher123') {
+    } else if (username == 'teacher' && password == 'teacher123') {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const TeacherMainPage()),
       ).then((_) {
         if (mounted) setState(() => _isLoggingIn = false);
       });
-    }
-    else {
+    } else {
       if (mounted) {
         setState(() {
           _errorMessage = 'Invalid username or password';
@@ -82,6 +82,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _usernameFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -126,6 +128,8 @@ class _LoginScreenState extends State<LoginScreen> {
             icon: Icons.person,
             hint: "Username",
             obscure: false,
+            focusNode: _usernameFocus,
+            onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
           ),
           const SizedBox(height: 16),
           _buildInputField(
@@ -133,10 +137,13 @@ class _LoginScreenState extends State<LoginScreen> {
             icon: Icons.lock,
             hint: "Password",
             obscure: true,
+            isPassword: true,
+            focusNode: _passwordFocus,
+            onSubmitted: (_) => _handleLogin(),
           ),
           if (_errorMessage != null) ...[
             const SizedBox(height: 12),
-            Text(_errorMessage!, style: TextStyle(color: Colors.red)),
+            Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
           ],
           const SizedBox(height: 24),
           SizedBox(
@@ -173,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
             BoxShadow(
               color: Colors.black12,
               blurRadius: 16,
-              offset: Offset(0, 8),
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -197,6 +204,8 @@ class _LoginScreenState extends State<LoginScreen> {
               obscure: false,
               fillColor: Colors.grey[100],
               textColor: Colors.black87,
+              focusNode: _usernameFocus,
+              onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
             ),
             const SizedBox(height: 16),
             _buildInputField(
@@ -204,12 +213,15 @@ class _LoginScreenState extends State<LoginScreen> {
               icon: Icons.lock,
               hint: "Password",
               obscure: true,
+              isPassword: true,
               fillColor: Colors.grey[100],
               textColor: Colors.black87,
+              focusNode: _passwordFocus,
+              onSubmitted: (_) => _handleLogin(),
             ),
             if (_errorMessage != null) ...[
               const SizedBox(height: 12),
-              Text(_errorMessage!, style: TextStyle(color: Colors.red)),
+              Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
             ],
             const SizedBox(height: 24),
             SizedBox(
@@ -242,11 +254,15 @@ class _LoginScreenState extends State<LoginScreen> {
     required bool obscure,
     Color? fillColor,
     Color? textColor,
+    bool isPassword = false,
+    FocusNode? focusNode,
+    void Function(String)? onSubmitted,
   }) {
     return TextField(
       controller: controller,
-      obscureText: obscure,
+      obscureText: isPassword ? _obscurePassword : obscure,
       style: TextStyle(color: textColor ?? Colors.white),
+      focusNode: focusNode,
       decoration: InputDecoration(
         filled: true,
         fillColor: fillColor ?? Colors.white.withOpacity(0.2),
@@ -257,11 +273,26 @@ class _LoginScreenState extends State<LoginScreen> {
           vertical: 18,
           horizontal: 20,
         ),
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  color: textColor ?? Colors.white,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              )
+            : null,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(24),
           borderSide: BorderSide.none,
         ),
       ),
+      textInputAction: isPassword ? TextInputAction.done : TextInputAction.next,
+      onSubmitted: onSubmitted,
     );
   }
 }

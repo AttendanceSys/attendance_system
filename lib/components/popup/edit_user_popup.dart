@@ -13,6 +13,7 @@ class _EditUserPopupState extends State<EditUserPopup> {
   final _formKey = GlobalKey<FormState>();
   late String _username;
   late String _password;
+  bool _obscurePassword = true; // ✅ added for show/hide toggle
 
   @override
   void initState() {
@@ -69,12 +70,25 @@ class _EditUserPopupState extends State<EditUserPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _password,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: Colors.grey[700],
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
                   ),
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter password" : null,
-                  obscureText: true,
+                  obscureText: _obscurePassword, // ✅ controlled visibility
                   onChanged: (val) => _password = val,
                 ),
                 const SizedBox(height: 24),

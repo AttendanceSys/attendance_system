@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
 import '../../models/user.dart';
 import '../popup/edit_user_popup.dart';
 import '../cards/searchBar.dart';
+import '../../hooks/use_user_handling.dart';
 
 class UserHandlingPage extends StatefulWidget {
   const UserHandlingPage({Key? key}) : super(key: key);
@@ -11,12 +14,9 @@ class UserHandlingPage extends StatefulWidget {
 }
 
 class _UserHandlingPageState extends State<UserHandlingPage> {
-  final List<AppUser> _users = [
-    AppUser(username: 'SNU1234', role: 'F admin', password: '*******'),
-    AppUser(username: 'MWE299', role: 'teacher', password: '*******'),
-    AppUser(username: 'SNU1234', role: 'F admin', password: '*******'),
-    AppUser(username: 'SNU1234', role: 'F admin', password: '*******'),
-  ];
+  final List<AppUser> _users = [];
+  bool _isLoading = true;
+  String? _loadError;
 
   String _searchText = '';
   int? _selectedIndex;
@@ -28,6 +28,46 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
             user.role.toLowerCase().contains(_searchText.toLowerCase()),
       )
       .toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsersFromDb();
+  }
+
+  Future<void> _loadUsersFromDb() async {
+    final dataSource = UseUserHandling();
+    try {
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
+
+      final rows = await dataSource.fetchUsersWithSync();
+
+      final mapped = rows.map(
+        (r) => AppUser(
+          username: r.usernames ?? '',
+          role: r.role,
+          password: r.passwords ?? '',
+        ),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _users.clear();
+        _users.addAll(mapped);
+        _isLoading = false;
+      });
+    } catch (e, st) {
+      debugPrint('Admin_user_handling_page._loadUsersFromDb error: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _loadError = e.toString();
+      });
+    }
+  }
 
   Future<void> _showEditUserPopup() async {
     if (_selectedIndex == null) return;
@@ -89,14 +129,40 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
-          const Text(
-            "User Handling",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: LinearProgressIndicator(),
             ),
+          if (_loadError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(
+                'Failed to load users: $_loadError',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text(
+                "User Handling",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Reload users from DB',
+                icon: const Icon(Icons.refresh),
+                onPressed: () async {
+                  debugPrint('Manual reload requested');
+                  await _loadUsersFromDb();
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           Row(
@@ -205,10 +271,10 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
   Widget _buildDesktopTable() {
     return Table(
       columnWidths: const {
-        0: FixedColumnWidth(64),   // No
-        1: FixedColumnWidth(160),  // Username
-        2: FixedColumnWidth(160),  // Role
-        3: FixedColumnWidth(120),  // Password
+        0: FixedColumnWidth(64), // No
+        1: FixedColumnWidth(160), // Username
+        2: FixedColumnWidth(160), // Role
+        3: FixedColumnWidth(120), // Password
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -302,10 +368,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(
-          text,
-          overflow: TextOverflow.ellipsis,
-        ),
+        child: Text(text, overflow: TextOverflow.ellipsis),
       ),
     );
   }
