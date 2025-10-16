@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class TimetableCellEditResult {
-  final String? cellText;    // null means no change, '' means clear
+  final String? cellText; // null means no change, '' means clear
   TimetableCellEditResult({required this.cellText});
 }
 
 /// Dialog to edit a single timetable cell.
-/// If both course & lecturer are empty on save -> treated as "clear".
+/// If both course & lecturer are empty on save -> treated as "clear" (with confirmation).
 class TimetableCellEditDialog extends StatefulWidget {
   final String? initialCourse;
   final String? initialLecturer;
@@ -32,21 +32,34 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   bool _useCustomLecturer = false;
   final TextEditingController _customLecturerCtrl = TextEditingController();
 
+  // Track initial values to detect unsaved changes
+  late final String _initialCourse;
+  late final String _initialLecturer;
+  late final bool _initialUseCustomLecturer;
+
   @override
   void initState() {
     super.initState();
+
     _course = widget.initialCourse != null && widget.initialCourse!.isNotEmpty
         ? widget.initialCourse
         : null;
 
     if (widget.initialLecturer != null && widget.initialLecturer!.isNotEmpty) {
-      if (widget.lecturers.map((e) => e.toLowerCase()).contains(widget.initialLecturer!.toLowerCase())) {
+      if (widget.lecturers
+          .map((e) => e.toLowerCase())
+          .contains(widget.initialLecturer!.toLowerCase())) {
         _lecturer = widget.initialLecturer;
+        _useCustomLecturer = false;
       } else {
         _useCustomLecturer = true;
         _customLecturerCtrl.text = widget.initialLecturer!;
       }
     }
+
+    _initialCourse = (widget.initialCourse ?? '').trim();
+    _initialLecturer = (widget.initialLecturer ?? '').trim();
+    _initialUseCustomLecturer = _useCustomLecturer;
   }
 
   @override
@@ -55,28 +68,110 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
     super.dispose();
   }
 
-  void _save() {
-    final course = (_course ?? '').trim();
-    String lecturer;
-    if (_useCustomLecturer) {
-      lecturer = _customLecturerCtrl.text.trim();
-    } else {
-      lecturer = (_lecturer ?? '').trim();
+  String get _currentCourse => (_course ?? '').trim();
+  String get _currentLecturer =>
+      _useCustomLecturer ? _customLecturerCtrl.text.trim() : (_lecturer ?? '').trim();
+
+  bool get _hasChanges =>
+      _currentCourse != _initialCourse ||
+      _currentLecturer != _initialLecturer ||
+      _useCustomLecturer != _initialUseCustomLecturer;
+
+  Future<bool> _confirm({
+    required String title,
+    required String content,
+    String confirmText = 'Yes',
+    String cancelText = 'No',
+    bool destructive = false,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(cancelText)),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: destructive ? Colors.red : Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(confirmText),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
+
+  Future<void> _onCloseOrCancel() async {
+    if (_hasChanges) {
+      final ok = await _confirm(
+        title: 'Discard changes?',
+        content: 'You have unsaved changes. Do you want to discard them?',
+        confirmText: 'Discard',
+        destructive: true,
+      );
+      if (!ok) return;
     }
+    if (!mounted) return;
+    Navigator.pop(context); // no result -> no change
+  }
+
+  Future<void> _clear() async {
+    final ok = await _confirm(
+      title: 'Clear this cell?',
+      content: 'This will remove the course and lecturer from this time slot.',
+      confirmText: 'Clear',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    Navigator.pop(context, TimetableCellEditResult(cellText: ''));
+  }
+
+  Future<void> _save() async {
+    final course = _currentCourse;
+    final lecturer = _currentLecturer;
 
     if (course.isEmpty && lecturer.isEmpty) {
+      // Treat as clear, but confirm first
+      final ok = await _confirm(
+        title: 'Save as empty?',
+        content: 'Both Course and Lecturer are empty. This will clear the cell.',
+        confirmText: 'Clear cell',
+        destructive: true,
+      );
+      if (!ok || !mounted) return;
       Navigator.pop(context, TimetableCellEditResult(cellText: ''));
       return;
     }
 
-    final cellText =
-        lecturer.isEmpty ? course : '$course\n$lecturer';
+    final cellText = lecturer.isEmpty ? course : '$course\n$lecturer';
 
+    // Confirm applying non-empty edits (show before -> after summary)
+    if (_hasChanges) {
+      final display = (String s) => s.isEmpty ? '(empty)' : s;
+      final before = [
+        if (_initialCourse.isNotEmpty || _initialLecturer.isNotEmpty) display(_initialCourse),
+        if (_initialLecturer.isNotEmpty) display(_initialLecturer),
+      ].join('\n');
+      final after = [
+        if (course.isNotEmpty || lecturer.isNotEmpty) display(course),
+        if (lecturer.isNotEmpty) display(lecturer),
+      ].join('\n');
+
+      final ok = await _confirm(
+        title: 'Apply changes?',
+        content: 'You are about to update this cell.\n\nBefore:\n$before\n\nAfter:\n$after',
+        confirmText: 'Save',
+        destructive: false,
+      );
+      if (!ok || !mounted) return;
+    }
+
+    if (!mounted) return;
     Navigator.pop(context, TimetableCellEditResult(cellText: cellText));
-  }
-
-  void _clear() {
-    Navigator.pop(context, TimetableCellEditResult(cellText: ''));
   }
 
   @override
@@ -107,7 +202,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                     IconButton(
                       icon: const Icon(Icons.close),
                       tooltip: 'Close',
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _onCloseOrCancel,
                     ),
                   ],
                 ),
@@ -175,7 +270,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                     ),
                     const SizedBox(width: 8),
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _onCloseOrCancel,
                       child: const Text('Cancel'),
                     ),
                     const SizedBox(width: 12),

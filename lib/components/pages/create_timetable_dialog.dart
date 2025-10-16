@@ -122,6 +122,36 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     super.dispose();
   }
 
+  // --------------------- Helpers ---------------------
+
+  Future<bool> _confirm({
+    required String title,
+    required String content,
+    String confirmText = 'Yes',
+    String cancelText = 'No',
+    bool destructive = false,
+  }) async {
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(cancelText)),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: destructive ? Colors.red : Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(confirmText),
+          ),
+        ],
+      ),
+    );
+    return res == true;
+  }
+
   // --------------------- Parsing & Integrity ---------------------
 
   final RegExp _timeLabelRegex = RegExp(
@@ -206,6 +236,17 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   // --------------------- Period Generator (Full Reconfigure) ---------------------
 
   Future<void> _openFullGenerator() async {
+    if (_configured) {
+      final ok = await _confirm(
+        title: 'Replace period structure?',
+        content:
+            'You are about to reconfigure periods. Existing period selections in sessions will be reset.',
+        confirmText: 'Replace',
+        destructive: true,
+      );
+      if (!ok) return;
+    }
+
     final result = await showDialog<_GeneratedScheduleResult>(
       context: context,
       builder: (ctx) => _PeriodGeneratorDialog(
@@ -215,6 +256,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       ),
     );
     if (result == null) return;
+
     setState(() {
       _labels = result.labels;
       _spans = result.spans;
@@ -226,11 +268,68 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     });
   }
 
+  // --------------------- Append Period / Break (incremental) ---------------------
+
+  Future<void> _appendPeriodOrBreak() async {
+    if (!_configured) {
+      _snack('Configure or load periods first');
+      return;
+    }
+
+    final res = await showDialog<_AddPeriodResult>(
+      context: context,
+      builder: (_) => _AddPeriodDialog(
+        existingSpans: List<(int, int)>.from(_spans),
+        existingLabels: List<String>.from(_labels),
+        periodMinutes: _inferredPeriodMinutes,
+      ),
+    );
+    if (res == null) return;
+
+    final start = res.start;
+    final end = res.end;
+    final label = '${_fmt(start)} - ${_fmt(end)}${res.isBreak ? ' (Break)' : ''}';
+
+    final ok = await _confirm(
+      title: 'Add ${res.isBreak ? 'Break' : 'Period'}?',
+      content:
+          'You are adding:\n$label\n\nThis will be inserted into the current schedule in time order.',
+      confirmText: 'Add',
+    );
+    if (!ok) return;
+
+    // Find insert position by start time
+    int insertAt = 0;
+    while (insertAt < _spans.length && _spans[insertAt].$1 < start) {
+      insertAt++;
+    }
+
+    setState(() {
+      _spans.insert(insertAt, (start, end));
+      _labels.insert(insertAt, label);
+
+      // Recompute teaching indices to ensure correctness with breaks and order
+      _recomputeTeachingIndices();
+    });
+
+    // If period length becomes inconsistent after insertion, warn user
+    if (_inferredPeriodMinutes == null && !res.isBreak) {
+      _snack('Note: Teaching period length is now inconsistent. Consider reconfiguring.');
+    }
+  }
+
   // --------------------- Sessions ---------------------
 
   void _addSession() => setState(() => _sessions.add(_SessionRow()));
-  void _removeSession(int i) {
+  void _removeSession(int i) async {
     if (i == 0) return;
+    final ok = await _confirm(
+      title: 'Remove session?',
+      content: 'Do you want to remove session #${i + 1} from this list?',
+      confirmText: 'Remove',
+      destructive: true,
+    );
+    if (!ok) return;
     setState(() => _sessions.removeAt(i));
   }
 
@@ -239,7 +338,16 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
   // --------------------- Clear Generated Schedule ---------------------
 
-  void _clearGenerated() {
+  Future<void> _clearGenerated() async {
+    final ok = await _confirm(
+      title: 'Clear period structure?',
+      content:
+          'This will remove all period labels and break labels from this dialog. Sessions will keep their Day but lose the selected Start period.',
+      confirmText: 'Clear',
+      destructive: true,
+    );
+    if (!ok) return;
+
     setState(() {
       _labels.clear();
       _spans.clear();
@@ -253,7 +361,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
   // --------------------- Save ---------------------
 
-  void _save() {
+  Future<void> _save() async {
     if (_department == null || _classKey == null || _section == null) {
       _snack('Please select Department, Class, and Section');
       return;
@@ -280,6 +388,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         : '${_course!.trim()}\n$lecturerName';
 
     final results = <CreateTimetableTimeResult>[];
+    final seenPairs = <String>{}; // to detect duplicates in sessions within this dialog
 
     for (int i = 0; i < _sessions.length; i++) {
       final s = _sessions[i];
@@ -301,6 +410,21 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         _snack('Session ${i + 1}: internal span index error');
         return;
       }
+
+      // Build a unique key to detect duplicate sessions within the dialog
+      final key = '${s.dayIndex}-${labelIdx}';
+      if (seenPairs.contains(key)) {
+        final proceed = await _confirm(
+          title: 'Duplicate session?',
+          content:
+              'You have more than one session on ${widget.days[s.dayIndex!]} at "${_labels[labelIdx]}".\nDo you want to continue?',
+          confirmText: 'Continue',
+        );
+        if (!proceed) return;
+      } else {
+        seenPairs.add(key);
+      }
+
       final span = _spans[labelIdx];
       results.add(
         CreateTimetableTimeResult(
@@ -320,6 +444,21 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       return;
     }
 
+    // Confirmation summary before returning payload
+    final summary = results.map((r) {
+      final d = widget.days[r.dayIndex];
+      final t = '${_fmt(r.startMinutes)} - ${_fmt(r.endMinutes)}';
+      return '- $d  $t  • ${_course!.trim()}${lecturerName.isNotEmpty ? ' • $lecturerName' : ''}';
+    }).join('\n');
+
+    final ok = await _confirm(
+      title: 'Save timetable entries?',
+      content:
+          'Department: ${_department!}\nClass: ${_classKey!}  • Section: ${_section!}\n\nEntries:\n$summary',
+      confirmText: 'Save',
+    );
+    if (!ok) return;
+
     Navigator.of(context).pop(
       CreateTimetableTimePayload(
         results: results,
@@ -333,7 +472,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   String _fmt(int minutes) {
     final h = minutes ~/ 60;
     final m = minutes % 60;
-    return '$h:${m.toString().padLeft(2, '0')}';
+    return '${h}:${m.toString().padLeft(2, '0')}';
   }
 
   void _snack(String msg) {
@@ -545,8 +684,13 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                       ),
                       if (_configured)
                         OutlinedButton(
+                          onPressed: _appendPeriodOrBreak,
+                          child: const Text('Append period / break'),
+                        ),
+                      if (_configured)
+                        OutlinedButton(
                           onPressed: _clearGenerated,
-                          child: const Text('Clear'),
+                          child: const Text('Clear structure'),
                         ),
                     ],
                   ),
@@ -739,7 +883,7 @@ class _GeneratedScheduleResult {
   });
 }
 
-/// Period generator dialog (same logic as before, simplified for reconfigure).
+/// Period generator dialog (same logic as before, with guardrails).
 class _PeriodGeneratorDialog extends StatefulWidget {
   final List<String> existingLabels;
   final List<(int, int)> existingSpans;
@@ -818,7 +962,7 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
   String _fmt(int minutes) {
     final h = minutes ~/ 60;
     final m = minutes % 60;
-    return '$h:${m.toString().padLeft(2, '0')}';
+    return '${h}:${m.toString().padLeft(2, '0')}';
   }
 
   void _generate() {
@@ -914,18 +1058,11 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
-                      // Value text set below via LayoutBuilder (can't use const here)
+                    children: [
+                      Text(_fmt(_dayStart)),
+                      const Icon(Icons.access_time, size: 18),
                     ],
                   ),
-                ),
-              ),
-              // The above Row placeholder gets replaced; show actual value below:
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 6, left: 2),
-                  child: Text(_fmt(_dayStart), style: const TextStyle(fontSize: 12)),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1115,7 +1252,8 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
         '• Each teaching period = fixed duration.\n'
         '• Breaks can be any positive length after a period.\n'
         '• No duplicate breaks after the same period.\n'
-        '• Final end time = start + (#periods × duration) + breaks.',
+        '• Final end time = start + (#periods × duration) + breaks.\n'
+        '• Adding a period/break will be rejected if it overlaps an existing span.',
         style: TextStyle(fontSize: 12),
       ),
     );

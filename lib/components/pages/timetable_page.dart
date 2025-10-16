@@ -1,5 +1,3 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -80,7 +78,8 @@ class _TimetablePageState extends State<TimetablePage> {
     "11:40 - 1:30",
   ];
 
-  final Map<String, Map<String, Map<String, List<List<String>>>>> timetableData = {
+  final Map<String, Map<String, Map<String, List<List<String>>>>>
+  timetableData = {
     "CS": {
       "B3SC": {
         "A": [
@@ -160,7 +159,10 @@ class _TimetablePageState extends State<TimetablePage> {
       classPeriods.putIfAbsent(dep, () => {});
       final classesMap = timetableData[dep]!;
       for (final cls in classesMap.keys) {
-        classPeriods[dep]!.putIfAbsent(cls, () => List<String>.from(seedPeriods, growable: true));
+        classPeriods[dep]!.putIfAbsent(
+          cls,
+          () => List<String>.from(seedPeriods, growable: true),
+        );
         for (final sect in classesMap[cls]!.keys) {
           final grid = classesMap[cls]![sect]!;
           for (int r = 0; r < grid.length; r++) {
@@ -169,7 +171,13 @@ class _TimetablePageState extends State<TimetablePage> {
           final labelsLen = classPeriods[dep]![cls]!.length;
           for (int r = 0; r < grid.length; r++) {
             if (grid[r].length < labelsLen) {
-              grid[r].addAll(List<String>.filled(labelsLen - grid[r].length, "", growable: true));
+              grid[r].addAll(
+                List<String>.filled(
+                  labelsLen - grid[r].length,
+                  "",
+                  growable: true,
+                ),
+              );
             }
           }
         }
@@ -195,13 +203,19 @@ class _TimetablePageState extends State<TimetablePage> {
 
   List<String> get currentPeriods {
     final depKey =
-        _findKeyIgnoreCase(timetableData, selectedDepartment) ?? selectedDepartment;
+        _findKeyIgnoreCase(timetableData, selectedDepartment) ??
+        selectedDepartment;
     final clsKey = selectedClass;
     if (depKey == null || clsKey == null) return seedPeriods;
     classPeriods.putIfAbsent(depKey, () => {});
-    classPeriods[depKey]!.putIfAbsent(clsKey, () => List<String>.from(seedPeriods, growable: true));
-    classPeriods[depKey]![clsKey] =
-        List<String>.from(classPeriods[depKey]![clsKey]!, growable: true);
+    classPeriods[depKey]!.putIfAbsent(
+      clsKey,
+      () => List<String>.from(seedPeriods, growable: true),
+    );
+    classPeriods[depKey]![clsKey] = List<String>.from(
+      classPeriods[depKey]![clsKey]!,
+      growable: true,
+    );
     return classPeriods[depKey]![clsKey]!;
   }
 
@@ -217,27 +231,35 @@ class _TimetablePageState extends State<TimetablePage> {
     return sectionsMap[sectionKey];
   }
 
-  List<TimetableSlot> _slotsFromGrid(List<List<String>> grid, List<String> periodsForClass) {
+  List<TimetableSlot> _slotsFromGrid(
+    List<List<String>> grid,
+    List<String> periodsForClass,
+  ) {
     final List<TimetableSlot> slots = [];
     for (var d = 0; d < days.length; d++) {
-      final row =
-          d < grid.length ? grid[d] : List<String>.filled(periodsForClass.length, "", growable: true);
+      final row = d < grid.length
+          ? grid[d]
+          : List<String>.filled(periodsForClass.length, "", growable: true);
       for (var p = 0; p < periodsForClass.length; p++) {
         final cell = (p < row.length) ? row[p].trim() : '';
         if (cell.isEmpty) continue;
         if (cell.toLowerCase().contains('break')) continue;
         final parts = cell.split('\n');
         final course = parts.isNotEmpty ? parts[0] : '';
-        final lecturer = parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
-        slots.add(TimetableSlot(
-          day: days[d],
-          periodLabel: periodsForClass[p],
-          course: course,
-          className: selectedClass ?? '',
-          department: selectedDepartment ?? '',
-          lecturer: lecturer,
-          section: selectedSection ?? '',
-        ));
+        final lecturer = parts.length > 1
+            ? parts.sublist(1).join(' ').trim()
+            : '';
+        slots.add(
+          TimetableSlot(
+            day: days[d],
+            periodLabel: periodsForClass[p],
+            course: course,
+            className: selectedClass ?? '',
+            department: selectedDepartment ?? '',
+            lecturer: lecturer,
+            section: selectedSection ?? '',
+          ),
+        );
       }
     }
     return slots;
@@ -279,7 +301,6 @@ class _TimetablePageState extends State<TimetablePage> {
     return list;
   }
 
-  // Clipboard removed (copy button removed) – left method here if needed later (unused).
   void copySlotsToClipboard(List<TimetableSlot> slots) {}
 
   String _fmtMinutes(int minutes) {
@@ -310,9 +331,14 @@ class _TimetablePageState extends State<TimetablePage> {
     final classesMap = timetableData[depKey]!;
     final classKey = _findKeyIgnoreCase(classesMap, cls) ?? cls;
     classesMap.putIfAbsent(classKey, () => {});
-    classPeriods[depKey]!.putIfAbsent(classKey, () => List<String>.from(seedPeriods, growable: true));
-    classPeriods[depKey]![classKey] =
-        List<String>.from(classPeriods[depKey]![classKey]!, growable: true);
+    classPeriods[depKey]!.putIfAbsent(
+      classKey,
+      () => List<String>.from(seedPeriods, growable: true),
+    );
+    classPeriods[depKey]![classKey] = List<String>.from(
+      classPeriods[depKey]![classKey]!,
+      growable: true,
+    );
     return MapEntry(depKey, classKey);
   }
 
@@ -333,10 +359,12 @@ class _TimetablePageState extends State<TimetablePage> {
 
     final grid = sectionsMap[sectionKey]!;
     if (grid.length < days.length) {
-      grid.addAll(List.generate(
-        days.length - grid.length,
-        (_) => List<String>.filled(labelsLen, "", growable: true),
-      ));
+      grid.addAll(
+        List.generate(
+          days.length - grid.length,
+          (_) => List<String>.filled(labelsLen, "", growable: true),
+        ),
+      );
     }
     for (int r = 0; r < days.length; r++) {
       if (r >= grid.length) {
@@ -344,12 +372,18 @@ class _TimetablePageState extends State<TimetablePage> {
       }
       grid[r] = List<String>.from(grid[r], growable: true);
       if (grid[r].length < labelsLen) {
-        grid[r].addAll(List<String>.filled(labelsLen - grid[r].length, "", growable: true));
+        grid[r].addAll(
+          List<String>.filled(labelsLen - grid[r].length, "", growable: true),
+        );
       }
     }
   }
 
-  void _replaceClassPeriods(String depKey, String classKey, List<String> newLabels) {
+  void _replaceClassPeriods(
+    String depKey,
+    String classKey,
+    List<String> newLabels,
+  ) {
     final oldLabels = classPeriods[depKey]![classKey]!;
     final newGrow = List<String>.from(newLabels, growable: true);
     classPeriods[depKey]![classKey] = newGrow;
@@ -365,7 +399,8 @@ class _TimetablePageState extends State<TimetablePage> {
       for (int oldIdx = 0; oldIdx < oldLabels.length; oldIdx++) {
         final label = oldLabels[oldIdx];
         final newIdx = newGrow.indexWhere(
-            (l) => l.trim().toLowerCase() == label.trim().toLowerCase());
+          (l) => l.trim().toLowerCase() == label.trim().toLowerCase(),
+        );
         if (newIdx >= 0) {
           for (int r = 0; r < days.length; r++) {
             final row = (r < oldGrid.length)
@@ -385,13 +420,16 @@ class _TimetablePageState extends State<TimetablePage> {
     required String classKey,
     required String newLabel,
   }) {
-    classPeriods[depKey]![classKey] =
-        List<String>.from(classPeriods[depKey]![classKey]!, growable: true);
+    classPeriods[depKey]![classKey] = List<String>.from(
+      classPeriods[depKey]![classKey]!,
+      growable: true,
+    );
     final labels = classPeriods[depKey]![classKey]!;
     final newStart = _parseStartFromLabel(newLabel) ?? 0;
 
     final existing = labels.indexWhere(
-        (l) => l.trim().toLowerCase() == newLabel.trim().toLowerCase());
+      (l) => l.trim().toLowerCase() == newLabel.trim().toLowerCase(),
+    );
     if (existing >= 0) return existing;
 
     int insertAt = labels.length;
@@ -408,10 +446,12 @@ class _TimetablePageState extends State<TimetablePage> {
     for (final sectKey in sectionsMap.keys) {
       final grid = sectionsMap[sectKey]!;
       if (grid.length < days.length) {
-        grid.addAll(List.generate(
-          days.length - grid.length,
-          (_) => List<String>.filled(labels.length, "", growable: true),
-        ));
+        grid.addAll(
+          List.generate(
+            days.length - grid.length,
+            (_) => List<String>.filled(labels.length, "", growable: true),
+          ),
+        );
       }
       for (int r = 0; r < days.length; r++) {
         grid[r] = List<String>.from(grid[r], growable: true);
@@ -421,7 +461,10 @@ class _TimetablePageState extends State<TimetablePage> {
     return insertAt;
   }
 
-  Future<void> _openEditCellDialog({required int dayIndex, required int periodIndex}) async {
+  Future<void> _openEditCellDialog({
+    required int dayIndex,
+    required int periodIndex,
+  }) async {
     if (!editingEnabled) return;
     final timetable = currentTimetable;
     if (timetable == null) return;
@@ -430,11 +473,19 @@ class _TimetablePageState extends State<TimetablePage> {
     final periodLabel = currentPeriods[periodIndex];
     if (periodLabel.toLowerCase().contains('break')) return;
 
-    final depKey = _findKeyIgnoreCase(timetableData, selectedDepartment) ?? selectedDepartment;
-    final classKey =
-        depKey == null ? null : _findKeyIgnoreCase(timetableData[depKey]!, selectedClass) ?? selectedClass;
+    final depKey =
+        _findKeyIgnoreCase(timetableData, selectedDepartment) ??
+        selectedDepartment;
+    final classKey = depKey == null
+        ? null
+        : _findKeyIgnoreCase(timetableData[depKey]!, selectedClass) ??
+              selectedClass;
     final sectionKey = (depKey != null && classKey != null)
-        ? _findKeyIgnoreCase(timetableData[depKey]![classKey]!, selectedSection) ?? selectedSection
+        ? _findKeyIgnoreCase(
+                timetableData[depKey]![classKey]!,
+                selectedSection,
+              ) ??
+              selectedSection
         : null;
     if (depKey == null || classKey == null || sectionKey == null) return;
 
@@ -468,8 +519,6 @@ class _TimetablePageState extends State<TimetablePage> {
     });
   }
 
-  // ------------------ Deletion (existing from previous enhancement) ------------------
-
   Future<void> _showDeleteMenu() async {
     if (selectedDepartment == null || selectedClass == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -477,9 +526,13 @@ class _TimetablePageState extends State<TimetablePage> {
       );
       return;
     }
-    final depKey = _findKeyIgnoreCase(timetableData, selectedDepartment) ?? selectedDepartment;
-    final classKey =
-        depKey == null ? null : _findKeyIgnoreCase(timetableData[depKey]!, selectedClass) ?? selectedClass;
+    final depKey =
+        _findKeyIgnoreCase(timetableData, selectedDepartment) ??
+        selectedDepartment;
+    final classKey = depKey == null
+        ? null
+        : _findKeyIgnoreCase(timetableData[depKey]!, selectedClass) ??
+              selectedClass;
     if (depKey == null || classKey == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Timetable not found for class')),
@@ -500,20 +553,25 @@ class _TimetablePageState extends State<TimetablePage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Class: $classKey  (Sections: $sectionCount, Period columns: $periodsCount)'),
+              Text(
+                'Class: $classKey  (Sections: $sectionCount, Period columns: $periodsCount)',
+              ),
               const SizedBox(height: 12),
-              if (selectedSection != null) Text('Current Section: $selectedSection'),
+              if (selectedSection != null)
+                Text('Current Section: $selectedSection'),
               const SizedBox(height: 12),
               const Text('Choose what you want to delete:'),
               const SizedBox(height: 8),
               _DeleteOptionTile(
                 title: 'Delete This Section Timetable',
-                subtitle: 'Clears all cells for section only. Period labels stay.',
+                subtitle:
+                    'Clears all cells for section only. Period labels stay.',
                 action: _DeleteAction.section,
               ),
               _DeleteOptionTile(
                 title: 'Delete Entire Class Timetable',
-                subtitle: 'Clears all sections for this class. Period labels stay.',
+                subtitle:
+                    'Clears all sections for this class. Period labels stay.',
                 action: _DeleteAction.classAll,
               ),
               _DeleteOptionTile(
@@ -526,20 +584,50 @@ class _TimetablePageState extends State<TimetablePage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
         ],
       ),
     );
 
     if (action == null) return;
 
-    if (action == _DeleteAction.section && selectedSection == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a Section first')),
-      );
+    if (action == _DeleteAction.section &&
+        (selectedSection == null || selectedSection!.trim().isEmpty)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Select a Section first')));
       return;
     }
 
+    // Build confirmation message based on chosen action
+    String title = 'Confirm Deletion';
+    String body;
+    switch (action) {
+      case _DeleteAction.section:
+        body =
+            'This will clear all cells for section "${selectedSection!}" of class "$classKey" in department "$depKey".\n\nPeriod labels will stay.\n\nDo you want to proceed?';
+        break;
+      case _DeleteAction.classAll:
+        body =
+            'This will clear all cells for ALL sections of class "$classKey" in department "$depKey".\n\nPeriod labels will stay.\n\nDo you want to proceed?';
+        break;
+      case _DeleteAction.classStructure:
+        body =
+            'This will remove ALL period labels and ALL cells for all sections of class "$classKey" in department "$depKey".\n\nDo you want to proceed?';
+        break;
+    }
+
+    final confirmed = await _confirmDelete(
+      title: title,
+      content: body,
+      confirmText: 'Delete',
+    );
+    if (!confirmed) return;
+
+    // Backup for UNDO
     final backup = _UndoState(
       depKey: depKey,
       classKey: classKey!,
@@ -552,7 +640,9 @@ class _TimetablePageState extends State<TimetablePage> {
     setState(() {
       switch (action) {
         case _DeleteAction.section:
-          final sectKey = _findKeyIgnoreCase(sectionsMap, selectedSection) ?? selectedSection!;
+          final sectKey =
+              _findKeyIgnoreCase(sectionsMap, selectedSection) ??
+              selectedSection!;
           final grid = sectionsMap[sectKey]!;
           for (int r = 0; r < grid.length; r++) {
             for (int c = 0; c < grid[r].length; c++) {
@@ -588,7 +678,8 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Map<String, List<List<String>>> _deepCopyTimetableClass(
-      Map<String, List<List<String>>> src) {
+    Map<String, List<List<String>>> src,
+  ) {
     final out = <String, List<List<String>>>{};
     src.forEach((k, v) {
       out[k] = v
@@ -610,12 +701,16 @@ class _TimetablePageState extends State<TimetablePage> {
               final b = _lastUndo!;
               classPeriods[b.depKey]!.clear();
               b.classPeriodsCopy.forEach((k, v) {
-                classPeriods[b.depKey]![k] = List<String>.from(v, growable: true);
+                classPeriods[b.depKey]![k] = List<String>.from(
+                  v,
+                  growable: true,
+                );
               });
               timetableData[b.depKey]![b.classKey]!.clear();
               b.timetableCopy.forEach((sect, grid) {
-                timetableData[b.depKey]![b.classKey]![sect] =
-                    grid.map((r) => List<String>.from(r, growable: true)).toList();
+                timetableData[b.depKey]![b.classKey]![sect] = grid
+                    .map((r) => List<String>.from(r, growable: true))
+                    .toList();
               });
               _lastUndo = null;
             });
@@ -625,8 +720,6 @@ class _TimetablePageState extends State<TimetablePage> {
       ),
     );
   }
-
-  // ------------------ PDF Export ------------------
 
   Future<void> _exportPdfFlow() async {
     if (selectedDepartment == null || selectedClass == null) {
@@ -657,7 +750,10 @@ class _TimetablePageState extends State<TimetablePage> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
         ],
       ),
     );
@@ -666,7 +762,9 @@ class _TimetablePageState extends State<TimetablePage> {
 
     if (choice == _ExportChoice.currentSection && selectedSection == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select a Section first to export current section')),
+        const SnackBar(
+          content: Text('Select a Section first to export current section'),
+        ),
       );
       return;
     }
@@ -675,13 +773,17 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<void> _generatePdf(_ExportChoice choice) async {
-    final depKey = _findKeyIgnoreCase(timetableData, selectedDepartment) ?? selectedDepartment;
-    final classKey =
-        depKey == null ? null : _findKeyIgnoreCase(timetableData[depKey]!, selectedClass) ?? selectedClass;
+    final depKey =
+        _findKeyIgnoreCase(timetableData, selectedDepartment) ??
+        selectedDepartment;
+    final classKey = depKey == null
+        ? null
+        : _findKeyIgnoreCase(timetableData[depKey]!, selectedClass) ??
+              selectedClass;
     if (depKey == null || classKey == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Class not found')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Class not found')));
       return;
     }
 
@@ -692,7 +794,8 @@ class _TimetablePageState extends State<TimetablePage> {
     final sectionsMap = timetableData[depKey]![classKey]!;
 
     if (choice == _ExportChoice.currentSection) {
-      final sectKey = _findKeyIgnoreCase(sectionsMap, selectedSection) ?? selectedSection!;
+      final sectKey =
+          _findKeyIgnoreCase(sectionsMap, selectedSection) ?? selectedSection!;
       final grid = sectionsMap[sectKey];
 
       pdf.addPage(
@@ -708,11 +811,17 @@ class _TimetablePageState extends State<TimetablePage> {
             _pdfHeader(depKey!, classKey!, dateStr, section: sectKey),
             pw.SizedBox(height: 8),
             if (periods.isEmpty)
-              pw.Text('No period structure configured.', style: pw.TextStyle(color: PdfColors.grey600)),
+              pw.Text(
+                'No period structure configured.',
+                style: pw.TextStyle(color: PdfColors.grey600),
+              ),
             if (grid == null || periods.isEmpty)
               pw.Padding(
                 padding: const pw.EdgeInsets.only(top: 16),
-                child: pw.Text('No timetable data', style: const pw.TextStyle(fontSize: 14)),
+                child: pw.Text(
+                  'No timetable data',
+                  style: pw.TextStyle(fontSize: 14),
+                ),
               )
             else
               _pdfGridTable(periods: periods, grid: grid),
@@ -720,7 +829,6 @@ class _TimetablePageState extends State<TimetablePage> {
         ),
       );
     } else {
-      // Entire class: one section per page
       if (sectionsMap.isEmpty) {
         pdf.addPage(
           pw.MultiPage(
@@ -734,7 +842,7 @@ class _TimetablePageState extends State<TimetablePage> {
             build: (ctx) => [
               _pdfHeader(depKey!, classKey!, dateStr),
               pw.SizedBox(height: 8),
-              pw.Text('No sections found for this class.')
+              pw.Text('No sections found for this class.'),
             ],
           ),
         );
@@ -754,8 +862,10 @@ class _TimetablePageState extends State<TimetablePage> {
                 _pdfHeader(depKey!, classKey!, dateStr, section: sectKey),
                 pw.SizedBox(height: 8),
                 if (periods.isEmpty)
-                  pw.Text('No period structure configured.',
-                      style: pw.TextStyle(color: PdfColors.grey600))
+                  pw.Text(
+                    'No period structure configured.',
+                    style: pw.TextStyle(color: PdfColors.grey600),
+                  )
                 else
                   _pdfGridTable(periods: periods, grid: grid),
               ],
@@ -772,7 +882,12 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  pw.Widget _pdfHeader(String dep, String cls, String dateStr, {String? section}) {
+  pw.Widget _pdfHeader(
+    String dep,
+    String cls,
+    String dateStr, {
+    String? section,
+  }) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -781,7 +896,9 @@ class _TimetablePageState extends State<TimetablePage> {
           style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 4),
-        pw.Text('Department: $dep   Class: $cls${section != null ? "   Section: $section" : ""}'),
+        pw.Text(
+          'Department: $dep   Class: $cls${section != null ? "   Section: $section" : ""}',
+        ),
         pw.Text('Exported: $dateStr'),
       ],
     );
@@ -805,7 +922,10 @@ class _TimetablePageState extends State<TimetablePage> {
         pw.Container(
           width: 40,
           padding: const pw.EdgeInsets.all(4),
-          child: pw.Text(days[d], style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+          child: pw.Text(
+            days[d],
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          ),
         ),
       ];
       for (int p = 0; p < periods.length; p++) {
@@ -822,10 +942,7 @@ class _TimetablePageState extends State<TimetablePage> {
               color: isBreak ? breakFill : null,
               border: pw.Border.all(color: PdfColors.grey400, width: 0.3),
             ),
-            child: pw.Text(
-              display,
-              style: pw.TextStyle(fontSize: 9),
-            ),
+            child: pw.Text(display, style: pw.TextStyle(fontSize: 9)),
           ),
         );
       }
@@ -836,8 +953,8 @@ class _TimetablePageState extends State<TimetablePage> {
       border: pw.TableBorder.all(color: PdfColors.grey500, width: 0.5),
       defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
       columnWidths: {
-        0: const pw.FixedColumnWidth(42),
-        for (int i = 1; i < tableHeaders.length; i++) i: const pw.FlexColumnWidth(2),
+        0: pw.FixedColumnWidth(42),
+        for (int i = 1; i < tableHeaders.length; i++) i: pw.FlexColumnWidth(2),
       },
       children: [
         pw.TableRow(
@@ -849,34 +966,55 @@ class _TimetablePageState extends State<TimetablePage> {
                   child: pw.Text(
                     h,
                     textAlign: pw.TextAlign.center,
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 9,
+                    ),
                   ),
                 ),
               )
               .toList(),
         ),
-        ...dataRows.map(
-          (cells) => pw.TableRow(children: cells),
-        ),
+        ...dataRows.map((cells) => pw.TableRow(children: cells)),
       ],
     );
   }
 
-  // ---------------- UI Build ----------------
+  Future<bool> _confirmDelete({
+    required String title,
+    required String content,
+    String confirmText = 'Delete',
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmText),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
 
   @override
   Widget build(BuildContext context) {
     final grid = currentTimetable;
     final periodsForClass = currentPeriods;
-    final slotsList = getFilteredSlotsFromGrid();
-    final showGrid = !(selectedLecturer != null &&
-        selectedLecturer!.trim().isNotEmpty &&
-        selectedLecturer != 'NONE' &&
-        selectedLecturer != 'All lecturers');
-
-    if (!showGrid && editingEnabled) {
-      editingEnabled = false;
-    }
+    final canEdit = grid != null;
+    final canDelete = selectedDepartment != null && selectedClass != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -885,64 +1023,76 @@ class _TimetablePageState extends State<TimetablePage> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(12.0), // tighter on mobile
+          padding: const EdgeInsets.all(12.0), // mobile-friendly padding
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search (dense for mobile)
+              // Search
               TextField(
                 decoration: InputDecoration(
                   hintText: 'Search Time Table...',
                   prefixIcon: const Icon(Icons.search, size: 20),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   isDense: true,
                   filled: true,
                   fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                 ),
                 onChanged: (v) => setState(() => searchText = v),
               ),
               const SizedBox(height: 10),
 
-              // Main actions - Wrap for small screens
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              // Create button (left) and Edit/Delete/Export (right) — like your other pages
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Left: Create Time Table
                   ElevatedButton.icon(
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('Create Time Table'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF3B4B9B),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       minimumSize: const Size(0, 40),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     onPressed: () async {
-                      final existingLabels = (selectedDepartment != null &&
+                      final existingLabels =
+                          (selectedDepartment != null &&
                               selectedClass != null &&
                               classPeriods[selectedDepartment!] != null &&
-                              classPeriods[selectedDepartment!]![selectedClass!] != null)
+                              classPeriods[selectedDepartment!]![selectedClass!] !=
+                                  null)
                           ? classPeriods[selectedDepartment!]![selectedClass!]
                           : null;
 
-                      final payload = await showDialog<CreateTimetableTimePayload>(
-                        context: context,
-                        builder: (_) => CreateTimetableDialog(
-                          departments: departments,
-                          departmentClasses: departmentClasses,
-                          lecturers: lecturers,
-                          sections: sections,
-                          days: days,
-                          courses: const [],
-                          initialDepartment: selectedDepartment,
-                          initialClass: selectedClass,
-                          initialSection: selectedSection,
-                          preconfiguredLabels: existingLabels,
-                        ),
-                      );
+                      final payload =
+                          await showDialog<CreateTimetableTimePayload>(
+                            context: context,
+                            builder: (_) => CreateTimetableDialog(
+                              departments: departments,
+                              departmentClasses: departmentClasses,
+                              lecturers: lecturers,
+                              sections: sections,
+                              days: days,
+                              courses: const [],
+                              initialDepartment: selectedDepartment,
+                              initialClass: selectedClass,
+                              initialSection: selectedSection,
+                              preconfiguredLabels: existingLabels,
+                            ),
+                          );
 
                       if (payload == null) return;
 
@@ -954,7 +1104,11 @@ class _TimetablePageState extends State<TimetablePage> {
                         );
                         final depKey = depClass.key;
                         final classKey = depClass.value;
-                        _replaceClassPeriods(depKey, classKey, payload.periodsOverride!);
+                        _replaceClassPeriods(
+                          depKey,
+                          classKey,
+                          payload.periodsOverride!,
+                        );
                         _ensureSectionGrid(
                           depKey,
                           classKey,
@@ -964,12 +1118,18 @@ class _TimetablePageState extends State<TimetablePage> {
 
                       setState(() {
                         for (final r in payload.results) {
-                          final depClass = _ensureDepClass(r.department, r.classKey);
+                          final depClass = _ensureDepClass(
+                            r.department,
+                            r.classKey,
+                          );
                           final depKey = depClass.key;
                           final classKey = depClass.value;
                           _ensureSectionGrid(depKey, classKey, r.section);
 
-                          final label = _makeLabel(r.startMinutes, r.endMinutes);
+                          final label = _makeLabel(
+                            r.startMinutes,
+                            r.endMinutes,
+                          );
                           final colIndex = _findOrInsertPeriodIndexForClass(
                             depKey: depKey,
                             classKey: classKey,
@@ -979,7 +1139,8 @@ class _TimetablePageState extends State<TimetablePage> {
                           _ensureSectionGrid(depKey, classKey, r.section);
                           final sectionsMap = timetableData[depKey]![classKey]!;
                           final sectionKey =
-                              _findKeyIgnoreCase(sectionsMap, r.section) ?? r.section;
+                              _findKeyIgnoreCase(sectionsMap, r.section) ??
+                              r.section;
                           final tgtGrid = sectionsMap[sectionKey]!;
                           if (r.dayIndex >= 0 &&
                               r.dayIndex < tgtGrid.length &&
@@ -990,40 +1151,76 @@ class _TimetablePageState extends State<TimetablePage> {
                         }
                       });
 
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(const SnackBar(content: Text('Time table entries saved')));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Time table entries saved'),
+                        ),
+                      );
                     },
                   ),
-                  ElevatedButton.icon(
-                    icon: Icon(editingEnabled ? Icons.done : Icons.edit, size: 18),
-                    label: Text(editingEnabled ? 'Done' : 'Edit Cells'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: editingEnabled ? Colors.orange : Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      minimumSize: const Size(0, 40),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () {
-                      if (currentTimetable == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Select Department/Class/Section first')),
-                        );
-                        return;
-                      }
-                      setState(() => editingEnabled = !editingEnabled);
-                    },
-                  ),
-                  // Icons wrap nicely on small screens
-                  IconButton(
-                    tooltip: 'Delete timetable options',
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: _showDeleteMenu,
-                  ),
-                  IconButton(
-                    tooltip: 'Export PDF',
-                    icon: const Icon(Icons.picture_as_pdf_outlined),
-                    onPressed: _exportPdfFlow,
+
+                  // Right: Edit / Delete (disabled until needed) + Export icon
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 80,
+                        height: 36,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 0,
+                              horizontal: 0,
+                            ),
+                          ),
+                          onPressed: !canEdit
+                              ? null
+                              : () {
+                                  setState(
+                                    () => editingEnabled = !editingEnabled,
+                                  );
+                                },
+                          child: Text(
+                            editingEnabled ? "Done" : "Edit",
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 80,
+                        height: 36,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 0,
+                              horizontal: 0,
+                            ),
+                          ),
+                          onPressed: !canDelete ? null : _showDeleteMenu,
+                          child: const Text(
+                            "Delete",
+                            style: TextStyle(fontSize: 15, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Export PDF',
+                        onPressed: canDelete ? _exportPdfFlow : null,
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1052,21 +1249,24 @@ class _TimetablePageState extends State<TimetablePage> {
                       items: selectedDepartment == null
                           ? departmentClasses.values.expand((e) => e).toList()
                           : (departmentClasses[selectedDepartment] ?? []),
-                      onChanged: (v) => setState(() => selectedClass = v?.trim()),
+                      onChanged: (v) =>
+                          setState(() => selectedClass = v?.trim()),
                     ),
                     const SizedBox(width: 8),
                     _FilterBox(
                       hint: 'Lecturer',
                       value: selectedLecturer,
                       items: lecturers,
-                      onChanged: (v) => setState(() => selectedLecturer = v?.trim()),
+                      onChanged: (v) =>
+                          setState(() => selectedLecturer = v?.trim()),
                     ),
                     const SizedBox(width: 8),
                     _FilterBox(
                       hint: 'Section',
                       value: selectedSection,
                       items: sections,
-                      onChanged: (v) => setState(() => selectedSection = v?.trim()),
+                      onChanged: (v) =>
+                          setState(() => selectedSection = v?.trim()),
                     ),
                   ],
                 ),
@@ -1090,7 +1290,7 @@ class _TimetablePageState extends State<TimetablePage> {
                       ),
                     ],
                   ),
-                  child: (currentTimetable == null)
+                  child: (grid == null)
                       ? Center(
                           child: Text(
                             'Please select Department, Class, and Section to view the timetable.',
@@ -1098,16 +1298,14 @@ class _TimetablePageState extends State<TimetablePage> {
                             textAlign: TextAlign.center,
                           ),
                         )
-                      : (showGrid
-                          ? _TimetableGrid(
-                              days: days,
-                              periods: periodsForClass,
-                              timetable: grid!,
-                              editing: editingEnabled,
-                              onCellTap: (d, p) =>
-                                  _openEditCellDialog(dayIndex: d, periodIndex: p),
-                            )
-                          : _TimetableListView(slots: slotsList)),
+                      : _TimetableGrid(
+                          days: days,
+                          periods: periodsForClass,
+                          timetable: grid,
+                          editing: editingEnabled,
+                          onCellTap: (d, p) =>
+                              _openEditCellDialog(dayIndex: d, periodIndex: p),
+                        ),
                 ),
               ),
             ],
@@ -1140,7 +1338,10 @@ class _FilterBox extends StatelessWidget {
       constraints: const BoxConstraints(minWidth: 130, maxWidth: 240),
       child: InputDecorator(
         decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           isDense: true,
           filled: true,
@@ -1151,7 +1352,9 @@ class _FilterBox extends StatelessWidget {
             hint: Text(hint),
             isExpanded: true,
             value: value,
-            items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+            items: items
+                .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+                .toList(),
             onChanged: onChanged,
           ),
         ),
@@ -1189,19 +1392,24 @@ class _TimetableGrid extends StatelessWidget {
     const double dividerHeight = 1.0;
 
     final highlightShape = RoundedRectangleBorder(
-      side: BorderSide(color: editing ? const Color(0xFF3B4B9B) : Colors.transparent),
+      side: BorderSide(
+        color: editing ? const Color(0xFF3B4B9B) : Colors.transparent,
+      ),
     );
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final periodColWidth = _periodWidthFor(constraints);
-        final dayColWidth = periodColWidth * 0.5; // smaller day column on phones
+        final dayColWidth =
+            periodColWidth * 0.5; // smaller day column on phones
 
         final totalWidth = dayColWidth + periodColWidth * periods.length;
-        final childWidth =
-            totalWidth > constraints.maxWidth ? totalWidth : constraints.maxWidth;
+        final childWidth = totalWidth > constraints.maxWidth
+            ? totalWidth
+            : constraints.maxWidth;
 
-        double rowsAreaHeight = constraints.maxHeight - headerHeight - dividerHeight;
+        double rowsAreaHeight =
+            constraints.maxHeight - headerHeight - dividerHeight;
         if (rowsAreaHeight < 120) rowsAreaHeight = 220;
 
         return SingleChildScrollView(
@@ -1230,14 +1438,19 @@ class _TimetableGrid extends StatelessWidget {
                         height: headerHeight,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          border: Border(left: BorderSide(color: Colors.grey.shade300)),
+                          border: Border(
+                            left: BorderSide(color: Colors.grey.shade300),
+                          ),
                           color: isBreak ? Colors.grey.shade100 : null,
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
                           p,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1254,7 +1467,11 @@ class _TimetableGrid extends StatelessWidget {
                     itemBuilder: (context, rowIdx) {
                       final row = rowIdx < timetable.length
                           ? timetable[rowIdx]
-                          : List<String>.filled(periods.length, '', growable: true);
+                          : List<String>.filled(
+                              periods.length,
+                              '',
+                              growable: true,
+                            );
                       return Column(
                         children: [
                           Row(
@@ -1262,49 +1479,68 @@ class _TimetableGrid extends StatelessWidget {
                             children: [
                               Container(
                                 width: dayColWidth,
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 12,
+                                ),
                                 child: Text(
                                   days[rowIdx],
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               ...List.generate(periods.length, (colIdx) {
-                                final cell = (colIdx < row.length) ? row[colIdx] : '';
-                                final isBreak = periods[colIdx].toLowerCase().contains('break');
-                                final tappable = editing && !isBreak && onCellTap != null;
+                                final cell = (colIdx < row.length)
+                                    ? row[colIdx]
+                                    : '';
+                                final isBreak = periods[colIdx]
+                                    .toLowerCase()
+                                    .contains('break');
+                                final tappable =
+                                    editing && !isBreak && onCellTap != null;
 
                                 Widget content = cell.trim().isEmpty
                                     ? (editing && !isBreak
-                                        ? Opacity(
-                                            opacity: 0.5,
-                                            child: Text(
-                                              'Tap to add',
-                                              style: TextStyle(
-                                                fontStyle: FontStyle.italic,
-                                                color: Colors.grey.shade600,
-                                                fontSize: 12,
+                                          ? Opacity(
+                                              opacity: 0.5,
+                                              child: Text(
+                                                'Tap to add',
+                                                style: TextStyle(
+                                                  fontStyle: FontStyle.italic,
+                                                  color: Colors.grey.shade600,
+                                                  fontSize: 12,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          )
-                                        : const SizedBox.shrink())
+                                            )
+                                          : const SizedBox.shrink())
                                     : Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             cell.split('\n').first,
-                                            style: const TextStyle(fontWeight: FontWeight.w600),
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                           const SizedBox(height: 4),
                                           if (cell.split('\n').length > 1)
                                             Text(
-                                              cell.split('\n').skip(1).join(' — '),
-                                              style: const TextStyle(color: Colors.black87, fontSize: 12),
+                                              cell
+                                                  .split('\n')
+                                                  .skip(1)
+                                                  .join(' — '),
+                                              style: const TextStyle(
+                                                color: Colors.black87,
+                                                fontSize: 12,
+                                              ),
                                               maxLines: 2,
                                               overflow: TextOverflow.ellipsis,
                                             ),
@@ -1312,19 +1548,27 @@ class _TimetableGrid extends StatelessWidget {
                                       );
 
                                 return InkWell(
-                                  onTap: tappable ? () => onCellTap!(rowIdx, colIdx) : null,
+                                  onTap: tappable
+                                      ? () => onCellTap!(rowIdx, colIdx)
+                                      : null,
                                   child: Container(
                                     width: periodColWidth,
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
                                       border: Border(
-                                        left: BorderSide(color: Colors.grey.shade300),
+                                        left: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
                                       ),
-                                      color: isBreak ? Colors.grey.shade100 : null,
+                                      color: isBreak
+                                          ? Colors.grey.shade100
+                                          : null,
                                       boxShadow: (editing && !isBreak)
                                           ? [
                                               BoxShadow(
-                                                color: Colors.blue.withOpacity(0.05),
+                                                color: Colors.blue.withOpacity(
+                                                  0.05,
+                                                ),
                                                 blurRadius: 4,
                                                 offset: const Offset(0, 2),
                                               ),
@@ -1354,66 +1598,6 @@ class _TimetableGrid extends StatelessWidget {
     );
   }
 }
-
-// Replace the entire _TimetableListView with this version.
-class _TimetableListView extends StatelessWidget {
-  final List<TimetableSlot> slots;
-
-  const _TimetableListView({required this.slots});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (slots.isEmpty) {
-          return Center(
-            child: Text(
-              'No slots available',
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-              textAlign: TextAlign.center,
-            ),
-          );
-        }
-
-        final table = DataTable(
-          columnSpacing: 16,
-          headingRowHeight: 44,
-          dataRowMinHeight: 44,
-          dataRowMaxHeight: 60,
-          columns: const [
-            DataColumn(label: Text('Day')),
-            DataColumn(label: Text('Time')),
-            DataColumn(label: Text('Course')),     // no Room
-            DataColumn(label: Text('Class')),
-            DataColumn(label: Text('Department')),
-          ],
-          rows: slots.map(
-            (slot) => DataRow(
-              cells: [
-                DataCell(Text(slot.day)),
-                DataCell(Text(slot.periodLabel)),
-                DataCell(Text(slot.course)),
-                DataCell(Text(slot.className)),
-                DataCell(Text(slot.department)),
-              ],
-            ),
-          ).toList(),
-        );
-
-        // Full width: ensure table width is at least the viewport width; allow horizontal scroll if needed.
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: table,
-          ),
-        );
-      },
-    );
-  }
-}
-
-/* ---------- Delete helpers ---------- */
 
 enum _DeleteAction { section, classAll, classStructure }
 
@@ -1459,7 +1643,6 @@ class _UndoState {
   });
 }
 
-/* ---------- Export helpers ---------- */
 enum _ExportChoice { currentSection, entireClass }
 
 class _ExportOptionTile extends StatelessWidget {
