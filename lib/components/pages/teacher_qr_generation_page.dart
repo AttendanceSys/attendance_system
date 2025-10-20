@@ -18,6 +18,15 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   String? qrCodeData;
 
   @override
+  void initState() {
+    super.initState();
+    department = ["CS", "IT", "SE"].first;
+    className = ["B3SC", "B2IT", "B1SE"].first;
+    section = ["A", "B", "C"].first;
+    subject = ["Cloud Computing", "Software Engineering", "Databases"].first;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),

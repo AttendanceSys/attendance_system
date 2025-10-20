@@ -12,23 +12,23 @@ class AddLecturerPopup extends StatefulWidget {
 
 class _AddLecturerPopupState extends State<AddLecturerPopup> {
   final _formKey = GlobalKey<FormState>();
-  String? _lecturerName;
-  String? _lecturerId;
-  String? _password;
+  late String _lecturerName;
+  late String _lecturerId;
+  late String _password;
+  bool _isPasswordVisible = false; // 👈 variable to toggle visibility
 
   @override
   void initState() {
     super.initState();
-    _lecturerName = widget.lecturer?.name;
-    _lecturerId = widget.lecturer?.id;
-    _password = widget.lecturer?.password;
+    _lecturerName = widget.lecturer?.name ?? '';
+    _lecturerId = widget.lecturer?.id ?? '';
+    _password = widget.lecturer?.password ?? '';
   }
 
   @override
   Widget build(BuildContext context) {
-    final double dialogWidth = MediaQuery.of(context).size.width > 600
-        ? 400
-        : double.infinity;
+    final double dialogWidth =
+        MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
 
     return Dialog(
       elevation: 8,
@@ -39,7 +39,10 @@ class _AddLecturerPopupState extends State<AddLecturerPopup> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.blue[100]!, width: 2),
+            border: Border.all(
+              color: Colors.blue[100] ?? Colors.blue,
+              width: 2,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.08),
@@ -87,11 +90,24 @@ class _AddLecturerPopupState extends State<AddLecturerPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _password,
-                  decoration: const InputDecoration(
+                  obscureText: !_isPasswordVisible, // 👈 toggle visibility
+                  decoration: InputDecoration(
                     hintText: "Password",
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: Colors.grey[700],
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isPasswordVisible = !_isPasswordVisible;
+                        });
+                      },
+                    ),
                   ),
-                  obscureText: true,
                   onChanged: (val) => _password = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter password" : null,
@@ -126,12 +142,12 @@ class _AddLecturerPopupState extends State<AddLecturerPopup> {
                       height: 40,
                       child: ElevatedButton(
                         onPressed: () {
-                          if (_formKey.currentState!.validate()) {
+                          if (_formKey.currentState?.validate() ?? false) {
                             Navigator.of(context).pop(
                               Lecturer(
-                                id: _lecturerId!,
-                                name: _lecturerName!,
-                                password: _password!,
+                                id: _lecturerId,
+                                name: _lecturerName,
+                                password: _password,
                               ),
                             );
                           }

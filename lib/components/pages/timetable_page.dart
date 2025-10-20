@@ -507,15 +507,16 @@ class _TimetablePageState extends State<TimetablePage> {
       }
     }
 
-    final result = await showDialog<TimetableCellEditResult>(
-      context: context,
-      builder: (_) => TimetableCellEditDialog(
-        initialCourse: initialCourse,
-        initialLecturer: initialLecturer,
-        courses: coursesMock,
-        lecturers: lecturers.where((l) => l != 'NONE').toList(),
-      ),
-    );
+    final TimetableCellEditResult? result =
+        await showDialog<TimetableCellEditResult>(
+          context: context,
+          builder: (_) => TimetableCellEditDialog(
+            initialCourse: initialCourse,
+            initialLecturer: initialLecturer,
+            courses: coursesMock,
+            lecturers: lecturers.where((l) => l != 'NONE').toList(),
+          ),
+        );
     if (result == null) return;
 
     setState(() {

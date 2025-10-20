@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../models/classes.dart';
+import '../../models/department.dart';
 
 class AddClassPopup extends StatefulWidget {
   final SchoolClass? schoolClass;
-  final List<String> departments;
+  final List<Department> departments;
   final List<String> sections;
   const AddClassPopup({
     super.key,
@@ -19,7 +20,8 @@ class AddClassPopup extends StatefulWidget {
 class _AddClassPopupState extends State<AddClassPopup> {
   final _formKey = GlobalKey<FormState>();
   String? _baseName;
-  String? _department;
+  String? _department; // display name
+  String? _departmentId;
   String? _section;
 
   String get _combinedClassName {
@@ -43,7 +45,28 @@ class _AddClassPopupState extends State<AddClassPopup> {
         _baseName = widget.schoolClass!.name;
         _section = widget.schoolClass!.section;
       }
-      _department = widget.schoolClass!.department;
+      // The stored `schoolClass.department` may be an id or a name depending on
+      // where it came from. Try to resolve it to a Department from the list so
+      // the dropdown displays the human-readable name while keeping the id for
+      // saving.
+      final stored = widget.schoolClass!.department;
+      Department? found;
+      try {
+        found = widget.departments.firstWhere(
+          (d) => d.id == stored || d.name == stored || d.code == stored,
+        );
+      } catch (_) {
+        found = null;
+      }
+
+      if (found != null) {
+        _department = found.name;
+        _departmentId = found.id;
+      } else {
+        // Fallback: show whatever is stored so the user can see/edit it.
+        _department = stored;
+        _departmentId = stored;
+      }
     }
   }
 
@@ -52,7 +75,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
       Navigator.of(context).pop(
         SchoolClass(
           name: _combinedClassName,
-          department: _department!,
+          department: _departmentId ?? _department ?? '',
           section: _section ?? '',
           isActive: widget.schoolClass?.isActive ?? true,
         ),
@@ -106,8 +129,9 @@ class _AddClassPopupState extends State<AddClassPopup> {
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (val) => setState(() => _baseName = val),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter base class name" : null,
+                  validator: (val) => val == null || val.isEmpty
+                      ? "Enter base class name"
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
@@ -117,12 +141,24 @@ class _AddClassPopupState extends State<AddClassPopup> {
                     border: OutlineInputBorder(),
                   ),
                   items: widget.departments
-                      .map((dep) => DropdownMenuItem(
-                            value: dep,
-                            child: Text(dep),
-                          ))
+                      .map(
+                        (dep) => DropdownMenuItem(
+                          value: dep.name,
+                          child: Text(dep.name),
+                        ),
+                      )
                       .toList(),
-                  onChanged: (val) => setState(() => _department = val),
+                  onChanged: (val) {
+                    if (val == null) return;
+                    final selected = widget.departments.firstWhere(
+                      (d) => d.name == val,
+                      orElse: () => widget.departments.first,
+                    );
+                    setState(() {
+                      _department = selected.name;
+                      _departmentId = selected.id;
+                    });
+                  },
                   validator: (val) =>
                       val == null || val.isEmpty ? "Select department" : null,
                 ),
@@ -134,14 +170,15 @@ class _AddClassPopupState extends State<AddClassPopup> {
                     border: OutlineInputBorder(),
                   ),
                   items: widget.sections
-                      .map((sec) => DropdownMenuItem(
-                            value: sec,
-                            child: Text(sec.isNotEmpty ? sec : "(none)"),
-                          ))
+                      .map(
+                        (sec) => DropdownMenuItem(
+                          value: sec,
+                          child: Text(sec.isNotEmpty ? sec : "(none)"),
+                        ),
+                      )
                       .toList(),
                   onChanged: (val) => setState(() => _section = val),
-                  validator: (val) =>
-                      val == null ? "Select section" : null,
+                  validator: (val) => val == null ? "Select section" : null,
                 ),
                 const SizedBox(height: 12),
                 // Preview field

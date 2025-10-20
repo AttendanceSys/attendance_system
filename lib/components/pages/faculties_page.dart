@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/faculty.dart';
+import '../../hooks/use_faculties.dart';
 import '../popup/add_faculty_popup.dart';
 import '../cards/searchBar.dart';
 
@@ -11,12 +12,10 @@ class FacultiesPage extends StatefulWidget {
 }
 
 class _FacultiesPageState extends State<FacultiesPage> {
-  final List<Faculty> _faculties = [
-    Faculty(code: 'SCI', name: 'Science', createdAt: DateTime(2023, 6, 12)),
-    Faculty(code: 'MED', name: 'Medicine', createdAt: DateTime(2023, 6, 12)),
-    Faculty(code: 'EDU', name: 'Education', createdAt: DateTime(2023, 6, 12)),
-    Faculty(code: 'ENG', name: 'Engineering', createdAt: DateTime(2023, 6, 12)),
-  ];
+  final UseFaculties _useFaculties = UseFaculties();
+  List<Faculty> _faculties = [];
+  bool _isLoading = false;
+  String? _loadError;
 
   String _searchText = '';
   int? _selectedIndex;
@@ -29,16 +28,43 @@ class _FacultiesPageState extends State<FacultiesPage> {
       )
       .toList();
 
+  @override
+  void initState() {
+    super.initState();
+    _fetchFaculties();
+  }
+
+  Future<void> _fetchFaculties() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+    try {
+      final faculties = await _useFaculties.fetchFaculties();
+      if (!mounted) return;
+      setState(() {
+        _faculties = faculties;
+        _isLoading = false;
+        _selectedIndex = null;
+      });
+    } catch (e, st) {
+      debugPrint('FacultiesPage._fetchFaculties error: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _loadError = e.toString();
+      });
+    }
+  }
+
   Future<void> _showAddFacultyPopup() async {
     final result = await showDialog<Faculty>(
       context: context,
       builder: (context) => const AddFacultyPopup(),
     );
     if (result != null) {
-      setState(() {
-        _faculties.add(result);
-        _selectedIndex = null;
-      });
+      await _useFaculties.addFaculty(result);
+      await _fetchFaculties();
     }
   }
 
@@ -50,10 +76,8 @@ class _FacultiesPageState extends State<FacultiesPage> {
       builder: (context) => AddFacultyPopup(faculty: faculty),
     );
     if (result != null) {
-      int mainIndex = _faculties.indexOf(faculty);
-      setState(() {
-        _faculties[mainIndex] = result;
-      });
+      await _useFaculties.updateFaculty(faculty.code, result);
+      await _fetchFaculties();
     }
   }
 
@@ -79,17 +103,25 @@ class _FacultiesPageState extends State<FacultiesPage> {
       ),
     );
     if (confirm == true) {
-      setState(() {
-        _faculties.remove(faculty);
-        _selectedIndex = null;
-      });
+      await _useFaculties.deleteFaculty(faculty.code);
+      await _fetchFaculties();
     }
   }
 
   String _monthString(int month) {
     const months = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
     ];
     return months[month - 1];
   }
@@ -110,98 +142,153 @@ class _FacultiesPageState extends State<FacultiesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
-          const Text(
-            "Faculties",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: LinearProgressIndicator(),
             ),
-          ),
-          const SizedBox(height: 24),
+          if (_loadError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(
+                'Failed to load faculties: $_loadError',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+          const SizedBox(height: 8),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SearchAddBar(
-                      hintText: "Search Faculty...",
-                      buttonText: "Add Faculty",
-                      onAddPressed: _showAddFacultyPopup,
-                      onChanged: (value) {
-                        setState(() {
-                          _searchText = value;
-                          _selectedIndex = null;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
-                            ),
-                            onPressed: _selectedIndex == null ? null : _showEditFacultyPopup,
-                            child: const Text(
-                              "Edit",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
-                            ),
-                            onPressed: _selectedIndex == null ? null : _confirmDeleteFaculty,
-                            child: const Text(
-                              "Delete",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              const Text(
+                "Faculties",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Reload from DB',
+                icon: const Icon(Icons.refresh),
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        debugPrint('Manual reload requested');
+                        await _fetchFaculties();
+                      },
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: _buildMobileTable(),
+          const SizedBox(height: 24),
+
+          if (!_isLoading)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SearchAddBar(
+                        hintText: "Search Faculty...",
+                        buttonText: "Add Faculty",
+                        onAddPressed: _showAddFacultyPopup,
+                        onChanged: (value) {
+                          setState(() {
+                            _searchText = value;
+                            _selectedIndex = null;
+                          });
+                        },
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          SizedBox(
+                            width: 80,
+                            height: 36,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 0,
+                                  horizontal: 0,
+                                ),
+                              ),
+                              onPressed: _selectedIndex == null
+                                  ? null
+                                  : _showEditFacultyPopup,
+                              child: const Text(
+                                "Edit",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 80,
+                            height: 36,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 0,
+                                  horizontal: 0,
+                                ),
+                              ),
+                              onPressed: _selectedIndex == null
+                                  ? null
+                                  : _confirmDeleteFaculty,
+                              child: const Text(
+                                "Delete",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ),
+          const SizedBox(height: 8),
+          if (!_isLoading)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  setState(() {
+                    _selectedIndex = null;
+                  });
+                },
+                child: Container(
+                  width: double.infinity,
+                  color: Colors.transparent,
+                  child: isDesktop
+                      ? _buildDesktopTable()
+                      : SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
+                        ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -210,10 +297,10 @@ class _FacultiesPageState extends State<FacultiesPage> {
   Widget _buildDesktopTable() {
     return Table(
       columnWidths: const {
-        0: FixedColumnWidth(64),   // No
-        1: FixedColumnWidth(120),  // Faculty Code
-        2: FixedColumnWidth(180),  // Faculty Name
-        3: FixedColumnWidth(130),  // Created At
+        0: FixedColumnWidth(64), // No
+        1: FixedColumnWidth(120), // Faculty Code
+        2: FixedColumnWidth(180), // Faculty Name
+        3: FixedColumnWidth(130), // Created At
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -230,12 +317,20 @@ class _FacultiesPageState extends State<FacultiesPage> {
         for (int index = 0; index < _filteredFaculties.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredFaculties[index].code, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredFaculties[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _filteredFaculties[index].code,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _filteredFaculties[index].name,
+                onTap: () => _handleRowTap(index),
+              ),
               _tableBodyCell(
                 "${_filteredFaculties[index].createdAt.day.toString().padLeft(2, '0')} "
                 "${_monthString(_filteredFaculties[index].createdAt.month)} "
@@ -266,12 +361,20 @@ class _FacultiesPageState extends State<FacultiesPage> {
         for (int index = 0; index < _filteredFaculties.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredFaculties[index].code, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredFaculties[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _filteredFaculties[index].code,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _filteredFaculties[index].name,
+                onTap: () => _handleRowTap(index),
+              ),
               _tableBodyCell(
                 "${_filteredFaculties[index].createdAt.day.toString().padLeft(2, '0')} "
                 "${_monthString(_filteredFaculties[index].createdAt.month)} "
@@ -301,10 +404,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(
-          text,
-          overflow: TextOverflow.ellipsis,
-        ),
+        child: Text(text, overflow: TextOverflow.ellipsis),
       ),
     );
   }
