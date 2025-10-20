@@ -6,7 +6,6 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
 import 'create_timetable_dialog.dart';
-import 'edit_timetable_page.dart';
 
 class TimetableSlot {
   final String day;
@@ -26,6 +25,12 @@ class TimetableSlot {
     required this.lecturer,
     required this.section,
   });
+}
+
+/// Result returned by TimetableCellEditDialog (nullable cellText when clearing)
+class TimetableCellEditResult {
+  final String? cellText;
+  TimetableCellEditResult({this.cellText});
 }
 
 class TimetablePage extends StatefulWidget {
@@ -1665,6 +1670,144 @@ class _ExportOptionTile extends StatelessWidget {
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
       leading: const Icon(Icons.picture_as_pdf_outlined),
       onTap: () => Navigator.pop(context, choice),
+    );
+  }
+}
+
+/// Simple dialog to edit a timetable cell (course + lecturer).
+/// Returns TimetableCellEditResult with cellText containing "Course\nLecturer"
+/// or with cellText == null when the user chooses the "Clear" action.
+class TimetableCellEditDialog extends StatefulWidget {
+  final String? initialCourse;
+  final String? initialLecturer;
+  final List<String> courses;
+  final List<String> lecturers;
+
+  const TimetableCellEditDialog({
+    super.key,
+    this.initialCourse,
+    this.initialLecturer,
+    required this.courses,
+    required this.lecturers,
+  });
+
+  @override
+  State<TimetableCellEditDialog> createState() =>
+      _TimetableCellEditDialogState();
+}
+
+class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
+  late TextEditingController _courseController;
+  late TextEditingController _lecturerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _courseController =
+        TextEditingController(text: widget.initialCourse ?? '');
+    _lecturerController =
+        TextEditingController(text: widget.initialLecturer ?? '');
+  }
+
+  @override
+  void dispose() {
+    _courseController.dispose();
+    _lecturerController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final course = _courseController.text.trim();
+    final lecturer = _lecturerController.text.trim();
+    final combined = course.isEmpty && lecturer.isEmpty
+        ? ''
+        : (course.isEmpty ? lecturer : (lecturer.isEmpty ? course : '$course\n$lecturer'));
+    Navigator.of(context).pop(TimetableCellEditResult(cellText: combined));
+  }
+
+  void _clearCell() {
+    // As documented, returning cellText == null indicates a clear action.
+    Navigator.of(context).pop(TimetableCellEditResult(cellText: null));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Cell'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _courseController,
+              decoration: const InputDecoration(
+                labelText: 'Course',
+                hintText: 'Course name',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _lecturerController,
+              decoration: const InputDecoration(
+                labelText: 'Lecturer',
+                hintText: 'Lecturer name',
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Quick pick buttons (optional, non-intrusive)
+            if (widget.courses.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: widget.courses.take(6).map((c) {
+                  return ActionChip(
+                    label: Text(
+                      c,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onPressed: () {
+                      _courseController.text = c;
+                    },
+                  );
+                }).toList(),
+              ),
+            const SizedBox(height: 8),
+            if (widget.lecturers.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: widget.lecturers.take(6).map((l) {
+                  return ActionChip(
+                    label: Text(
+                      l,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onPressed: () {
+                      _lecturerController.text = l;
+                    },
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(), // cancel
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _clearCell,
+          child: const Text(
+            'Clear',
+            style: TextStyle(color: Colors.red),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }
