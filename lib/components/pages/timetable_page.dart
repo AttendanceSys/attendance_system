@@ -6,7 +6,6 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
 import 'create_timetable_dialog.dart';
-import 'Edit_timetable_page.dart';
 
 class TimetableSlot {
   final String day;
@@ -26,6 +25,12 @@ class TimetableSlot {
     required this.lecturer,
     required this.section,
   });
+}
+
+/// Result returned by TimetableCellEditDialog (nullable cellText when clearing)
+class TimetableCellEditResult {
+  final String? cellText;
+  TimetableCellEditResult({this.cellText});
 }
 
 class TimetablePage extends StatefulWidget {
@@ -301,7 +306,6 @@ class _TimetablePageState extends State<TimetablePage> {
     return list;
   }
 
-  // Clipboard removed (copy button removed) – left method here if needed later (unused).
   void copySlotsToClipboard(List<TimetableSlot> slots) {}
 
   String _fmtMinutes(int minutes) {
@@ -521,8 +525,6 @@ class _TimetablePageState extends State<TimetablePage> {
     });
   }
 
-  // ------------------ Deletion (existing from previous enhancement) ------------------
-
   Future<void> _showDeleteMenu() async {
     if (selectedDepartment == null || selectedClass == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -598,13 +600,40 @@ class _TimetablePageState extends State<TimetablePage> {
 
     if (action == null) return;
 
-    if (action == _DeleteAction.section && selectedSection == null) {
+    if (action == _DeleteAction.section &&
+        (selectedSection == null || selectedSection!.trim().isEmpty)) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Select a Section first')));
       return;
     }
 
+    // Build confirmation message based on chosen action
+    String title = 'Confirm Deletion';
+    String body;
+    switch (action) {
+      case _DeleteAction.section:
+        body =
+            'This will clear all cells for section "${selectedSection!}" of class "$classKey" in department "$depKey".\n\nPeriod labels will stay.\n\nDo you want to proceed?';
+        break;
+      case _DeleteAction.classAll:
+        body =
+            'This will clear all cells for ALL sections of class "$classKey" in department "$depKey".\n\nPeriod labels will stay.\n\nDo you want to proceed?';
+        break;
+      case _DeleteAction.classStructure:
+        body =
+            'This will remove ALL period labels and ALL cells for all sections of class "$classKey" in department "$depKey".\n\nDo you want to proceed?';
+        break;
+    }
+
+    final confirmed = await _confirmDelete(
+      title: title,
+      content: body,
+      confirmText: 'Delete',
+    );
+    if (!confirmed) return;
+
+    // Backup for UNDO
     final backup = _UndoState(
       depKey: depKey,
       classKey: classKey!,
@@ -697,8 +726,6 @@ class _TimetablePageState extends State<TimetablePage> {
       ),
     );
   }
-
-  // ------------------ PDF Export ------------------
 
   Future<void> _exportPdfFlow() async {
     if (selectedDepartment == null || selectedClass == null) {
@@ -799,7 +826,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 padding: const pw.EdgeInsets.only(top: 16),
                 child: pw.Text(
                   'No timetable data',
-                  style: const pw.TextStyle(fontSize: 14),
+                  style: pw.TextStyle(fontSize: 14),
                 ),
               )
             else
@@ -808,7 +835,6 @@ class _TimetablePageState extends State<TimetablePage> {
         ),
       );
     } else {
-      // Entire class: one section per page
       if (sectionsMap.isEmpty) {
         pdf.addPage(
           pw.MultiPage(
@@ -933,9 +959,8 @@ class _TimetablePageState extends State<TimetablePage> {
       border: pw.TableBorder.all(color: PdfColors.grey500, width: 0.5),
       defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
       columnWidths: {
-        0: const pw.FixedColumnWidth(42),
-        for (int i = 1; i < tableHeaders.length; i++)
-          i: const pw.FlexColumnWidth(2),
+        0: pw.FixedColumnWidth(42),
+        for (int i = 1; i < tableHeaders.length; i++) i: pw.FlexColumnWidth(2),
       },
       children: [
         pw.TableRow(
@@ -961,22 +986,41 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  // ---------------- UI Build ----------------
+  Future<bool> _confirmDelete({
+    required String title,
+    required String content,
+    String confirmText = 'Delete',
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmText),
+          ),
+        ],
+      ),
+    );
+    return result == true;
+  }
 
   @override
   Widget build(BuildContext context) {
     final grid = currentTimetable;
     final periodsForClass = currentPeriods;
-    final slotsList = getFilteredSlotsFromGrid();
-    final showGrid =
-        !(selectedLecturer != null &&
-            selectedLecturer!.trim().isNotEmpty &&
-            selectedLecturer != 'NONE' &&
-            selectedLecturer != 'All lecturers');
-
-    if (!showGrid && editingEnabled) {
-      editingEnabled = false;
-    }
+    final canEdit = grid != null;
+    final canDelete = selectedDepartment != null && selectedClass != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -985,11 +1029,11 @@ class _TimetablePageState extends State<TimetablePage> {
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(12.0), // tighter on mobile
+          padding: const EdgeInsets.all(12.0), // mobile-friendly padding
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search (dense for mobile)
+              // Search
               TextField(
                 decoration: InputDecoration(
                   hintText: 'Search Time Table...',
@@ -1009,12 +1053,11 @@ class _TimetablePageState extends State<TimetablePage> {
               ),
               const SizedBox(height: 10),
 
-              // Main actions - Wrap for small screens
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              // Create button (left) and Edit/Delete/Export (right) — like your other pages
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Left: Create Time Table
                   ElevatedButton.icon(
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('Create Time Table'),
@@ -1121,50 +1164,69 @@ class _TimetablePageState extends State<TimetablePage> {
                       );
                     },
                   ),
-                  ElevatedButton.icon(
-                    icon: Icon(
-                      editingEnabled ? Icons.done : Icons.edit,
-                      size: 18,
-                    ),
-                    label: Text(editingEnabled ? 'Done' : 'Edit Cells'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: editingEnabled
-                          ? Colors.orange
-                          : Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      minimumSize: const Size(0, 40),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () {
-                      if (currentTimetable == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Select Department/Class/Section first',
+
+                  // Right: Edit / Delete (disabled until needed) + Export icon
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 80,
+                        height: 36,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 0,
+                              horizontal: 0,
                             ),
                           ),
-                        );
-                        return;
-                      }
-                      setState(() => editingEnabled = !editingEnabled);
-                    },
-                  ),
-                  // Icons wrap nicely on small screens
-                  IconButton(
-                    tooltip: 'Delete timetable options',
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: _showDeleteMenu,
-                  ),
-                  IconButton(
-                    tooltip: 'Export PDF',
-                    icon: const Icon(Icons.picture_as_pdf_outlined),
-                    onPressed: _exportPdfFlow,
+                          onPressed: !canEdit
+                              ? null
+                              : () {
+                                  setState(
+                                    () => editingEnabled = !editingEnabled,
+                                  );
+                                },
+                          child: Text(
+                            editingEnabled ? "Done" : "Edit",
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 80,
+                        height: 36,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 0,
+                              horizontal: 0,
+                            ),
+                          ),
+                          onPressed: !canDelete ? null : _showDeleteMenu,
+                          child: const Text(
+                            "Delete",
+                            style: TextStyle(fontSize: 15, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Export PDF',
+                        onPressed: canDelete ? _exportPdfFlow : null,
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1234,7 +1296,7 @@ class _TimetablePageState extends State<TimetablePage> {
                       ),
                     ],
                   ),
-                  child: (currentTimetable == null)
+                  child: (grid == null)
                       ? Center(
                           child: Text(
                             'Please select Department, Class, and Section to view the timetable.',
@@ -1242,18 +1304,14 @@ class _TimetablePageState extends State<TimetablePage> {
                             textAlign: TextAlign.center,
                           ),
                         )
-                      : (showGrid
-                            ? _TimetableGrid(
-                                days: days,
-                                periods: periodsForClass,
-                                timetable: grid!,
-                                editing: editingEnabled,
-                                onCellTap: (d, p) => _openEditCellDialog(
-                                  dayIndex: d,
-                                  periodIndex: p,
-                                ),
-                              )
-                            : _TimetableListView(slots: slotsList)),
+                      : _TimetableGrid(
+                          days: days,
+                          periods: periodsForClass,
+                          timetable: grid,
+                          editing: editingEnabled,
+                          onCellTap: (d, p) =>
+                              _openEditCellDialog(dayIndex: d, periodIndex: p),
+                        ),
                 ),
               ),
             ],
@@ -1547,68 +1605,6 @@ class _TimetableGrid extends StatelessWidget {
   }
 }
 
-// Replace the entire _TimetableListView with this version.
-class _TimetableListView extends StatelessWidget {
-  final List<TimetableSlot> slots;
-
-  const _TimetableListView({required this.slots});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (slots.isEmpty) {
-          return Center(
-            child: Text(
-              'No slots available',
-              style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
-              textAlign: TextAlign.center,
-            ),
-          );
-        }
-
-        final table = DataTable(
-          columnSpacing: 16,
-          headingRowHeight: 44,
-          dataRowMinHeight: 44,
-          dataRowMaxHeight: 60,
-          columns: const [
-            DataColumn(label: Text('Day')),
-            DataColumn(label: Text('Time')),
-            DataColumn(label: Text('Course')), // no Room
-            DataColumn(label: Text('Class')),
-            DataColumn(label: Text('Department')),
-          ],
-          rows: slots
-              .map(
-                (slot) => DataRow(
-                  cells: [
-                    DataCell(Text(slot.day)),
-                    DataCell(Text(slot.periodLabel)),
-                    DataCell(Text(slot.course)),
-                    DataCell(Text(slot.className)),
-                    DataCell(Text(slot.department)),
-                  ],
-                ),
-              )
-              .toList(),
-        );
-
-        // Full width: ensure table width is at least the viewport width; allow horizontal scroll if needed.
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: table,
-          ),
-        );
-      },
-    );
-  }
-}
-
-/* ---------- Delete helpers ---------- */
-
 enum _DeleteAction { section, classAll, classStructure }
 
 class _DeleteOptionTile extends StatelessWidget {
@@ -1653,7 +1649,6 @@ class _UndoState {
   });
 }
 
-/* ---------- Export helpers ---------- */
 enum _ExportChoice { currentSection, entireClass }
 
 class _ExportOptionTile extends StatelessWidget {
@@ -1676,6 +1671,144 @@ class _ExportOptionTile extends StatelessWidget {
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
       leading: const Icon(Icons.picture_as_pdf_outlined),
       onTap: () => Navigator.pop(context, choice),
+    );
+  }
+}
+
+/// Simple dialog to edit a timetable cell (course + lecturer).
+/// Returns TimetableCellEditResult with cellText containing "Course\nLecturer"
+/// or with cellText == null when the user chooses the "Clear" action.
+class TimetableCellEditDialog extends StatefulWidget {
+  final String? initialCourse;
+  final String? initialLecturer;
+  final List<String> courses;
+  final List<String> lecturers;
+
+  const TimetableCellEditDialog({
+    super.key,
+    this.initialCourse,
+    this.initialLecturer,
+    required this.courses,
+    required this.lecturers,
+  });
+
+  @override
+  State<TimetableCellEditDialog> createState() =>
+      _TimetableCellEditDialogState();
+}
+
+class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
+  late TextEditingController _courseController;
+  late TextEditingController _lecturerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _courseController =
+        TextEditingController(text: widget.initialCourse ?? '');
+    _lecturerController =
+        TextEditingController(text: widget.initialLecturer ?? '');
+  }
+
+  @override
+  void dispose() {
+    _courseController.dispose();
+    _lecturerController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final course = _courseController.text.trim();
+    final lecturer = _lecturerController.text.trim();
+    final combined = course.isEmpty && lecturer.isEmpty
+        ? ''
+        : (course.isEmpty ? lecturer : (lecturer.isEmpty ? course : '$course\n$lecturer'));
+    Navigator.of(context).pop(TimetableCellEditResult(cellText: combined));
+  }
+
+  void _clearCell() {
+    // As documented, returning cellText == null indicates a clear action.
+    Navigator.of(context).pop(TimetableCellEditResult(cellText: null));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Edit Cell'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _courseController,
+              decoration: const InputDecoration(
+                labelText: 'Course',
+                hintText: 'Course name',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _lecturerController,
+              decoration: const InputDecoration(
+                labelText: 'Lecturer',
+                hintText: 'Lecturer name',
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Quick pick buttons (optional, non-intrusive)
+            if (widget.courses.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: widget.courses.take(6).map((c) {
+                  return ActionChip(
+                    label: Text(
+                      c,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onPressed: () {
+                      _courseController.text = c;
+                    },
+                  );
+                }).toList(),
+              ),
+            const SizedBox(height: 8),
+            if (widget.lecturers.isNotEmpty)
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: widget.lecturers.take(6).map((l) {
+                  return ActionChip(
+                    label: Text(
+                      l,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onPressed: () {
+                      _lecturerController.text = l;
+                    },
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(), // cancel
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _clearCell,
+          child: const Text(
+            'Clear',
+            style: TextStyle(color: Colors.red),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }
