@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'student_details_panel.dart';
 
 class AttendanceUnifiedPage extends StatefulWidget {
@@ -459,30 +460,46 @@ class _DropdownFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 170,
-      child: DropdownButtonFormField<String>(
-        value: value,
-        hint: Text(hint),
-        items: [
-          DropdownMenuItem(
-            value: null,
-            child: Text(
-              'Select $hint',
-              style: const TextStyle(color: Colors.grey),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final usableWidth =
+            (constraints.maxWidth.isFinite
+                    ? math.min(170, constraints.maxWidth)
+                    : 170.0)
+                .toDouble();
+        return SizedBox(
+          width: usableWidth,
+          child: DropdownButtonFormField<String>(
+            isExpanded: true,
+            value: value,
+            hint: Text(hint),
+            items: [
+              DropdownMenuItem(
+                value: null,
+                child: Text(
+                  'Select $hint',
+                  style: const TextStyle(color: Colors.grey),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              ...items
+                  .map(
+                    (item) => DropdownMenuItem(
+                      value: item,
+                      child: Text(item, overflow: TextOverflow.ellipsis),
+                    ),
+                  )
+                  .toList(),
+            ],
+            onChanged: onChanged,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
             ),
           ),
-          ...items
-              .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-              .toList(),
-        ],
-        onChanged: onChanged,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -513,13 +530,16 @@ class _DateFilter extends StatelessWidget {
             contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                date != null
-                    ? '${date!.day}/${date!.month}/${date!.year}'
-                    : 'Date',
+              Expanded(
+                child: Text(
+                  date != null
+                      ? '${date!.day}/${date!.month}/${date!.year}'
+                      : 'Date',
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(width: 8),
               const Icon(Icons.calendar_today, size: 18),
             ],
           ),

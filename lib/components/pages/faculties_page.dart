@@ -14,7 +14,8 @@ class FacultiesPage extends StatefulWidget {
 class _FacultiesPageState extends State<FacultiesPage> {
   final UseFaculties _useFaculties = UseFaculties();
   List<Faculty> _faculties = [];
-  bool _loading = false;
+  bool _isLoading = false;
+  String? _loadError;
 
   String _searchText = '';
   int? _selectedIndex;
@@ -34,13 +35,26 @@ class _FacultiesPageState extends State<FacultiesPage> {
   }
 
   Future<void> _fetchFaculties() async {
-    setState(() => _loading = true);
-    final faculties = await _useFaculties.fetchFaculties();
     setState(() {
-      _faculties = faculties;
-      _loading = false;
-      _selectedIndex = null;
+      _isLoading = true;
+      _loadError = null;
     });
+    try {
+      final faculties = await _useFaculties.fetchFaculties();
+      if (!mounted) return;
+      setState(() {
+        _faculties = faculties;
+        _isLoading = false;
+        _selectedIndex = null;
+      });
+    } catch (e, st) {
+      debugPrint('FacultiesPage._fetchFaculties error: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _loadError = e.toString();
+      });
+    }
   }
 
   Future<void> _showAddFacultyPopup() async {
@@ -128,18 +142,46 @@ class _FacultiesPageState extends State<FacultiesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
-          const Text(
-            "Faculties",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: LinearProgressIndicator(),
             ),
+          if (_loadError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(
+                'Failed to load faculties: $_loadError',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text(
+                "Faculties",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Reload from DB',
+                icon: const Icon(Icons.refresh),
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        debugPrint('Manual reload requested');
+                        await _fetchFaculties();
+                      },
+              ),
+            ],
           ),
           const SizedBox(height: 24),
-          if (_loading) const Center(child: CircularProgressIndicator()),
-          if (!_loading)
+
+          if (!_isLoading)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -223,20 +265,28 @@ class _FacultiesPageState extends State<FacultiesPage> {
               ],
             ),
           const SizedBox(height: 8),
-          if (!_loading)
+          if (!_isLoading)
             Expanded(
-              child: Container(
-                width: double.infinity,
-                color: Colors.transparent,
-                child: isDesktop
-                    ? _buildDesktopTable()
-                    : SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: _buildMobileTable(),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  setState(() {
+                    _selectedIndex = null;
+                  });
+                },
+                child: Container(
+                  width: double.infinity,
+                  color: Colors.transparent,
+                  child: isDesktop
+                      ? _buildDesktopTable()
+                      : SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
                         ),
-                      ),
+                ),
               ),
             ),
         ],

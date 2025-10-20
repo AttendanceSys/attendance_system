@@ -18,8 +18,8 @@ class _AdminsPageState extends State<AdminsPage> {
   List<api.Admin> _admins = [];
   List<String> _facultyNames = [];
 
-  bool _loading = false;
-  String? _error;
+  bool _isLoading = false;
+  String? _loadError;
 
   String _searchText = '';
   int? _selectedIndex;
@@ -27,9 +27,15 @@ class _AdminsPageState extends State<AdminsPage> {
   List<api.Admin> get _filteredAdmins => _admins
       .where(
         (admin) =>
-            (admin.username ?? '').toLowerCase().contains(_searchText.toLowerCase()) ||
-            (admin.fullName ?? '').toLowerCase().contains(_searchText.toLowerCase()) ||
-            (admin.facultyName ?? '').toLowerCase().contains(_searchText.toLowerCase()),
+            (admin.username ?? '').toLowerCase().contains(
+              _searchText.toLowerCase(),
+            ) ||
+            (admin.fullName ?? '').toLowerCase().contains(
+              _searchText.toLowerCase(),
+            ) ||
+            (admin.facultyName ?? '').toLowerCase().contains(
+              _searchText.toLowerCase(),
+            ),
       )
       .toList();
 
@@ -41,38 +47,50 @@ class _AdminsPageState extends State<AdminsPage> {
 
   Future<void> _loadAll() async {
     setState(() {
-      _loading = true;
-      _error = null;
+      _isLoading = true;
+      _loadError = null;
     });
     try {
       final results = await Future.wait([
         _useAdmins.fetchAdmins(),
         _useAdmins.fetchFacultyNames(),
       ]);
+      if (!mounted) return;
       setState(() {
         _admins = results[0] as List<api.Admin>;
         _facultyNames = results[1] as List<String>;
-        _loading = false;
+        _isLoading = false;
         _selectedIndex = null;
       });
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('AdminsPage._loadAll error: $e\n$st');
+      if (!mounted) return;
       setState(() {
-        _loading = false;
-        _error = 'Failed to load admins or faculties';
+        _isLoading = false;
+        _loadError = 'Failed to load admins or faculties';
       });
     }
   }
 
   Future<void> _fetchAdmins() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final admins = await _useAdmins.fetchAdmins();
+      if (!mounted) return;
       setState(() {
         _admins = admins;
         _selectedIndex = null;
+        _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('AdminsPage._fetchAdmins error: $e\n$st');
+      if (!mounted) return;
       setState(() {
-        _error = 'Failed to refresh admins';
+        _isLoading = false;
+        _loadError = 'Failed to refresh admins';
       });
     }
   }
@@ -84,30 +102,37 @@ class _AdminsPageState extends State<AdminsPage> {
     );
     if (result != null) {
       // Check if faculty already has an admin
-      final existing = _admins.where((a) => a.facultyName == result.facultyName).toList();
+      final existing = _admins
+          .where((a) => a.facultyName == result.facultyName)
+          .toList();
       bool shouldReplace = true;
       if (existing.isNotEmpty) {
         // Show confirmation dialog
-        shouldReplace = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("Replace Admin"),
-            content: Text(
-              "This faculty already has an admin. Are you sure you want to replace the existing admin with the new one?",
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text("Cancel"),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                child: const Text("Replace"),
-              ),
-            ],
-          ),
-        ) ?? false;
+        shouldReplace =
+            await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text("Replace Admin"),
+                    content: Text(
+                      "This faculty already has an admin. Are you sure you want to replace the existing admin with the new one?",
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text("Cancel"),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text("Replace"),
+                      ),
+                    ],
+                  ),
+                ) ??
+                false;
       }
       if (shouldReplace) {
         // If replacing, delete the old admin first
@@ -127,6 +152,7 @@ class _AdminsPageState extends State<AdminsPage> {
       }
     }
   }
+
   Future<void> _showEditAdminPopup() async {
     if (_selectedIndex == null) return;
     final admin = _filteredAdmins[_selectedIndex!];
@@ -146,36 +172,38 @@ class _AdminsPageState extends State<AdminsPage> {
     );
     if (result != null) {
       // Check if another admin exists for the selected faculty (except current)
-      final existing = _admins.where((a) =>
-        a.facultyName == result.facultyName && a.id != admin.id
-      ).toList();
+      final existing = _admins
+          .where((a) => a.facultyName == result.facultyName && a.id != admin.id)
+          .toList();
 
       bool shouldReplace = true;
       if (existing.isNotEmpty) {
         // Show confirmation dialog
-        shouldReplace = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text("Replace Admin"),
-            content: const Text(
-              "This faculty already has an admin. Are you sure you want to replace the existing admin with the new one?",
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text("Cancel"),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text("Replace"),
-              ),
-            ],
-          ),
-        ) ?? false;
+        shouldReplace =
+            await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text("Replace Admin"),
+                    content: const Text(
+                      "This faculty already has an admin. Are you sure you want to replace the existing admin with the new one?",
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text("Cancel"),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text("Replace"),
+                      ),
+                    ],
+                  ),
+                ) ??
+                false;
       }
       if (shouldReplace) {
         // If replacing, delete the old admin first (except current)
@@ -203,7 +231,9 @@ class _AdminsPageState extends State<AdminsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Delete Admin"),
-        content: Text("Are you sure you want to delete '${admin.fullName ?? ''}'?"),
+        content: Text(
+          "Are you sure you want to delete '${admin.fullName ?? ''}'?",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -240,19 +270,39 @@ class _AdminsPageState extends State<AdminsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
-            "Admins",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+          Row(
+            children: [
+              const Text(
+                "Admins",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Reload from DB',
+                icon: const Icon(Icons.refresh),
+                onPressed: () async {
+                  debugPrint('Manual reload requested');
+                  await _loadAll();
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 24),
-          if (_loading) const Center(child: CircularProgressIndicator()),
-          if (_error != null && !_loading)
-            Center(child: Text(_error!, style: const TextStyle(color: Colors.red))),
-          if (!_loading && _error == null)
+          if (_isLoading) const Center(child: CircularProgressIndicator()),
+          if (_loadError != null && !_isLoading)
+            Center(
+              child: Text(
+                _loadError!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+
+          // Controls (search + buttons)
+          if (!_isLoading && _loadError == null)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -289,11 +339,15 @@ class _AdminsPageState extends State<AdminsPage> {
                                   horizontal: 0,
                                 ),
                               ),
-                              onPressed:
-                                  _selectedIndex == null ? null : _showEditAdminPopup,
+                              onPressed: _selectedIndex == null
+                                  ? null
+                                  : _showEditAdminPopup,
                               child: const Text(
                                 "Edit",
-                                style: TextStyle(fontSize: 15, color: Colors.white),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
@@ -312,11 +366,15 @@ class _AdminsPageState extends State<AdminsPage> {
                                   horizontal: 0,
                                 ),
                               ),
-                              onPressed:
-                                  _selectedIndex == null ? null : _confirmDeleteAdmin,
+                              onPressed: _selectedIndex == null
+                                  ? null
+                                  : _confirmDeleteAdmin,
                               child: const Text(
                                 "Delete",
-                                style: TextStyle(fontSize: 15, color: Colors.white),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                           ),
@@ -327,21 +385,33 @@ class _AdminsPageState extends State<AdminsPage> {
                 ),
               ],
             ),
+
           const SizedBox(height: 8),
-          if (!_loading && _error == null)
+
+          // TABLE AREA — wrap in GestureDetector so tapping blank area clears selection
+          if (!_isLoading && _loadError == null)
             Expanded(
-              child: Container(
-                width: double.infinity,
-                color: Colors.transparent,
-                child: isDesktop
-                    ? _buildDesktopTable()
-                    : SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: _buildMobileTable(),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  // clicking blank area unselects the current row
+                  setState(() {
+                    _selectedIndex = null;
+                  });
+                },
+                child: Container(
+                  width: double.infinity,
+                  color: Colors.transparent,
+                  child: isDesktop
+                      ? _buildDesktopTable()
+                      : SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
                         ),
-                      ),
+                ),
               ),
             ),
         ],

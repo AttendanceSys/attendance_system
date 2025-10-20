@@ -77,7 +77,7 @@ class FacultyAdminSidebar extends StatelessWidget {
                 ),
                 _SidebarItem(
                   icon: Icons.menu_book_outlined,
-                  title: "Subjects",
+                  title: "Courses",
                   isSelected: selectedIndex == 3,
                   onTap: () => onItemSelected(3),
                   collapsed: collapsed,

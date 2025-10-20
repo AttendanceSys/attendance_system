@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:attendance_system/screens/super_admin_page.dart';
 import 'package:attendance_system/screens/faculty_admin_page.dart';
 import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
-
 import 'package:attendance_system/screens/teacher_main_page.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -108,6 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildMobileForm(BuildContext context) {
+    // For mobile, keep it compact but slightly larger
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -117,12 +117,12 @@ class _LoginScreenState extends State<LoginScreen> {
             "LOGIN",
             style: TextStyle(
               color: Colors.white,
-              fontSize: 32,
+              fontSize: 38, // Larger font
               fontWeight: FontWeight.bold,
               letterSpacing: 2,
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 38),
           _buildInputField(
             controller: _usernameController,
             icon: Icons.person,
@@ -131,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
             focusNode: _usernameFocus,
             onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 22),
           _buildInputField(
             controller: _passwordController,
             icon: Icons.lock,
@@ -142,10 +142,10 @@ class _LoginScreenState extends State<LoginScreen> {
             onSubmitted: (_) => _handleLogin(),
           ),
           if (_errorMessage != null) ...[
-            const SizedBox(height: 12),
-            Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 14),
+            Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 16)),
           ],
-          const SizedBox(height: 24),
+          const SizedBox(height: 30),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -154,12 +154,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: const EdgeInsets.symmetric(vertical: 22),
               ),
               onPressed: _handleLogin,
               child: const Text(
                 "Login",
-                style: TextStyle(fontSize: 18, color: Colors.white),
+                style: TextStyle(fontSize: 22, color: Colors.white),
               ),
             ),
           ),
@@ -169,18 +169,19 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildWebForm(BuildContext context) {
+    // Make card much larger and more central
     return Center(
       child: Container(
-        width: 400,
-        padding: const EdgeInsets.all(32),
+        width: 600, // Wider card
+        padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 54), // More padding
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: BorderRadius.circular(36),
           boxShadow: [
             BoxShadow(
               color: Colors.black12,
-              blurRadius: 16,
-              offset: const Offset(0, 8),
+              blurRadius: 32,
+              offset: const Offset(0, 12),
             ),
           ],
         ),
@@ -191,12 +192,12 @@ class _LoginScreenState extends State<LoginScreen> {
               "LOGIN",
               style: TextStyle(
                 color: Color(0xFF4D91D6),
-                fontSize: 32,
+                fontSize: 48, // Much larger font
                 fontWeight: FontWeight.bold,
-                letterSpacing: 2,
+                letterSpacing: 3,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 48),
             _buildInputField(
               controller: _usernameController,
               icon: Icons.person,
@@ -205,9 +206,10 @@ class _LoginScreenState extends State<LoginScreen> {
               fillColor: Colors.grey[100],
               textColor: Colors.black87,
               focusNode: _usernameFocus,
+              fontSize: 24,
               onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 28),
             _buildInputField(
               controller: _passwordController,
               icon: Icons.lock,
@@ -217,27 +219,28 @@ class _LoginScreenState extends State<LoginScreen> {
               fillColor: Colors.grey[100],
               textColor: Colors.black87,
               focusNode: _passwordFocus,
+              fontSize: 24,
               onSubmitted: (_) => _handleLogin(),
             ),
             if (_errorMessage != null) ...[
-              const SizedBox(height: 12),
-              Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+              const SizedBox(height: 24),
+              Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 18)),
             ],
-            const SizedBox(height: 24),
+            const SizedBox(height: 42),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4D91D6),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(28),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 26),
                 ),
                 onPressed: _handleLogin,
                 child: const Text(
                   "Login",
-                  style: TextStyle(fontSize: 18, color: Colors.white),
+                  style: TextStyle(fontSize: 26, color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -257,27 +260,29 @@ class _LoginScreenState extends State<LoginScreen> {
     bool isPassword = false,
     FocusNode? focusNode,
     void Function(String)? onSubmitted,
+    double fontSize = 20,
   }) {
     return TextField(
       controller: controller,
       obscureText: isPassword ? _obscurePassword : obscure,
-      style: TextStyle(color: textColor ?? Colors.white),
+      style: TextStyle(color: textColor ?? Colors.white, fontSize: fontSize),
       focusNode: focusNode,
       decoration: InputDecoration(
         filled: true,
         fillColor: fillColor ?? Colors.white.withOpacity(0.2),
-        prefixIcon: Icon(icon, color: textColor ?? Colors.white),
+        prefixIcon: Icon(icon, color: textColor ?? Colors.white, size: fontSize + 4),
         hintText: hint,
-        hintStyle: TextStyle(color: textColor ?? Colors.white70),
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 18,
-          horizontal: 20,
+        hintStyle: TextStyle(color: textColor ?? Colors.white70, fontSize: fontSize),
+        contentPadding: EdgeInsets.symmetric(
+          vertical: fontSize + 8,
+          horizontal: fontSize + 4,
         ),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
                   _obscurePassword ? Icons.visibility_off : Icons.visibility,
                   color: textColor ?? Colors.white,
+                  size: fontSize + 2,
                 ),
                 onPressed: () {
                   setState(() {

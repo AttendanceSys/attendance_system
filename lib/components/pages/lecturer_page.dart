@@ -14,20 +14,19 @@ class LecturersPage extends StatefulWidget {
 class _LecturersPageState extends State<LecturersPage> {
   final UseTeachers _useTeachers = UseTeachers();
   List<Teacher> _teachers = [];
-  bool _loading = false;
+  bool _isLoading = false;
   String _searchText = '';
   int? _selectedIndex;
-  String? _error;
+  String? _loadError;
 
-  List<Teacher> get _filteredTeachers => _teachers
-      .where(
-        (teacher) =>
-            teacher.id.toLowerCase().contains(_searchText.toLowerCase()) ||
-            (teacher.teacherName ?? '').toLowerCase().contains(
-              _searchText.toLowerCase(),
-            ),
-      )
-      .toList();
+  List<Teacher> get _filteredTeachers {
+    final query = _searchText.toLowerCase();
+    return _teachers.where((teacher) {
+      final id = (teacher.username ?? '').toLowerCase();
+      final name = (teacher.teacherName ?? '').toLowerCase();
+      return id.contains(query) || name.contains(query);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -37,20 +36,23 @@ class _LecturersPageState extends State<LecturersPage> {
 
   Future<void> _fetchTeachers() async {
     setState(() {
-      _loading = true;
-      _error = null;
+      _isLoading = true;
+      _loadError = null;
     });
     try {
       final teachers = await _useTeachers.fetchTeachers();
+      if (!mounted) return;
       setState(() {
         _teachers = teachers;
-        _loading = false;
+        _isLoading = false;
         _selectedIndex = null;
       });
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('LecturerPage._fetchTeachers error: $e\n$st');
+      if (!mounted) return;
       setState(() {
-        _loading = false;
-        _error = 'Error fetching teachers';
+        _isLoading = false;
+        _loadError = 'Error fetching teachers';
       });
     }
   }
@@ -144,21 +146,45 @@ class _LecturersPageState extends State<LecturersPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
-            "Lecturers",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: LinearProgressIndicator(),
             ),
+          if (_loadError != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(
+                _loadError!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text(
+                "Lecturers",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: 'Reload from DB',
+                icon: const Icon(Icons.refresh),
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        debugPrint('Manual reload requested');
+                        await _fetchTeachers();
+                      },
+              ),
+            ],
           ),
           const SizedBox(height: 24),
-          if (_loading) const Center(child: CircularProgressIndicator()),
-          if (_error != null)
-            Center(
-              child: Text(_error!, style: const TextStyle(color: Colors.red)),
-            ),
-          if (!_loading && _error == null)
+          if (!_isLoading && _loadError == null)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -195,9 +221,8 @@ class _LecturersPageState extends State<LecturersPage> {
                                   horizontal: 0,
                                 ),
                               ),
-                              onPressed: _selectedIndex == null
-                                  ? null
-                                  : _showEditLecturerPopup,
+                              onPressed:
+                                  _selectedIndex == null ? null : _showEditLecturerPopup,
                               child: const Text(
                                 "Edit",
                                 style: TextStyle(
@@ -222,9 +247,8 @@ class _LecturersPageState extends State<LecturersPage> {
                                   horizontal: 0,
                                 ),
                               ),
-                              onPressed: _selectedIndex == null
-                                  ? null
-                                  : _confirmDeleteLecturer,
+                              onPressed:
+                                  _selectedIndex == null ? null : _confirmDeleteLecturer,
                               child: const Text(
                                 "Delete",
                                 style: TextStyle(
@@ -242,20 +266,30 @@ class _LecturersPageState extends State<LecturersPage> {
               ],
             ),
           const SizedBox(height: 8),
-          if (!_loading && _error == null)
+          // show the table only when not loading and no load error
+          if (!_isLoading && _loadError == null)
             Expanded(
-              child: Container(
-                width: double.infinity,
-                color: Colors.transparent,
-                child: isDesktop
-                    ? _buildDesktopTable()
-                    : SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: _buildMobileTable(),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  // clicking blank area unselects the current row
+                  setState(() {
+                    _selectedIndex = null;
+                  });
+                },
+                child: Container(
+                  width: double.infinity,
+                  color: Colors.transparent,
+                  child: isDesktop
+                      ? _buildDesktopTable()
+                      : SingleChildScrollView(
+                          scrollDirection: Axis.vertical,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
                         ),
-                      ),
+                ),
               ),
             ),
         ],
@@ -268,13 +302,14 @@ class _LecturersPageState extends State<LecturersPage> {
       columnWidths: const {
         0: FixedColumnWidth(64), // No
         1: FixedColumnWidth(140), // Lecturer ID
-        2: FixedColumnWidth(140), // Lecturer Name
+        2: FixedColumnWidth(240), // Lecturer Name
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
       ),
       children: [
         TableRow(
+          decoration: const BoxDecoration(color: Color(0xFFF7F7F7)),
           children: [
             _tableHeaderCell("No"),
             _tableHeaderCell("Lecturer ID"),
@@ -312,6 +347,7 @@ class _LecturersPageState extends State<LecturersPage> {
       ),
       children: [
         TableRow(
+          decoration: const BoxDecoration(color: Color(0xFFF7F7F7)),
           children: [
             _tableHeaderCell("No"),
             _tableHeaderCell("Lecturer ID"),

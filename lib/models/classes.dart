@@ -1,13 +1,15 @@
 class SchoolClass {
+  final String id;
   final String name;
-  final String department;
+  final String department; // department id (uuid) or code depending on schema
   final String section;
   bool isActive;
 
   SchoolClass({
+    this.id = '',
     required this.name,
     required this.department,
-    required this.section,
+    this.section = '',
     this.isActive = true,
   });
 }

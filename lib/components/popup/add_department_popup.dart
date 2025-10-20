@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/department.dart';
+import '../../hooks/use_lectureres.dart';
 
 class AddDepartmentPopup extends StatefulWidget {
   final Department? department;
@@ -19,16 +20,38 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
   final _formKey = GlobalKey<FormState>();
   String? _name;
   String? _code;
-  String? _head;
-  String? _status;
+  String? _headDisplay; // shown in dropdown
+  String? _headId; // teacher id stored for DB
+  // status removed from popup; keep department.status unchanged when saving
+
+  final UseTeachers _teachersService = UseTeachers();
+  List<Teacher> _teachers = [];
 
   @override
   void initState() {
     super.initState();
     _name = widget.department?.name;
     _code = widget.department?.code;
-    _head = widget.department?.head;
-    _status = widget.department?.status;
+    // if widget.department.head contains an id, we will try to map to display name after loading teachers
+    _headId = widget.department?.head;
+    _loadTeachers();
+  }
+
+  Future<void> _loadTeachers() async {
+    final list = await _teachersService.fetchTeachers();
+    if (!mounted) return;
+    setState(() {
+      _teachers = list;
+      if (_headId != null && _headId!.isNotEmpty) {
+        final matched = _teachers.firstWhere(
+          (t) => t.id == _headId,
+          orElse: () => _teachers.isNotEmpty
+              ? _teachers.first
+              : Teacher(id: '', username: '', teacherName: '', password: ''),
+        );
+        _headDisplay = matched.teacherName ?? matched.username ?? matched.id;
+      }
+    });
   }
 
   @override
@@ -63,7 +86,9 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.department == null ? "Add Department" : "Edit Department",
+                  widget.department == null
+                      ? 'Add Department'
+                      : 'Edit Department',
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -73,52 +98,67 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 TextFormField(
                   initialValue: _name,
                   decoration: const InputDecoration(
-                    hintText: "Department Name",
+                    hintText: 'Department Name',
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (val) => _name = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter department name" : null,
+                  validator: (val) => val == null || val.isEmpty
+                      ? 'Enter department name'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _code,
                   decoration: const InputDecoration(
-                    hintText: "Department Code",
+                    hintText: 'Department Code',
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (val) => _code = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter department code" : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  initialValue: _head,
-                  decoration: const InputDecoration(
-                    hintText: "Head of Department",
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) => _head = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter head of department" : null,
+                  validator: (val) => val == null || val.isEmpty
+                      ? 'Enter department code'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _status,
+                  value: _headDisplay,
                   decoration: const InputDecoration(
-                    hintText: "Status",
+                    hintText: 'Head of Department',
                     border: OutlineInputBorder(),
                   ),
-                  items: widget.statusOptions
-                      .map((status) => DropdownMenuItem(
-                            value: status,
-                            child: Text(status),
-                          ))
+                  items: _teachers
+                      .map(
+                        (t) => DropdownMenuItem(
+                          value: t.teacherName ?? t.username ?? t.id,
+                          child: Text(t.teacherName ?? t.username ?? t.id),
+                        ),
+                      )
                       .toList(),
-                  onChanged: (val) => setState(() => _status = val),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Select status" : null,
+                  onChanged: (val) {
+                    if (val == null) return;
+                    final selected = _teachers.firstWhere(
+                      (t) => (t.teacherName ?? t.username ?? t.id) == val,
+                      orElse: () => _teachers.isNotEmpty
+                          ? _teachers.first
+                          : Teacher(
+                              id: '',
+                              username: '',
+                              teacherName: '',
+                              password: '',
+                            ),
+                    );
+                    setState(() {
+                      _headDisplay =
+                          selected.teacherName ??
+                          selected.username ??
+                          selected.id;
+                      _headId = selected.id;
+                    });
+                  },
+                  validator: (val) => val == null || val.isEmpty
+                      ? 'Select head of department'
+                      : null,
                 ),
+                const SizedBox(height: 16),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -135,7 +175,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                           minimumSize: const Size(90, 40),
                         ),
                         child: const Text(
-                          "Cancel",
+                          'Cancel',
                           style: TextStyle(
                             color: Colors.black87,
                             fontWeight: FontWeight.w500,
@@ -150,12 +190,14 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                       child: ElevatedButton(
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
+                            // store head as id (if available) so DB receives teacher id
                             Navigator.of(context).pop(
                               Department(
-                                code: _code!,
-                                name: _name!,
-                                head: _head!,
-                                status: _status!,
+                                code: _code ?? '',
+                                name: _name ?? '',
+                                head: _headId ?? _headDisplay ?? '',
+                                status:
+                                    widget.department?.status ?? 'in active',
                               ),
                             );
                           }
@@ -168,7 +210,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                           minimumSize: const Size(90, 40),
                         ),
                         child: const Text(
-                          "Save",
+                          'Save',
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
