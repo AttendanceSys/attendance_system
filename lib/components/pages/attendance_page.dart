@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'student_details_panel.dart';
+import 'dart:async';
+
+import '../../hooks/use_attendance_fetch.dart';
+import '../../models/attendance.dart';
 
 class AttendanceUnifiedPage extends StatefulWidget {
   const AttendanceUnifiedPage({super.key});
@@ -195,6 +199,104 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   String? selectedStudentId;
   String searchText = '';
 
+  // --- Attendance fetch state ---
+  final UseAttendanceFetch _attendanceHook = UseAttendanceFetch();
+  List<Attendance> _attendanceList = [];
+  StreamSubscription? _attendanceSubscription;
+  bool _attendanceLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // initial load (if some defaults are set later this will be a no-op)
+    // do not await here
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reloadAttendance());
+  }
+
+  @override
+  void dispose() {
+    _attendanceSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _reloadAttendance() async {
+    // Only fetch when department, class, course and section are selected
+    if (selectedDepartment == null ||
+        selectedClass == null ||
+        selectedCourse == null)
+      return;
+
+    setState(() {
+      _attendanceLoading = true;
+    });
+
+    try {
+      final list = await _attendanceHook.fetchAttendance(
+        departmentId: selectedDepartment,
+        classId: selectedClass,
+        courseId: selectedCourse,
+        date: selectedDate,
+        limit: 200,
+        page: 0,
+      );
+      setState(() {
+        _attendanceList = list;
+      });
+
+      // setup real-time subscription
+      _attendanceSubscription?.cancel();
+      _attendanceSubscription = _attendanceHook.subscribeAttendance().listen((
+        rows,
+      ) {
+        // Convert rows to Attendance model where possible and update
+        final mapped = rows.map((e) {
+          final rawDept = e['department'];
+          final rawClass = e['class'];
+          String extractName(dynamic value, String key) {
+            if (value == null) return '';
+            if (value is Map) return (value[key] ?? '') as String;
+            if (value is List && value.isNotEmpty) {
+              final first = value.first;
+              if (first is Map) return (first[key] ?? '') as String;
+            }
+            return '';
+          }
+
+          final deptName =
+              (e['department_name'] ?? extractName(rawDept, 'department_name'))
+                  as String;
+          final className =
+              (e['class_name'] ?? extractName(rawClass, 'class_name'))
+                  as String;
+          final studentName = (() {
+            if (e['student'] is Map)
+              return (e['student']['fullname'] ?? '') as String;
+            if (e['student'] is String) return e['student'] as String;
+            return '';
+          })();
+
+          return Attendance(
+            id: e['id'] as String,
+            name: studentName,
+            department: deptName,
+            className: className,
+            status: true,
+          );
+        }).toList();
+
+        setState(() {
+          _attendanceList = mapped;
+        });
+      });
+    } catch (e) {
+      // keep previous data but stop loading
+    } finally {
+      setState(() {
+        _attendanceLoading = false;
+      });
+    }
+  }
+
   // --- Calculated lists ---
   List<String> get classes => selectedDepartment != null
       ? departmentClasses[selectedDepartment!] ?? []
@@ -313,41 +415,47 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                         selectedSection = section;
                       }
                       if (date != null) selectedDate = date;
+                      // reload attendance when filters change
+                      _reloadAttendance();
                     });
                   },
             ),
             const SizedBox(height: 16),
+            const SizedBox(height: 16),
             Expanded(
               child: showTable
-                  ? _AttendanceTable(
-                      department: selectedDepartment!,
-                      className: selectedClass!,
-                      course: selectedCourse!,
-                      section: selectedSection!,
-                      date: selectedDate,
-                      searchText: searchText,
-                      classSectionStudents: classSectionStudents,
-                      onStudentSelected: (studentId) {
-                        setState(() {
-                          selectedStudentId = studentId;
-                        });
-                      },
-                      onStatusChanged: (studentId, newStatus) {
-                        setState(() {
-                          final students =
-                              classSectionStudents[selectedClass]?[selectedSection];
-                          if (students != null) {
-                            final student = students.firstWhere(
-                              (s) => s['id'] == studentId,
-                              orElse: () => <String, dynamic>{},
-                            );
-                            if (student.isNotEmpty) {
-                              student['status'] = newStatus;
-                            }
-                          }
-                        });
-                      },
-                    )
+                  ? (_attendanceLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _AttendanceTable(
+                            department: selectedDepartment!,
+                            className: selectedClass!,
+                            course: selectedCourse!,
+                            section: selectedSection!,
+                            date: selectedDate,
+                            searchText: searchText,
+                            classSectionStudents: classSectionStudents,
+                            attendanceList: _attendanceList,
+                            onStudentSelected: (studentId) {
+                              setState(() {
+                                selectedStudentId = studentId;
+                              });
+                            },
+                            onStatusChanged: (studentId, newStatus) {
+                              setState(() {
+                                final students =
+                                    classSectionStudents[selectedClass]?[selectedSection];
+                                if (students != null) {
+                                  final student = students.firstWhere(
+                                    (s) => s['id'] == studentId,
+                                    orElse: () => <String, dynamic>{},
+                                  );
+                                  if (student.isNotEmpty) {
+                                    student['status'] = newStatus;
+                                  }
+                                }
+                              });
+                            },
+                          ))
                   : showStudentDetails
                   ? StudentDetailsPanel(
                       studentId: selectedStudentId!,
@@ -556,6 +664,7 @@ class _AttendanceTable extends StatelessWidget {
   final String searchText;
   final Map<String, Map<String, List<Map<String, dynamic>>>>
   classSectionStudents;
+  final List<Attendance>? attendanceList;
   final Function(String studentId) onStudentSelected;
   final void Function(String studentId, bool newStatus)? onStatusChanged;
 
@@ -565,6 +674,7 @@ class _AttendanceTable extends StatelessWidget {
     required this.course,
     required this.section,
     required this.classSectionStudents,
+    this.attendanceList,
     this.date,
     required this.searchText,
     required this.onStudentSelected,
@@ -573,14 +683,23 @@ class _AttendanceTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final students = classSectionStudents[className]?[section] ?? [];
+    // If attendanceList is provided (from backend), use it. Otherwise fall back
+    // to the local demo `classSectionStudents` map used previously.
+    final bool usingRemote =
+        attendanceList != null && attendanceList!.isNotEmpty;
 
-    final filtered = students.where((row) {
-      final matchesSearch =
-          row['name'].toLowerCase().contains(searchText.toLowerCase()) ||
-          row['id'].toLowerCase().contains(searchText.toLowerCase());
-      return matchesSearch;
-    }).toList();
+    final filtered = usingRemote
+        ? attendanceList!.where((a) {
+            final q = searchText.toLowerCase();
+            return a.name.toLowerCase().contains(q) ||
+                a.id.toLowerCase().contains(q);
+          }).toList()
+        : (classSectionStudents[className]?[section] ?? []).where((row) {
+            final matchesSearch =
+                row['name'].toLowerCase().contains(searchText.toLowerCase()) ||
+                row['id'].toLowerCase().contains(searchText.toLowerCase());
+            return matchesSearch;
+          }).toList();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -638,16 +757,55 @@ class _AttendanceTable extends StatelessWidget {
               ],
               rows: List.generate(filtered.length, (index) {
                 final row = filtered[index];
-                if (row.isEmpty) return null;
+                if (usingRemote) {
+                  final Attendance a = row as Attendance;
+                  return DataRow(
+                    cells: [
+                      DataCell(Text('${index + 1}')),
+                      DataCell(Text(a.id)),
+                      DataCell(
+                        InkWell(
+                          onTap: () => onStudentSelected(a.id),
+                          child: Text(
+                            a.name,
+                            style: const TextStyle(
+                              color: Colors.blue,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataCell(Text(a.department)),
+                      DataCell(Text(a.className)),
+                      DataCell(Text(course)),
+                      DataCell(
+                        Switch(
+                          value: a.status,
+                          activeColor: Colors.green,
+                          inactiveThumbColor: Colors.red,
+                          onChanged: (val) {
+                            if (onStatusChanged != null) {
+                              onStatusChanged!(a.id, val);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                // fallback to demo row map
+                final map = row as Map<String, dynamic>;
+                if (map.isEmpty) return null;
                 return DataRow(
                   cells: [
                     DataCell(Text('${index + 1}')),
-                    DataCell(Text(row['id']?.toString() ?? '')),
+                    DataCell(Text(map['id']?.toString() ?? '')),
                     DataCell(
                       InkWell(
-                        onTap: () => onStudentSelected(row['id']),
+                        onTap: () => onStudentSelected(map['id']),
                         child: Text(
-                          row['name']?.toString() ?? '',
+                          map['name']?.toString() ?? '',
                           style: const TextStyle(
                             color: Colors.blue,
                             decoration: TextDecoration.underline,
@@ -662,12 +820,12 @@ class _AttendanceTable extends StatelessWidget {
                     DataCell(Text(course)),
                     DataCell(
                       Switch(
-                        value: row['status'] ?? false,
+                        value: map['status'] ?? false,
                         activeColor: Colors.green,
                         inactiveThumbColor: Colors.red,
                         onChanged: (val) {
                           if (onStatusChanged != null) {
-                            onStatusChanged!(row['id'], val);
+                            onStatusChanged!(map['id'], val);
                           }
                         },
                       ),
