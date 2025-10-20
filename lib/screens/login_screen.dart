@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:attendance_system/screens/super_admin_page.dart';
 import 'package:attendance_system/screens/faculty_admin_page.dart';
 import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
-// import 'package:attendance_system/components/pages/teacher_attendance_page.dart';
+
 import 'package:attendance_system/screens/teacher_main_page.dart';
 
 class LoginScreen extends StatefulWidget {

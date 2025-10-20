@@ -4,7 +4,7 @@ import '../popup/edit_user_popup.dart';
 import '../cards/searchBar.dart';
 
 class FacultyUserHandlingPage extends StatefulWidget {
-  const FacultyUserHandlingPage({Key? key}) : super(key: key);
+  const FacultyUserHandlingPage({super.key});
 
   @override
   State<FacultyUserHandlingPage> createState() =>

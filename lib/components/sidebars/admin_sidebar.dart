@@ -6,11 +6,11 @@ class AdminSidebar extends StatelessWidget {
   final bool collapsed;
 
   const AdminSidebar({
-    Key? key,
+    super.key,
     required this.onItemSelected,
     required this.selectedIndex,
     this.collapsed = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -108,13 +108,13 @@ class SidebarItem extends StatelessWidget {
   final bool collapsed;
 
   const SidebarItem({
-    Key? key,
+    super.key,
     required this.icon,
     required this.title,
     required this.isSelected,
     required this.onTap,
     this.collapsed = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

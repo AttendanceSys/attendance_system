@@ -6,11 +6,11 @@ class ErrorPopup extends StatelessWidget {
   final String time;
 
   const ErrorPopup({
-    Key? key,
+    super.key,
     required this.subject,
     required this.date,
     required this.time,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

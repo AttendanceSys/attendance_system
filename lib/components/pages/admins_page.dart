@@ -6,7 +6,7 @@ import '../cards/searchBar.dart';
 import '../../hooks/use_admins.dart' as api;
 
 class AdminsPage extends StatefulWidget {
-  const AdminsPage({Key? key}) : super(key: key);
+  const AdminsPage({super.key});
 
   @override
   State<AdminsPage> createState() => _AdminsPageState();

@@ -6,12 +6,12 @@ class EditDepartmentPopup extends StatefulWidget {
   final String head;
   final void Function(String code, String name, String head) onEdit;
   const EditDepartmentPopup({
-    Key? key,
+    super.key,
     required this.code,
     required this.name,
     required this.head,
     required this.onEdit,
-  }) : super(key: key);
+  });
 
   @override
   State<EditDepartmentPopup> createState() => _EditDepartmentPopupState();

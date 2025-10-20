@@ -7,7 +7,7 @@ import '../cards/searchBar.dart';
 import '../../hooks/use_user_handling.dart';
 
 class UserHandlingPage extends StatefulWidget {
-  const UserHandlingPage({Key? key}) : super(key: key);
+  const UserHandlingPage({super.key});
 
   @override
   State<UserHandlingPage> createState() => _UserHandlingPageState();
