@@ -23,7 +23,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
   String? _name;
   String? _teacher;
   String? _className;
-  String? _semesterStr;
+  int? _semester;
 
   @override
   void initState() {
@@ -32,7 +32,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
     _name = widget.course?.name;
     _teacher = widget.course?.teacher;
     _className = widget.course?.className;
-    _semesterStr = widget.course?.semester.toString();
+  _semester = widget.course?.semester;
   }
 
   @override
@@ -44,7 +44,10 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
     return Dialog(
       elevation: 8,
       backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.symmetric(horizontal: isMobile ? 4 : 40, vertical: isMobile ? 8 : 24),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 4 : 40,
+        vertical: isMobile ? 8 : 24,
+      ),
       child: Center(
         child: SingleChildScrollView(
           child: Container(
@@ -83,8 +86,9 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (val) => _code = val,
-                    validator: (val) =>
-                        val == null || val.isEmpty ? "Enter subject code" : null,
+                    validator: (val) => val == null || val.isEmpty
+                        ? "Enter subject code"
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -94,8 +98,9 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                       border: OutlineInputBorder(),
                     ),
                     onChanged: (val) => _name = val,
-                    validator: (val) =>
-                        val == null || val.isEmpty ? "Enter subject name" : null,
+                    validator: (val) => val == null || val.isEmpty
+                        ? "Enter subject name"
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
@@ -104,12 +109,26 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                       hintText: "Teacher Assigned (optional)",
                       border: OutlineInputBorder(),
                     ),
-                    items: widget.teachers
-                        .map((teacher) => DropdownMenuItem(
+                    items: () {
+                      final List<String> unique = widget.teachers
+                          .where((t) => t.trim().isNotEmpty)
+                          .toSet()
+                          .toList();
+                      // If editing and current teacher missing from list, include it
+                      if (_teacher != null &&
+                          _teacher!.trim().isNotEmpty &&
+                          !unique.contains(_teacher)) {
+                        unique.insert(0, _teacher!);
+                      }
+                      return unique
+                          .map(
+                            (teacher) => DropdownMenuItem(
                               value: teacher,
                               child: Text(teacher),
-                            ))
-                        .toList(),
+                            ),
+                          )
+                          .toList();
+                    }(),
                     onChanged: (val) => setState(() => _teacher = val),
                   ),
                   const SizedBox(height: 16),
@@ -119,31 +138,42 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                       hintText: "Select Class",
                       border: OutlineInputBorder(),
                     ),
-                    items: widget.classes
-                        .map((className) => DropdownMenuItem(
+                    items: () {
+                      final List<String> unique = widget.classes
+                          .where((c) => c.trim().isNotEmpty)
+                          .toSet()
+                          .toList();
+                      if (_className != null &&
+                          _className!.trim().isNotEmpty &&
+                          !unique.contains(_className)) {
+                        unique.insert(0, _className!);
+                      }
+                      return unique
+                          .map(
+                            (className) => DropdownMenuItem(
                               value: className,
                               child: Text(className),
-                            ))
-                        .toList(),
+                            ),
+                          )
+                          .toList();
+                    }(),
                     onChanged: (val) => setState(() => _className = val),
                     validator: (val) =>
                         val == null || val.isEmpty ? "Select class" : null,
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    initialValue: _semesterStr,
+                  DropdownButtonFormField<int>(
+                    value: _semester,
                     decoration: const InputDecoration(
-                      hintText: "Semester",
+                      hintText: "Select Semester",
                       border: OutlineInputBorder(),
                     ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (val) => _semesterStr = val,
-                    validator: (val) {
-                      if (val == null || val.isEmpty) return "Enter semester";
-                      final num = int.tryParse(val);
-                      if (num == null || num < 1) return "Enter valid semester";
-                      return null;
-                    },
+                    items: List.generate(10, (i) => DropdownMenuItem(
+                      value: i + 1,
+                      child: Text('Semester ${i + 1}'),
+                    )),
+                    onChanged: (val) => setState(() => _semester = val),
+                    validator: (val) => val == null ? "Select semester" : null,
                   ),
                   const SizedBox(height: 24),
                   Row(
@@ -165,7 +195,6 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                             style: TextStyle(
                               color: Colors.black87,
                               fontWeight: FontWeight.w500,
-                              fontSize: 16,
                             ),
                           ),
                         ),
@@ -178,11 +207,11 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                             if (_formKey.currentState!.validate()) {
                               Navigator.of(context).pop(
                                 Course(
-                                  code: _code!,
-                                  name: _name!,
+                                  code: _code ?? '',
+                                  name: _name ?? '',
                                   teacher: _teacher ?? '',
-                                  className: _className!,
-                                  semester: int.parse(_semesterStr!),
+                                  className: _className ?? '',
+                                  semester: _semester ?? 1,
                                 ),
                               );
                             }

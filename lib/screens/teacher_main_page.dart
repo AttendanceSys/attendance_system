@@ -4,8 +4,10 @@ import '../components/pages/teacher_qr_generation_page.dart';
 import '../components/pages/teacher_attendance_page.dart';
 import '../components/popup/logout_confirmation_popup.dart'; // <-- reusable popup
 import 'login_screen.dart';
+
 class TeacherMainPage extends StatefulWidget {
-  const TeacherMainPage({super.key});
+  final String displayName;
+  const TeacherMainPage({super.key, this.displayName = ''});
 
   @override
   State<TeacherMainPage> createState() => _TeacherMainPageState();
@@ -36,11 +38,11 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
   Future<void> _logout(BuildContext context) async {
     final confirmed = await showLogoutConfirmationPopup(context);
     if (confirmed == true) {
-       Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
   }
 
   @override
@@ -79,6 +81,7 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
                   Navigator.pop(context);
                 },
                 collapsed: false,
+                teacherName: widget.displayName,
               ),
             )
           : null,
@@ -110,6 +113,7 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
                           selectedIndex: selectedIndex,
                           onItemSelected: onSidebarItemSelected,
                           collapsed: collapsed,
+                          teacherName: widget.displayName,
                         ),
                       ),
                     ],

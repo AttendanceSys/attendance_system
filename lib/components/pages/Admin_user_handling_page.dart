@@ -49,7 +49,25 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
       });
 
       // fetch & sync (will update existing rows if needed)
-      final allRows = await _dataSource.fetchUsersWithSync();
+      // Use dynamic to try multiple possible method names on UseUserHandling,
+      // so we don't rely on a single method name that may differ between versions.
+      final dynamic ds = _dataSource;
+      List<UserHandling> allRows = [];
+      try {
+        allRows = await ds.fetchUsersWithSync();
+      } catch (_) {
+        try {
+          allRows = await ds.fetchUsers();
+        } catch (_) {
+          try {
+            allRows = await ds.fetchAllUsers();
+          } catch (e) {
+            // If none of the common methods exist, rethrow a descriptive error.
+            throw Exception(
+                'No suitable fetch method found on UseUserHandling. Tried fetchUsersWithSync, fetchUsers, fetchAllUsers. Error: $e');
+          }
+        }
+      }
 
       // keep only teachers and faculty admins (exclude students)
       final filtered = allRows.where((r) {

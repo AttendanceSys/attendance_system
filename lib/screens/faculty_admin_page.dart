@@ -10,7 +10,8 @@ import '../components/pages/attendance_page.dart';
 import '../components/pages/timetable_page.dart';
 
 class FacultyAdminPage extends StatelessWidget {
-  const FacultyAdminPage({super.key});
+  final String displayName;
+  const FacultyAdminPage({super.key, this.displayName = ''});
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +33,7 @@ class FacultyAdminPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              DashboardStatsGrid(),
+              Expanded(child: DashboardStatsGrid()),
             ],
           ),
         ),
@@ -51,6 +52,7 @@ class FacultyAdminPage extends StatelessWidget {
         // 7: User Handling
         FacultyUserHandlingPage(),
       ],
+      displayName: displayName,
     );
   }
 }

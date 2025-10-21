@@ -49,6 +49,7 @@ class _MainLayoutState extends State<MainLayout> {
                   Navigator.pop(context);
                 },
                 collapsed: false,
+                adminName: '',
               ),
             )
           : null,
@@ -93,6 +94,7 @@ class _MainLayoutState extends State<MainLayout> {
                           });
                         },
                         collapsed: _collapsed,
+                        adminName: '',
                       ),
                     ),
                 ],

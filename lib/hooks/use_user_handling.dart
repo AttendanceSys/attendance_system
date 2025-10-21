@@ -1,6 +1,73 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Upsert (update or insert) a row in `user_handling` for the provided username.
+/// Returns the id of the inserted/updated user_handling row, or null on failure.
+Future<String?> upsertUserHandling(
+  SupabaseClient client,
+  String username,
+  String role,
+  String? password,
+) async {
+  try {
+    final normalizedRoleForDb =
+        (role.trim().toLowerCase() == 'faculty admin' ||
+            role.trim().toLowerCase() == 'faculty_admin')
+        ? 'admin'
+        : role.trim().toLowerCase();
+
+    // Check existing
+    final existing = await client
+        .from('user_handling')
+        .select('id')
+        .eq('usernames', username)
+        .maybeSingle();
+
+    if (existing != null && existing['id'] != null) {
+      // Update existing row
+      final updateData = <String, dynamic>{
+        'role': normalizedRoleForDb,
+        if (password != null && password.isNotEmpty) 'passwords': password,
+      };
+
+      final updated = await client
+          .from('user_handling')
+          .update(updateData)
+          .eq('usernames', username)
+          .select()
+          .maybeSingle();
+
+      if (updated != null && updated['id'] != null) {
+        return updated['id'] as String;
+      }
+      return existing['id'] as String;
+    }
+
+    // Insert new row
+    final insertData = <String, dynamic>{
+      'usernames': username,
+      'role': normalizedRoleForDb,
+      if (password != null && password.isNotEmpty) 'passwords': password,
+    };
+
+    final inserted = await client
+        .from('user_handling')
+        .insert(insertData)
+        .select()
+        .maybeSingle();
+
+    if (inserted != null && inserted['id'] != null) {
+      debugPrint('Inserted user_handling for $username: ${inserted['id']}');
+      return inserted['id'] as String;
+    }
+
+    return null;
+  } catch (e) {
+    debugPrint('upsertUserHandling error for $username: $e');
+    return null;
+  }
+}
+
 /// Represents a user entry from the `user_handling` table.
 class UserHandling {
   final String id;
@@ -87,7 +154,7 @@ class UseStudentHandling {
     try {
       final List<dynamic> rows = await _supabase
           .from('user_handling')
-          .select('id, auth_uid, usernames, role, passwords, created_at')
+          .select('id, usernames, role, passwords, created_at')
           .eq('role', 'student');
 
       debugPrint('Fetched ${rows.length} student user_handling rows');
@@ -115,7 +182,25 @@ class UseStudentHandling {
         final pwd = (row['password'] as String?)?.trim();
 
         if (username == null || username.isEmpty) continue;
-        await _updateStudentIfExists(username, pwd);
+        try {
+          final uhId = await upsertUserHandling(
+            _supabase,
+            username,
+            'student',
+            pwd,
+          );
+          if (uhId != null && uhId.isNotEmpty) {
+            // update students table to reference the created/updated user_handling row
+            await _supabase
+                .from('students')
+                .update({'user_handling_id': uhId, 'user_id': uhId})
+                .eq('username', username);
+          }
+        } catch (e) {
+          debugPrint(
+            'syncStudents: failed to upsert/attach user_handling for $username: $e',
+          );
+        }
       }
 
       debugPrint('✅ Students sync complete (updated existing rows only)');
@@ -126,38 +211,8 @@ class UseStudentHandling {
   }
 
   /// Helper: update student in user_handling only if a matching usernames row exists.
-  Future<void> _updateStudentIfExists(String username, String? password) async {
-    try {
-      final existing = await _supabase
-          .from('user_handling')
-          .select('id')
-          .eq('usernames', username)
-          .maybeSingle();
 
-      if (existing != null) {
-        final updateData = <String, dynamic>{
-          'role': 'student',
-          if (password != null && password.isNotEmpty) 'passwords': password,
-        };
-
-        final updated = await _supabase
-            .from('user_handling')
-            .update(updateData)
-            .eq('usernames', username)
-            .select()
-            .maybeSingle();
-
-        debugPrint(
-            'Updated user_handling for existing student $username: $updated');
-      } else {
-        // Per request, do not insert. Log and continue.
-        debugPrint(
-            '_updateStudentIfExists: no user_handling row for username="$username", skipping (no insert).');
-      }
-    } catch (e) {
-      debugPrint('_updateStudentIfExists failed for $username: $e');
-    }
-  }
+  // (upsertUserHandling implemented as a top-level helper above)
 
   /// Fetch students and auto-sync updates if missing/changed. Does NOT insert rows.
   Future<List<StudentHandling>> fetchStudentsWithSync({
@@ -167,7 +222,8 @@ class UseStudentHandling {
 
     if (students.isEmpty && attemptSyncIfEmpty) {
       debugPrint(
-          '⚠️ No students found in user_handling; attempting to update existing entries from students table (no inserts)...');
+        '⚠️ No students found in user_handling; attempting to update existing entries from students table (no inserts)...',
+      );
       await syncStudents();
       return await fetchStudents();
     }
@@ -191,7 +247,8 @@ class UseStudentHandling {
 
       if (missingStudents.isNotEmpty) {
         debugPrint(
-            'Detected missing students in user_handling: $missingStudents — will attempt to update existing rows only (no inserts).');
+          'Detected missing students in user_handling: $missingStudents — will attempt to update existing rows only (no inserts).',
+        );
         await syncStudents();
         return await fetchStudents();
       }
@@ -214,15 +271,20 @@ class UseUserHandling {
   /// Fetch all users (admins, teachers, etc.)
   Future<List<UserHandling>> fetchUsers() async {
     try {
-      final List<dynamic> rows = await _supabase
+      final dynamic rowsRaw = await _supabase
           .from('user_handling')
-          .select('id, auth_uid, usernames, role, passwords, created_at');
+          .select('id, usernames, role, passwords, created_at');
+
+      debugPrint('RAW user_handling response: $rowsRaw');
+
+      final List<dynamic> rows = (rowsRaw is List) ? rowsRaw : <dynamic>[];
 
       debugPrint('Fetched ${rows.length} user_handling rows');
 
       final List<UserHandling> users = [];
 
       for (final e in rows) {
+        if (e == null) continue;
         final json = e as Map<String, dynamic>;
         String role = (json['role'] ?? '').toString().trim();
 
@@ -237,8 +299,9 @@ class UseUserHandling {
                 .maybeSingle();
 
             if (adminRow != null) {
-              final facultyName =
-                  (adminRow['faculty_name'] ?? '').toString().trim();
+              final facultyName = (adminRow['faculty_name'] ?? '')
+                  .toString()
+                  .trim();
               if (facultyName.isNotEmpty) {
                 role = 'faculty admin';
               }
@@ -260,10 +323,28 @@ class UseUserHandling {
         );
       }
 
+      debugPrint('Mapped ${users.length} user_handling rows into models');
       return users;
     } catch (e) {
       debugPrint('fetchUsers error: $e');
+      // rethrow so callers can handle; include stacktrace in logs
       throw Exception('Failed to fetch user_handling: $e');
+    }
+  }
+
+  /// Debug helper: fetch raw rows from user_handling and return them.
+  /// Use this from a debug page or console to print what the client receives.
+  Future<List<dynamic>> debugFetchUserHandlingRaw() async {
+    try {
+      final dynamic rows = await _supabase
+          .from('user_handling')
+          .select('id, usernames, role, passwords, created_at');
+      debugPrint('debugFetchUserHandlingRaw -> $rows');
+      if (rows is List) return rows;
+      return <dynamic>[];
+    } catch (e, st) {
+      debugPrint('debugFetchUserHandlingRaw error: $e\n$st');
+      rethrow;
     }
   }
 
@@ -296,8 +377,8 @@ class UseUserHandling {
       // Normalize role for DB: keep same mapping as earlier upsert logic
       final normalizedRoleForDb =
           (roleLower == 'faculty admin' || roleLower == 'faculty_admin')
-              ? 'admin'
-              : roleLower;
+          ? 'admin'
+          : roleLower;
 
       final updateData = <String, dynamic>{
         'usernames': username,
@@ -313,7 +394,9 @@ class UseUserHandling {
           .maybeSingle();
 
       if (existingRow == null) {
-        throw Exception('No user_handling row found with id=$id (username=$username)');
+        throw Exception(
+          'No user_handling row found with id=$id (username=$username)',
+        );
       }
 
       // Perform update and return updated row
@@ -325,27 +408,90 @@ class UseUserHandling {
           .maybeSingle();
 
       if (updatedRow == null) {
-        throw Exception("Failed to update user_handling for $username (id=$id)");
+        throw Exception(
+          "Failed to update user_handling for $username (id=$id)",
+        );
       }
 
       debugPrint('✅ Updated user_handling row: $updatedRow');
 
-      // Sync password to related table using the normalized role
-      if (password != null && password.isNotEmpty) {
-        if (normalizedRoleForDb == 'teacher') {
-          final rt = await _supabase
+      final oldUsername = (existingRow['usernames'] ?? '').toString().trim();
+      // final oldPassword = (existingRow['passwords'] ?? '').toString();
+      // Propagate username changes to related tables (students, teachers, admins)
+      try {
+        final newUsername = username;
+        if (newUsername.isNotEmpty) {
+          // Update by user_handling_id where link exists
+          await _supabase
+              .from('students')
+              .update({'username': newUsername})
+              .eq('user_handling_id', id);
+          await _supabase
+              .from('teachers')
+              .update({'username': newUsername})
+              .eq('user_handling_id', id);
+          await _supabase
+              .from('admins')
+              .update({'username': newUsername})
+              .eq('user_handling_id', id);
+
+          // Also update by old username fallback (if link wasn't established)
+          if (oldUsername.isNotEmpty && oldUsername != newUsername) {
+            await _supabase
+                .from('students')
+                .update({'username': newUsername})
+                .eq('username', oldUsername);
+            await _supabase
+                .from('teachers')
+                .update({'username': newUsername})
+                .eq('username', oldUsername);
+            await _supabase
+                .from('admins')
+                .update({'username': newUsername})
+                .eq('username', oldUsername);
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to propagate username to related tables: $e');
+      }
+
+      // Propagate password changes as well
+      try {
+        if (password != null && password.isNotEmpty) {
+          // Update linked rows by user_handling_id first
+          await _supabase
+              .from('students')
+              .update({'password': password})
+              .eq('user_handling_id', id);
+          await _supabase
               .from('teachers')
               .update({'password': password})
-              .eq('username', username);
-          debugPrint('Synced password to teachers for $username: $rt');
-        } else if (normalizedRoleForDb == 'admin') {
-          final rt = await _supabase
+              .eq('user_handling_id', id);
+          await _supabase
               .from('admins')
               .update({'password': password})
-              .eq('username', username);
-          debugPrint('Synced password to admins for $username: $rt');
+              .eq('user_handling_id', id);
+
+          // Fallback: update by old username where link isn't established
+          if (oldUsername.isNotEmpty) {
+            await _supabase
+                .from('students')
+                .update({'password': password})
+                .eq('username', oldUsername);
+            await _supabase
+                .from('teachers')
+                .update({'password': password})
+                .eq('username', oldUsername);
+            await _supabase
+                .from('admins')
+                .update({'password': password})
+                .eq('username', oldUsername);
+          }
         }
+      } catch (e) {
+        debugPrint('Failed to propagate password to related tables: $e');
       }
+      // password propagation handled above (by user_handling_id and fallback username)
     } catch (e, st) {
       debugPrint('❌ updateUser error: $e\n$st');
       throw Exception('Failed to update user_handling and sync: $e');
@@ -360,7 +506,9 @@ class UseUserHandling {
     final users = await fetchUsers();
 
     if (users.isEmpty && attemptSyncIfEmpty) {
-      debugPrint('No users found, attempting to update existing user_handling rows from admins and teachers (no inserts)...');
+      debugPrint(
+        'No users found, attempting to update existing user_handling rows from admins and teachers (no inserts)...',
+      );
       await syncRolesFromAdminsAndTeachers();
       return await fetchUsers();
     }
@@ -383,7 +531,9 @@ class UseUserHandling {
       final missingTeachers = teacherNames.difference(existingUsernames);
 
       if (missingTeachers.isNotEmpty) {
-        debugPrint('Detected missing teachers: $missingTeachers — will attempt to update existing rows only (no inserts).');
+        debugPrint(
+          'Detected missing teachers: $missingTeachers — will attempt to update existing rows only (no inserts).',
+        );
         await syncRolesFromAdminsAndTeachers();
         return await fetchUsers();
       }
@@ -412,7 +562,24 @@ class UseUserHandling {
         final pwd = (row['password'] as String?)?.trim();
         if (username == null || username.isEmpty) continue;
 
-        await _updateUserIfExists(username, 'admin', pwd);
+        try {
+          final uhId = await upsertUserHandling(
+            _supabase,
+            username,
+            'admin',
+            pwd,
+          );
+          if (uhId != null && uhId.isNotEmpty) {
+            await _supabase
+                .from('admins')
+                .update({'user_handling_id': uhId, 'user_id': uhId})
+                .eq('username', username);
+          }
+        } catch (e) {
+          debugPrint(
+            'syncRolesFromAdminsAndTeachers: failed to upsert/attach admin $username: $e',
+          );
+        }
       }
 
       // Process teachers: only update existing user_handling rows
@@ -422,7 +589,24 @@ class UseUserHandling {
         final pwd = (row['password'] as String?)?.trim();
         if (username == null || username.isEmpty) continue;
 
-        await _updateUserIfExists(username, 'teacher', pwd);
+        try {
+          final uhId = await upsertUserHandling(
+            _supabase,
+            username,
+            'teacher',
+            pwd,
+          );
+          if (uhId != null && uhId.isNotEmpty) {
+            await _supabase
+                .from('teachers')
+                .update({'user_handling_id': uhId, 'user_id': uhId})
+                .eq('username', username);
+          }
+        } catch (e) {
+          debugPrint(
+            'syncRolesFromAdminsAndTeachers: failed to upsert/attach teacher $username: $e',
+          );
+        }
       }
 
       debugPrint('Sync complete ✅ (updated existing rows only)');
@@ -432,45 +616,5 @@ class UseUserHandling {
     }
   }
 
-  /// Helper: update user_handling record if it exists; do NOT insert.
-  Future<void> _updateUserIfExists(
-    String username,
-    String role,
-    String? password,
-  ) async {
-    try {
-      final existing = await _supabase
-          .from('user_handling')
-          .select('id')
-          .eq('usernames', username)
-          .maybeSingle();
-
-      final normalizedRole = role.trim().toLowerCase();
-      final roleForDb = (normalizedRole == 'faculty admin' ||
-              normalizedRole == 'faculty_admin')
-          ? 'admin'
-          : normalizedRole;
-
-      if (existing != null) {
-        final updateData = <String, dynamic>{
-          'role': roleForDb,
-          if (password != null && password.isNotEmpty) 'passwords': password,
-        };
-
-        final updated = await _supabase
-            .from('user_handling')
-            .update(updateData)
-            .eq('usernames', username)
-            .select()
-            .maybeSingle();
-
-        debugPrint('_updateUserIfExists: updated $username -> $updated');
-      } else {
-        // Per request, do not create new rows; log and continue.
-        debugPrint('_updateUserIfExists: no user_handling row for username="$username", skipping (no insert).');
-      }
-    } catch (e) {
-      debugPrint('_updateUserIfExists failed for $username ($role): $e');
-    }
-  }
+  // _updateUserIfExists removed; upsertUserHandling is used instead.
 }

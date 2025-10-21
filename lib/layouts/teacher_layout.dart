@@ -44,6 +44,7 @@ class _TeacherLayoutState extends State<TeacherLayout> {
                   });
                   Navigator.pop(context);
                 },
+                teacherName: '',
               ),
             )
           : null,
@@ -59,6 +60,7 @@ class _TeacherLayoutState extends State<TeacherLayout> {
                     _selectedIndex = index;
                   });
                 },
+                teacherName: '',
               ),
             ),
           if (!isMobile) const VerticalDivider(thickness: 1, width: 1),

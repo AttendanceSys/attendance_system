@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:attendance_system/screens/super_admin_page.dart';
-import 'package:attendance_system/screens/faculty_admin_page.dart';
-import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
-import 'package:attendance_system/screens/teacher_main_page.dart';
+// import 'package:supabase_flutter/supabase_flutter.dart';
+import '../hooks/use_login.dart';
+import '../screens/super_admin_page.dart';
+import '../screens/faculty_admin_page.dart';
+import '../screens/teacher_main_page.dart';
+import '../components/pages/student_view_attendance_page.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,64 +20,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final FocusNode _usernameFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
 
-  String? _errorMessage;
   bool _isLoggingIn = false;
   bool _obscurePassword = true;
-
-  void _handleLogin() {
-    if (_isLoggingIn) return;
-    setState(() {
-      _isLoggingIn = true;
-    });
-
-    String username = _usernameController.text.trim();
-    String password = _passwordController.text;
-    final bool isMobile = MediaQuery.of(context).size.width < 600;
-
-    if (username == 'admin' && password == 'admin123') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const SuperAdminPage()),
-      ).then((_) {
-        if (mounted) setState(() => _isLoggingIn = false);
-      });
-    } else if (username == 'a' && password == 'b') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const FacultyAdminPage()),
-      ).then((_) {
-        if (mounted) setState(() => _isLoggingIn = false);
-      });
-    } else if (username == 'student' && password == 'student123') {
-      if (!isMobile) {
-        setState(() {
-          _errorMessage = 'Student login is allowed on mobile devices only.';
-          _isLoggingIn = false;
-        });
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const StudentViewAttendanceMobile()),
-        ).then((_) {
-          if (mounted) setState(() => _isLoggingIn = false);
-        });
-      }
-    } else if (username == 'teacher' && password == 'teacher123') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const TeacherMainPage()),
-      ).then((_) {
-        if (mounted) setState(() => _isLoggingIn = false);
-      });
-    } else {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Invalid username or password';
-          _isLoggingIn = false;
-        });
-      }
-    }
-  }
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -84,6 +31,98 @@ class _LoginScreenState extends State<LoginScreen> {
     _usernameFocus.dispose();
     _passwordFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    if (_isLoggingIn) return;
+
+    setState(() {
+      _isLoggingIn = true;
+      _errorMessage = null;
+    });
+
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+    final bool isMobile = MediaQuery.of(context).size.width < 600;
+
+    if (username.isEmpty || password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please fill all fields';
+        _isLoggingIn = false;
+      });
+      return;
+    }
+
+    final user = await loginUser(username, password);
+
+    if (!mounted) return;
+
+    if (user == null) {
+      setState(() {
+        _errorMessage = 'Invalid username or password';
+        _isLoggingIn = false;
+      });
+      return;
+    }
+
+    final role = user['role'];
+    final fullName = (user['full_name'] ?? user['usernames'] ?? username)
+        .toString();
+
+    // Show a brief welcome message with full name in the login screen
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Welcome, $fullName')));
+    }
+
+    switch (role) {
+      case 'super_admin':
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const SuperAdminPage()),
+        );
+        break;
+      case 'admin':
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FacultyAdminPage(displayName: fullName),
+          ),
+        );
+        break;
+      case 'teacher':
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TeacherMainPage(displayName: fullName),
+          ),
+        );
+        break;
+      case 'student':
+        if (!isMobile) {
+          setState(() {
+            _errorMessage = 'Student login allowed only on mobile devices.';
+            _isLoggingIn = false;
+          });
+          return;
+        }
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const StudentViewAttendanceMobile(),
+          ),
+        );
+        break;
+      default:
+        setState(() {
+          _errorMessage = 'Unknown role: $role';
+          _isLoggingIn = false;
+        });
+        return;
+    }
+
+    if (mounted) setState(() => _isLoggingIn = false);
   }
 
   @override
@@ -107,7 +146,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildMobileForm(BuildContext context) {
-    // For mobile, keep it compact but slightly larger
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -117,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
             "LOGIN",
             style: TextStyle(
               color: Colors.white,
-              fontSize: 38, // Larger font
+              fontSize: 38,
               fontWeight: FontWeight.bold,
               letterSpacing: 2,
             ),
@@ -129,7 +167,8 @@ class _LoginScreenState extends State<LoginScreen> {
             hint: "Username",
             obscure: false,
             focusNode: _usernameFocus,
-            onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
+            onSubmitted: (_) =>
+                FocusScope.of(context).requestFocus(_passwordFocus),
           ),
           const SizedBox(height: 22),
           _buildInputField(
@@ -141,47 +180,50 @@ class _LoginScreenState extends State<LoginScreen> {
             focusNode: _passwordFocus,
             onSubmitted: (_) => _handleLogin(),
           ),
-          if (_errorMessage != null) ...[
-            const SizedBox(height: 14),
-            Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 16)),
-          ],
-          const SizedBox(height: 30),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4D91D6),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 22),
-              ),
-              onPressed: _handleLogin,
-              child: const Text(
-                "Login",
-                style: TextStyle(fontSize: 22, color: Colors.white),
-              ),
+          const SizedBox(height: 24),
+          if (_errorMessage != null)
+            Text(
+              _errorMessage!,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 16),
             ),
-          ),
+          const SizedBox(height: 28),
+          _isLoggingIn
+              ? const CircularProgressIndicator(color: Colors.white)
+              : SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4D91D6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                    ),
+                    onPressed: _handleLogin,
+                    child: const Text(
+                      "Login",
+                      style: TextStyle(fontSize: 20, color: Colors.white),
+                    ),
+                  ),
+                ),
         ],
       ),
     );
   }
 
   Widget _buildWebForm(BuildContext context) {
-    // Make card much larger and more central
     return Center(
       child: Container(
-        width: 600, // Wider card
-        padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 54), // More padding
+        width: 520,
+        padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 54),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(36),
           boxShadow: [
             BoxShadow(
-              color: Colors.black12,
-              blurRadius: 32,
-              offset: const Offset(0, 12),
+              color: Colors.black26,
+              blurRadius: 24,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
@@ -192,9 +234,9 @@ class _LoginScreenState extends State<LoginScreen> {
               "LOGIN",
               style: TextStyle(
                 color: Color(0xFF4D91D6),
-                fontSize: 48, // Much larger font
+                fontSize: 44,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 3,
+                letterSpacing: 2,
               ),
             ),
             const SizedBox(height: 48),
@@ -206,8 +248,9 @@ class _LoginScreenState extends State<LoginScreen> {
               fillColor: Colors.grey[100],
               textColor: Colors.black87,
               focusNode: _usernameFocus,
-              fontSize: 24,
-              onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
+              fontSize: 22,
+              onSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_passwordFocus),
             ),
             const SizedBox(height: 28),
             _buildInputField(
@@ -219,31 +262,39 @@ class _LoginScreenState extends State<LoginScreen> {
               fillColor: Colors.grey[100],
               textColor: Colors.black87,
               focusNode: _passwordFocus,
-              fontSize: 24,
+              fontSize: 22,
               onSubmitted: (_) => _handleLogin(),
             ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 24),
-              Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 18)),
-            ],
-            const SizedBox(height: 42),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4D91D6),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 26),
-                ),
-                onPressed: _handleLogin,
-                child: const Text(
-                  "Login",
-                  style: TextStyle(fontSize: 26, color: Colors.white, fontWeight: FontWeight.bold),
-                ),
+            const SizedBox(height: 24),
+            if (_errorMessage != null)
+              Text(
+                _errorMessage!,
+                style: const TextStyle(color: Colors.red, fontSize: 18),
               ),
-            ),
+            const SizedBox(height: 32),
+            _isLoggingIn
+                ? const CircularProgressIndicator(color: Color(0xFF4D91D6))
+                : SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4D91D6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                      ),
+                      onPressed: _handleLogin,
+                      child: const Text(
+                        "Login",
+                        style: TextStyle(
+                          fontSize: 24,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
           ],
         ),
       ),
@@ -267,22 +318,18 @@ class _LoginScreenState extends State<LoginScreen> {
       obscureText: isPassword ? _obscurePassword : obscure,
       style: TextStyle(color: textColor ?? Colors.white, fontSize: fontSize),
       focusNode: focusNode,
+      onSubmitted: onSubmitted,
       decoration: InputDecoration(
         filled: true,
-        fillColor: fillColor ?? Colors.white.withOpacity(0.2),
-        prefixIcon: Icon(icon, color: textColor ?? Colors.white, size: fontSize + 4),
+        fillColor: fillColor ?? Colors.white.withOpacity(0.15),
+        prefixIcon: Icon(icon, color: textColor ?? Colors.white),
         hintText: hint,
-        hintStyle: TextStyle(color: textColor ?? Colors.white70, fontSize: fontSize),
-        contentPadding: EdgeInsets.symmetric(
-          vertical: fontSize + 8,
-          horizontal: fontSize + 4,
-        ),
+        hintStyle: TextStyle(color: textColor ?? Colors.white70),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
                   _obscurePassword ? Icons.visibility_off : Icons.visibility,
                   color: textColor ?? Colors.white,
-                  size: fontSize + 2,
                 ),
                 onPressed: () {
                   setState(() {
@@ -295,9 +342,11 @@ class _LoginScreenState extends State<LoginScreen> {
           borderRadius: BorderRadius.circular(24),
           borderSide: BorderSide.none,
         ),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 18,
+          horizontal: 16,
+        ),
       ),
-      textInputAction: isPassword ? TextInputAction.done : TextInputAction.next,
-      onSubmitted: onSubmitted,
     );
   }
 }

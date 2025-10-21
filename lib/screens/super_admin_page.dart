@@ -12,7 +12,8 @@ import 'package:attendance_system/components/popup/logout_confirmation_popup.dar
 // Use reusable popup from components/popup/logout_confirmation_popup.dart
 
 class SuperAdminPage extends StatefulWidget {
-  const SuperAdminPage({super.key});
+  final String displayName;
+  const SuperAdminPage({super.key, this.displayName = ''});
 
   @override
   State<SuperAdminPage> createState() => _SuperAdminPageState();
@@ -99,6 +100,7 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
                   Navigator.pop(context);
                 },
                 collapsed: false,
+                adminName: widget.displayName,
               ),
             )
           : null,
@@ -146,6 +148,7 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
                               });
                             },
                             collapsed: _collapsed,
+                            adminName: widget.displayName,
                           ),
                         ),
                     ],

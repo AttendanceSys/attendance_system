@@ -6,7 +6,12 @@ import '../components/faculty_dashboard_stats_grid.dart';
 
 class FacultyAdminLayout extends StatefulWidget {
   final List<Widget>? customPages;
-  const FacultyAdminLayout({super.key, this.customPages});
+  final String displayName;
+  const FacultyAdminLayout({
+    super.key,
+    this.customPages,
+    this.displayName = '',
+  });
 
   @override
   State<FacultyAdminLayout> createState() => _FacultyAdminLayoutState();
@@ -105,6 +110,7 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                   Navigator.pop(context);
                 },
                 collapsed: false,
+                adminName: widget.displayName,
               ),
             )
           : null,
@@ -152,6 +158,7 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                               });
                             },
                             collapsed: _collapsed,
+                            adminName: widget.displayName,
                           ),
                         ),
                     ],

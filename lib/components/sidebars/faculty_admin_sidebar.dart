@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 
 class FacultyAdminSidebar extends StatelessWidget {
   final Function(int) onItemSelected;
   final int selectedIndex;
   final bool collapsed;
+  final String adminName;
 
   const FacultyAdminSidebar({
     super.key,
     required this.onItemSelected,
     required this.selectedIndex,
     this.collapsed = false,
+    this.adminName = '',
   });
 
   @override
@@ -23,11 +24,11 @@ class FacultyAdminSidebar extends StatelessWidget {
         children: [
           const SizedBox(height: 24),
           if (!collapsed)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(
-                "Axmed Faarax",
-                style: TextStyle(
+                adminName.isNotEmpty ? adminName : 'Faculty Admin',
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -40,9 +41,9 @@ class FacultyAdminSidebar extends StatelessWidget {
           CircleAvatar(
             radius: 25,
             backgroundColor: const Color(0xFF70C2FF),
-            child: const Text(
-              "A",
-              style: TextStyle(
+            child: Text(
+              adminName.trim().isNotEmpty ? adminName.trim()[0] : 'A',
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.bold,

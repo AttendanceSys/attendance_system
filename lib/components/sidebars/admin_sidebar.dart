@@ -4,12 +4,14 @@ class AdminSidebar extends StatelessWidget {
   final Function(int) onItemSelected;
   final int selectedIndex;
   final bool collapsed;
+  final String adminName;
 
   const AdminSidebar({
     super.key,
     required this.onItemSelected,
     required this.selectedIndex,
     this.collapsed = false,
+    this.adminName = '',
   });
 
   @override
@@ -23,11 +25,11 @@ class AdminSidebar extends StatelessWidget {
           const SizedBox(height: 24),
           // Profile Section
           if (!collapsed)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(
-                "Xasan Cali",
-                style: TextStyle(
+                adminName.isNotEmpty ? adminName : 'Admin',
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -40,9 +42,9 @@ class AdminSidebar extends StatelessWidget {
           CircleAvatar(
             radius: 25,
             backgroundColor: const Color(0xFF70C2FF),
-            child: const Text(
-              "X",
-              style: TextStyle(
+            child: Text(
+              adminName.trim().isNotEmpty ? adminName.trim()[0] : 'A',
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -145,7 +147,9 @@ class SidebarItem extends StatelessWidget {
               color: isSelected ? selectedBg : Colors.transparent,
             ),
             child: Row(
-              mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+              mainAxisAlignment: collapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
               children: [
                 Icon(
                   icon,
@@ -159,7 +163,9 @@ class SidebarItem extends StatelessWidget {
                     style: TextStyle(
                       color: isSelected ? selectedText : unselectedText,
                       fontSize: 16,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 ],
