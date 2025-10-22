@@ -6,14 +6,86 @@ import '../models/student.dart';
 class UseStudents {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  Future<List<Student>> fetchStudents({int? limit, int? page}) async {
+  Future<String?> _resolveAdminFacultyId() async {
     try {
+      final current = _supabase.auth.currentUser;
+      if (current == null) return null;
+      final authUid = current.id;
+
+      final uh = await _supabase
+          .from('user_handling')
+          .select('id, usernames, role')
+          .eq('auth_uid', authUid)
+          .maybeSingle();
+      if (uh == null) return null;
+      final role = (uh['role'] ?? '').toString().trim().toLowerCase();
+      if (role != 'admin') return null;
+
+      final uhId = (uh['id'] ?? '').toString();
+      final username = (uh['usernames'] ?? '').toString();
+
+      Map<String, dynamic>? adminRow;
+      if (uhId.isNotEmpty) {
+        final ar = await _supabase
+            .from('admins')
+            .select(
+              'faculty_id, faculty_name, user_handling_id, user_id, username',
+            )
+            .eq('user_handling_id', uhId)
+            .maybeSingle();
+        if (ar != null) adminRow = ar;
+      }
+      if (adminRow == null && username.isNotEmpty) {
+        final ar2 = await _supabase
+            .from('admins')
+            .select(
+              'faculty_id, faculty_name, user_handling_id, user_id, username',
+            )
+            .eq('username', username)
+            .maybeSingle();
+        if (ar2 != null) adminRow = ar2;
+      }
+      if (adminRow == null) return null;
+      final facultyId = (adminRow['faculty_id'] ?? '').toString();
+      if (facultyId.isNotEmpty) return facultyId;
+      final facultyName = (adminRow['faculty_name'] ?? '').toString();
+      if (facultyName.isNotEmpty) {
+        final f = await _supabase
+            .from('faculties')
+            .select('id')
+            .eq('faculty_name', facultyName)
+            .maybeSingle();
+        if (f != null && f['id'] != null) return f['id'].toString();
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<Student>> fetchStudents({
+    int? limit,
+    int? page,
+    String? facultyId,
+  }) async {
+    try {
+      String? resolvedFacultyId = facultyId;
+      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+        try {
+          resolvedFacultyId = await _resolveAdminFacultyId();
+        } catch (_) {}
+      }
+
       var query = _supabase
           .from('students')
           .select(
-            'id, username, fullname, gender, department, class, password, created_at, department:departments(id, department_name), class:classes(id, class_name)',
+            'id, username, fullname, gender, department, class, password, created_at, faculty_id, faculty:faculties(id,faculty_name), department:departments(id, department_name), class:classes(id, class_name)',
           )
           .order('created_at', ascending: false);
+      final dynamic builder = query;
+      if (resolvedFacultyId != null && resolvedFacultyId.isNotEmpty) {
+        builder.eq('faculty_id', resolvedFacultyId);
+      }
 
       if (limit != null) {
         final int offset = (page ?? 0) * limit;
@@ -90,7 +162,7 @@ class UseStudents {
       final response = await _supabase
           .from('students')
           .select(
-            'id, username, fullname, gender, department, class, password, created_at, department:departments(id, department_name), class:classes(id, class_name)',
+            'id, username, fullname, gender, department, class, password, created_at, faculty_id, faculty:faculties(id,faculty_name), department:departments(id, department_name), class:classes(id, class_name)',
           )
           .eq('id', id)
           .maybeSingle();
@@ -159,8 +231,15 @@ class UseStudents {
     }
   }
 
-  Future<void> addStudent(Student student) async {
+  Future<void> addStudent(Student student, {String? facultyId}) async {
     try {
+      String? resolvedFacultyId = facultyId;
+      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+        try {
+          resolvedFacultyId = await _resolveAdminFacultyId();
+        } catch (_) {}
+      }
+
       await _supabase.from('students').insert({
         'fullname': student.fullName,
         'username': student.username,
@@ -172,13 +251,19 @@ class UseStudents {
             ? student.departmentId
             : student.department,
         'password': student.password,
+        if (resolvedFacultyId != null && resolvedFacultyId.isNotEmpty)
+          'faculty_id': resolvedFacultyId,
       });
     } catch (e) {
       throw Exception('Failed to add student: $e');
     }
   }
 
-  Future<void> updateStudent(String id, Student student) async {
+  Future<void> updateStudent(
+    String id,
+    Student student, {
+    String? facultyId,
+  }) async {
     try {
       final Map<String, dynamic> data = {
         'fullname': student.fullName,
@@ -229,6 +314,16 @@ class UseStudents {
       }
       if (resolvedClassId != null && resolvedClassId.isNotEmpty) {
         data['class'] = resolvedClassId;
+      }
+
+      String? resolvedFacultyId = facultyId;
+      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+        try {
+          resolvedFacultyId = await _resolveAdminFacultyId();
+        } catch (_) {}
+      }
+      if (resolvedFacultyId != null && resolvedFacultyId.isNotEmpty) {
+        data['faculty_id'] = resolvedFacultyId;
       }
 
       // Fetch existing student row for old username / user_handling_id
@@ -334,7 +429,28 @@ class UseStudents {
   /// Delete a student by id.
   Future<void> deleteStudent(String id) async {
     try {
+      // Fetch the student row to get the username or user_handling_id
+      final student = await _supabase
+          .from('students')
+          .select('username, user_handling_id')
+          .eq('id', id)
+          .maybeSingle();
+
+      String? username = student?['username'] as String?;
+      String? uhId = student?['user_handling_id'] as String?;
+
+      // Delete the student row
       await _supabase.from('students').delete().eq('id', id);
+
+      // Delete the user_handling row (by id if possible, else by username)
+      if (uhId != null && uhId.isNotEmpty) {
+        await _supabase.from('user_handling').delete().eq('id', uhId);
+      } else if (username != null && username.isNotEmpty) {
+        await _supabase
+            .from('user_handling')
+            .delete()
+            .eq('usernames', username);
+      }
     } catch (e) {
       throw Exception('Failed to delete student: $e');
     }
@@ -396,7 +512,7 @@ class UseStudents {
       var query = _supabase
           .from('students')
           .select(
-            'id, username, fullname, gender, department, class, password, created_at, department:departments(id, department_name), class:classes(id, class_name)',
+            'id, username, fullname, gender, department, class, password, created_at, faculty_id, faculty:faculties(id,faculty_name), department:departments(id, department_name), class:classes(id, class_name)',
           )
           .eq('department', departmentId)
           .eq('class', classId)
@@ -476,7 +592,7 @@ class UseStudents {
     try {
       final resp = await _supabase
           .from('departments')
-          .select('id, department_name')
+          .select('id, department_name, faculty_id')
           .order('department_name', ascending: true);
       final List<dynamic> rows = resp as List<dynamic>;
       return rows.map((r) {
@@ -495,7 +611,7 @@ class UseStudents {
     try {
       dynamic builder = _supabase
           .from('classes')
-          .select('id, class_name, department');
+          .select('id, class_name, department, faculty_id');
       if (departmentId != null && departmentId.isNotEmpty) {
         builder = builder.eq('department', departmentId);
       }

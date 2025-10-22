@@ -300,7 +300,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
         0: FixedColumnWidth(64), // No
         1: FixedColumnWidth(120), // Faculty Code
         2: FixedColumnWidth(180), // Faculty Name
-        3: FixedColumnWidth(130), // Created At
+        3: FixedColumnWidth(130), // Establishment Date
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -311,7 +311,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
             _tableHeaderCell("No"),
             _tableHeaderCell("Faculty Code"),
             _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Created At"),
+            _tableHeaderCell("Establishment Date"),
           ],
         ),
         for (int index = 0; index < _filteredFaculties.length; index++)
@@ -332,9 +332,9 @@ class _FacultiesPageState extends State<FacultiesPage> {
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                "${_filteredFaculties[index].createdAt.day.toString().padLeft(2, '0')} "
-                "${_monthString(_filteredFaculties[index].createdAt.month)} "
-                "${_filteredFaculties[index].createdAt.year}",
+                "${_filteredFaculties[index].establishmentDate.day.toString().padLeft(2, '0')} "
+                "${_monthString(_filteredFaculties[index].establishmentDate.month)} "
+                "${_filteredFaculties[index].establishmentDate.year}",
                 onTap: () => _handleRowTap(index),
               ),
             ],
@@ -355,7 +355,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
             _tableHeaderCell("No"),
             _tableHeaderCell("Faculty Code"),
             _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Created At"),
+            _tableHeaderCell("Establishment Date"),
           ],
         ),
         for (int index = 0; index < _filteredFaculties.length; index++)
@@ -376,9 +376,9 @@ class _FacultiesPageState extends State<FacultiesPage> {
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                "${_filteredFaculties[index].createdAt.day.toString().padLeft(2, '0')} "
-                "${_monthString(_filteredFaculties[index].createdAt.month)} "
-                "${_filteredFaculties[index].createdAt.year}",
+                "${_filteredFaculties[index].establishmentDate.day.toString().padLeft(2, '0')} "
+                "${_monthString(_filteredFaculties[index].establishmentDate.month)} "
+                "${_filteredFaculties[index].establishmentDate.year}",
                 onTap: () => _handleRowTap(index),
               ),
             ],

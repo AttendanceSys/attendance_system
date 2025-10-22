@@ -13,6 +13,7 @@ class UseAttendanceFetch {
     String? classId,
     String? courseId,
     String? studentId,
+    String? facultyId,
     DateTime? date,
     int? limit,
     int? page,
@@ -34,10 +35,13 @@ class UseAttendanceFetch {
 
       var query = _supabase.from('attendance').select(select);
 
-      if (departmentId != null) query = query.eq('department', departmentId);
-      if (classId != null) query = query.eq('class', classId);
-      if (courseId != null) query = query.eq('course', courseId);
-      if (studentId != null) query = query.eq('student', studentId);
+      final dynamic builder = query;
+      if (facultyId != null && facultyId.isNotEmpty)
+        builder.eq('faculty_id', facultyId);
+      if (departmentId != null) builder.eq('department', departmentId);
+      if (classId != null) builder.eq('class', classId);
+      if (courseId != null) builder.eq('course', courseId);
+      if (studentId != null) builder.eq('student', studentId);
       if (date != null)
         query = query.eq('date', date.toIso8601String().split('T').first);
 
@@ -96,6 +100,7 @@ class UseAttendanceFetch {
     String? classId,
     String? courseId,
     String? studentId,
+    String? facultyId,
     DateTime? date,
     int? limit,
     int? page,
@@ -116,11 +121,13 @@ class UseAttendanceFetch {
       ''';
 
       var query = _supabase.from('attendance').select(select);
-
-      if (departmentId != null) query = query.eq('department', departmentId);
-      if (classId != null) query = query.eq('class', classId);
-      if (courseId != null) query = query.eq('course', courseId);
-      if (studentId != null) query = query.eq('student', studentId);
+      final dynamic builder = query;
+      if (facultyId != null && facultyId.isNotEmpty)
+        builder.eq('faculty_id', facultyId);
+      if (departmentId != null) builder.eq('department', departmentId);
+      if (classId != null) builder.eq('class', classId);
+      if (courseId != null) builder.eq('course', courseId);
+      if (studentId != null) builder.eq('student', studentId);
       if (date != null)
         query = query.eq('date', date.toIso8601String().split('T').first);
 

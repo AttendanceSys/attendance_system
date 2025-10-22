@@ -17,6 +17,9 @@ class UseFaculties {
               code: e['faculty_code'],
               name: e['faculty_name'],
               createdAt: DateTime.parse(e['created_at']),
+              establishmentDate: e['establishment_date'] != null
+                  ? DateTime.parse(e['establishment_date'])
+                  : DateTime.parse(e['created_at']),
             ),
           )
           .toList();
@@ -31,7 +34,9 @@ class UseFaculties {
       final resp = await _supabase.from('faculties').insert({
         'faculty_code': faculty.code,
         'faculty_name': faculty.name,
-        'establishment_date': faculty.createdAt.toIso8601String().split('T')[0],
+        'establishment_date': faculty.establishmentDate.toIso8601String().split(
+          'T',
+        )[0],
       });
       print('Add faculty response: $resp');
     } catch (e) {
@@ -46,9 +51,9 @@ class UseFaculties {
           .update({
             'faculty_code': faculty.code,
             'faculty_name': faculty.name,
-            'establishment_date': faculty.createdAt.toIso8601String().split(
-              'T',
-            )[0],
+            'establishment_date': faculty.establishmentDate
+                .toIso8601String()
+                .split('T')[0],
           })
           .eq('faculty_code', oldCode);
       print('Update faculty response: $resp');

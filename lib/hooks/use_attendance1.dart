@@ -1,16 +1,15 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'use_students.dart';
 // import '../models/student.dart';
 
 class UseAttendance {
   final SupabaseClient _supabase = Supabase.instance.client;
-  final UseStudents _useStudents = UseStudents();
 
   /// Fetch attendance rows with related student/department/class info.
   Future<List<Map<String, dynamic>>> fetchAttendanceWithRelations({
     String? departmentId,
     String? classId,
     String? date, // 'YYYY-MM-DD'
+    String? facultyId,
     int? limit,
     int? page,
   }) async {
@@ -22,6 +21,10 @@ class UseAttendance {
           'class:classes(id, class_name)';
 
       var builder = _supabase.from('attendance').select(selectQuery);
+
+      final dynamic b = builder;
+      if (facultyId != null && facultyId.isNotEmpty)
+        b.eq('faculty_id', facultyId);
 
       if (departmentId != null && departmentId.trim().isNotEmpty) {
         builder = builder.eq('department', departmentId);
@@ -83,6 +86,7 @@ class UseAttendance {
           'student': sid,
           'date': date,
           'status': defaultPresent ? presentValue : absentValue,
+          if (departmentId.isNotEmpty) 'faculty_id': departmentId,
         };
       }).toList();
 
@@ -115,6 +119,7 @@ class UseAttendance {
         'student': studentId,
         'date': date,
         'status': status,
+        if (departmentId.isNotEmpty) 'faculty_id': departmentId,
       };
 
       await _supabase.from('attendance').upsert(payload);
@@ -148,6 +153,7 @@ class UseAttendance {
           'student': sid,
           'date': date,
           'status': present ? presentValue : absentValue,
+          if (departmentId.isNotEmpty) 'faculty_id': departmentId,
         };
       }).toList();
 

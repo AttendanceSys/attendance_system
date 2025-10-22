@@ -149,19 +149,38 @@ class StudentHandling {
 class UseStudentHandling {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  /// Fetch all student users from user_handling
+  /// Fetch all student users from user_handling, but only if they exist in students table
   Future<List<StudentHandling>> fetchStudents() async {
     try {
-      final List<dynamic> rows = await _supabase
+      final List<dynamic> userRows = await _supabase
           .from('user_handling')
           .select('id, usernames, role, passwords, created_at')
           .eq('role', 'student');
 
-      debugPrint('Fetched ${rows.length} student user_handling rows');
+      final List<dynamic> studentRows = await _supabase
+          .from('students')
+          .select('username');
 
-      return rows
+      final Set<String> studentUsernames = (studentRows)
+          .map(
+            (r) => (r as Map<String, dynamic>)['username']?.toString().trim(),
+          )
+          .where((s) => s != null && s.isNotEmpty)
+          .cast<String>()
+          .toSet();
+
+      final filtered = userRows
+          .where((json) {
+            final uname = (json['usernames'] ?? '').toString().trim();
+            return studentUsernames.contains(uname);
+          })
           .map((json) => StudentHandling.fromJson(json as Map<String, dynamic>))
           .toList();
+
+      debugPrint(
+        'Fetched ${filtered.length} student user_handling rows (filtered by students table)',
+      );
+      return filtered;
     } catch (e) {
       debugPrint('fetchStudents error: $e');
       throw Exception('Failed to fetch student_handling: $e');
@@ -292,16 +311,38 @@ class UseUserHandling {
         if (role == 'admin') {
           final username = (json['usernames'] ?? '').toString().trim();
           if (username.isNotEmpty) {
-            final adminRow = await _supabase
-                .from('admins')
-                .select('faculty_name')
-                .eq('username', username)
-                .maybeSingle();
+            Map<String, dynamic>? adminRow;
+            try {
+              // Removed top-level 'faculty_name' from the select because it doesn't exist
+              // in the admins table in some schemas. We rely on the joined 'faculty'
+              // relation (faculty:faculties(...)) to provide faculty_name.
+              final ar = await _supabase
+                  .from('admins')
+                  .select('faculty_id, faculty:faculties(id, faculty_name)')
+                  .eq('username', username)
+                  .maybeSingle();
+              if (ar != null) adminRow = ar;
+            } catch (err) {
+              debugPrint('Warning: admins lookup failed for $username: $err');
+              adminRow = null;
+            }
 
             if (adminRow != null) {
-              final facultyName = (adminRow['faculty_name'] ?? '')
-                  .toString()
-                  .trim();
+              String facultyName = '';
+              // some schemas might have a top-level faculty_name column; check it if present
+              if (adminRow.containsKey('faculty_name') &&
+                  adminRow['faculty_name'] != null &&
+                  (adminRow['faculty_name'] as String).isNotEmpty) {
+                facultyName = (adminRow['faculty_name'] ?? '')
+                    .toString()
+                    .trim();
+              } else if (adminRow['faculty'] != null &&
+                  adminRow['faculty'] is Map) {
+                facultyName =
+                    ((adminRow['faculty'] as Map)['faculty_name'] ?? '')
+                        .toString()
+                        .trim();
+              }
               if (facultyName.isNotEmpty) {
                 role = 'faculty admin';
               }
@@ -359,6 +400,85 @@ class UseUserHandling {
               u.role.toLowerCase() == 'faculty admin',
         )
         .toList();
+  }
+
+  /// Compatibility wrapper: some UI code calls `fetchAllUsers()`.
+  /// Delegate to `fetchUsersWithSync` to preserve the previous behavior
+  /// (attempt sync when empty) and avoid NoSuchMethodError in callers.
+  Future<List<UserHandling>> fetchAllUsers({
+    bool attemptSyncIfEmpty = true,
+  }) async {
+    return await fetchUsersWithSync(attemptSyncIfEmpty: attemptSyncIfEmpty);
+  }
+
+  /// Resolve the current authenticated user's faculty id (uuid) when the
+  /// authenticated user is an admin. Returns null when not found or not an admin.
+  Future<String?> resolveCurrentAdminFacultyId(SupabaseClient client) async {
+    try {
+      final current = client.auth.currentUser;
+      if (current == null) return null;
+      final authUid = current.id;
+
+      // Find the user_handling row for this auth uid
+      final uh = await client
+          .from('user_handling')
+          .select('id, usernames, role')
+          .eq('auth_uid', authUid)
+          .maybeSingle();
+
+      if (uh == null) return null;
+      final role = (uh['role'] ?? '').toString().trim().toLowerCase();
+      if (role != 'admin') return null;
+
+      final uhId = (uh['id'] ?? '')?.toString() ?? '';
+      final username = (uh['usernames'] ?? '')?.toString() ?? '';
+
+      // Try to find an admins row linked to this user_handling id
+      Map<String, dynamic>? adminRow;
+      if (uhId.isNotEmpty) {
+        final ar = await client
+            .from('admins')
+            .select(
+              'id, faculty_id, faculty_name, user_handling_id, user_id, username',
+            )
+            .eq('user_handling_id', uhId)
+            .maybeSingle();
+        if (ar != null) adminRow = ar;
+      }
+
+      // Fallback: try matching by username
+      if (adminRow == null && username.isNotEmpty) {
+        final ar2 = await client
+            .from('admins')
+            .select(
+              'id, faculty_id, faculty_name, user_handling_id, user_id, username',
+            )
+            .eq('username', username)
+            .maybeSingle();
+        if (ar2 != null) adminRow = ar2;
+      }
+
+      if (adminRow == null) return null;
+
+      // Prefer faculty_id if present, otherwise resolve faculty_name -> faculties.id
+      final facultyId = (adminRow['faculty_id'] ?? '')?.toString() ?? '';
+      if (facultyId.isNotEmpty) return facultyId;
+
+      final facultyName = (adminRow['faculty_name'] ?? '')?.toString() ?? '';
+      if (facultyName.isNotEmpty) {
+        final f = await client
+            .from('faculties')
+            .select('id')
+            .eq('faculty_name', facultyName)
+            .maybeSingle();
+        if (f != null && f['id'] != null) return f['id'].toString();
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('resolveCurrentAdminFacultyId error: $e');
+      return null;
+    }
   }
 
   /// NOTE: addUser has been intentionally removed (no add/inserts).

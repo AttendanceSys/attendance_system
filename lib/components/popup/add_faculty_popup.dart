@@ -51,7 +51,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
     super.initState();
     _facultyCode = widget.faculty?.code;
     _facultyName = widget.faculty?.name;
-    _establishmentDate = widget.faculty?.createdAt;
+    _establishmentDate = widget.faculty?.establishmentDate;
   }
 
   @override
@@ -183,7 +183,8 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                               Faculty(
                                 code: _facultyCode!,
                                 name: _facultyName!,
-                                createdAt: _establishmentDate!,
+                                createdAt: DateTime.now(),
+                                establishmentDate: _establishmentDate!,
                               ),
                             );
                           }

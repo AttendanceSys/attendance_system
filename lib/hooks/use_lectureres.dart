@@ -183,10 +183,69 @@ class UseTeachers {
 
   Future<void> deleteTeacher(String id) async {
     try {
-      final resp = await _supabase.from('teachers').delete().eq('id', id);
+      // Fetch the teacher row to get the username or user_handling_id/user_id
+      final teacher = await _supabase
+          .from('teachers')
+          .select('username, user_handling_id, user_id')
+          .eq('id', id)
+          .maybeSingle();
+
+      String? username = teacher?['username'] as String?;
+      String? uhId = teacher?['user_handling_id'] as String?;
+      String? userIdField = teacher?['user_id'] as String?;
+
+      // Prefer explicit user_handling_id, otherwise try user_id
+      final candidateUhId = (uhId != null && uhId.isNotEmpty)
+          ? uhId
+          : (userIdField != null && userIdField.isNotEmpty)
+          ? userIdField
+          : null;
+
+      // Delete the teacher row first
+      final resp = await _supabase
+          .from('teachers')
+          .delete()
+          .eq('id', id)
+          .select();
       print('Delete teacher response: $resp');
+
+      // Attempt to delete linked user_handling. Try by id first, then by username.
+      try {
+        bool deleted = false;
+        if (candidateUhId != null && candidateUhId.isNotEmpty) {
+          final delResp = await _supabase
+              .from('user_handling')
+              .delete()
+              .eq('id', candidateUhId)
+              .select();
+          // delResp is typically a list of deleted rows; check length
+          if (delResp.isNotEmpty) deleted = true;
+        }
+
+        if (!deleted && username != null && username.isNotEmpty) {
+          final delResp2 = await _supabase
+              .from('user_handling')
+              .delete()
+              .eq('usernames', username)
+              .select();
+          if (delResp2.isNotEmpty) deleted = true;
+        }
+
+        if (!deleted) {
+          // Nothing deleted — surface a warning to help debug
+          debugPrint(
+            'No user_handling row deleted for teacher id=$id (username=$username, candidateUhId=$candidateUhId)',
+          );
+        }
+      } catch (e) {
+        // If cleaning up user_handling fails, surface the error so caller can handle it.
+        throw Exception(
+          'Failed to delete linked user_handling for teacher id=$id: $e',
+        );
+      }
     } catch (e) {
       print('Error deleting teacher: $e');
+      rethrow;
     }
   }
 }

@@ -50,26 +50,37 @@ class _AdminsPageState extends State<AdminsPage> {
       _isLoading = true;
       _loadError = null;
     });
+
+    List<api.Admin> admins = [];
+    List<String> faculties = [];
+    String? err;
+
     try {
-      final results = await Future.wait([
-        _useAdmins.fetchAdmins(),
-        _useAdmins.fetchFacultyNames(),
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _admins = results[0] as List<api.Admin>;
-        _facultyNames = results[1] as List<String>;
-        _isLoading = false;
-        _selectedIndex = null;
-      });
+      admins = await _useAdmins.fetchAdmins();
+      debugPrint('AdminsPage._loadAll: fetched ${admins.length} admins');
     } catch (e, st) {
-      debugPrint('AdminsPage._loadAll error: $e\n$st');
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _loadError = 'Failed to load admins or faculties';
-      });
+      debugPrint('AdminsPage._loadAll: fetchAdmins failed: $e\n$st');
+      err = 'Failed to load admins';
     }
+
+    try {
+      faculties = await _useAdmins.fetchFacultyNames();
+      debugPrint('AdminsPage._loadAll: fetched ${faculties.length} faculties');
+    } catch (e, st) {
+      debugPrint('AdminsPage._loadAll: fetchFacultyNames failed: $e\n$st');
+      err = (err == null)
+          ? 'Failed to load faculties'
+          : '$err; failed to load faculties';
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _admins = admins;
+      _facultyNames = faculties;
+      _isLoading = false;
+      _selectedIndex = null;
+      _loadError = err;
+    });
   }
 
   Future<void> _fetchAdmins() async {
@@ -110,29 +121,29 @@ class _AdminsPageState extends State<AdminsPage> {
         // Show confirmation dialog
         shouldReplace =
             await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text("Replace Admin"),
-                    content: Text(
-                      "This faculty already has an admin. Are you sure you want to replace the existing admin with the new one?",
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: const Text("Cancel"),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text("Replace"),
-                      ),
-                    ],
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text("Replace Admin"),
+                content: Text(
+                  "This faculty already has an admin. Are you sure you want to replace the existing admin with the new one?",
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text("Cancel"),
                   ),
-                ) ??
-                false;
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text("Replace"),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
       }
       if (shouldReplace) {
         // If replacing, delete the old admin first
@@ -181,29 +192,29 @@ class _AdminsPageState extends State<AdminsPage> {
         // Show confirmation dialog
         shouldReplace =
             await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text("Replace Admin"),
-                    content: const Text(
-                      "This faculty already has an admin. Are you sure you want to replace the existing admin with the new one?",
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: const Text("Cancel"),
-                      ),
-                      ElevatedButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text("Replace"),
-                      ),
-                    ],
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text("Replace Admin"),
+                content: const Text(
+                  "This faculty already has an admin. Are you sure you want to replace the existing admin with the new one?",
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text("Cancel"),
                   ),
-                ) ??
-                false;
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text("Replace"),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
       }
       if (shouldReplace) {
         // If replacing, delete the old admin first (except current)

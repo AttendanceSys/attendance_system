@@ -42,14 +42,23 @@ class UseCourses {
     return null;
   }
 
-  Future<List<Course>> fetchCourses({int? limit, int? page}) async {
+  Future<List<Course>> fetchCourses({
+    int? limit,
+    int? page,
+    String? facultyId,
+  }) async {
     try {
       var query = _supabase
           .from('courses')
           .select(
-            'id, course_code, course_name, teacher_assigned, class, semister, created_at, teacher_assigned:teachers(id, teacher_name, username), class:classes(id, class_name)',
+            'id, course_code, course_name, teacher_assigned, class, semister, created_at, faculty_id, faculty:faculties(id,faculty_name), teacher_assigned:teachers(id, teacher_name, username), class:classes(id, class_name)',
           )
           .order('created_at', ascending: false);
+
+      final dynamic builder = query;
+      if (facultyId != null && facultyId.isNotEmpty) {
+        builder.eq('faculty_id', facultyId);
+      }
 
       if (limit != null) {
         final int offset = (page ?? 0) * limit;
@@ -136,7 +145,7 @@ class UseCourses {
       final dynamic response = await _supabase
           .from('courses')
           .select(
-            'id, course_code, course_name, teacher_assigned, class, semister, created_at, teacher_assigned:teachers(id, teacher_name, username), class:classes(id, class_name)',
+            'id, course_code, course_name, teacher_assigned, class, semister, created_at, faculty_id, faculty:faculties(id,faculty_name), teacher_assigned:teachers(id, teacher_name, username), class:classes(id, class_name)',
           )
           .eq('id', id)
           .maybeSingle();
@@ -148,7 +157,7 @@ class UseCourses {
     }
   }
 
-  Future<void> addCourse(Course course) async {
+  Future<void> addCourse(Course course, {String? facultyId}) async {
     try {
       // resolve teacher/class display values to IDs when possible
       final Map<String, dynamic> data = {
@@ -177,6 +186,8 @@ class UseCourses {
       // ignore: avoid_print
       print('Inserting course: $data');
 
+      if (facultyId != null && facultyId.isNotEmpty)
+        data['faculty_id'] = facultyId;
       final resp = await _supabase.from('courses').insert(data);
       // ignore: avoid_print
       print('Insert response: $resp');
@@ -187,7 +198,11 @@ class UseCourses {
     }
   }
 
-  Future<void> updateCourse(String id, Course course) async {
+  Future<void> updateCourse(
+    String id,
+    Course course, {
+    String? facultyId,
+  }) async {
     try {
       final Map<String, dynamic> data = {
         'course_code': course.code,
@@ -219,6 +234,8 @@ class UseCourses {
       // debug
       // ignore: avoid_print
       print('Updating course $id with $data');
+      if (facultyId != null && facultyId.isNotEmpty)
+        data['faculty_id'] = facultyId;
       final resp = await _supabase.from('courses').update(data).eq('id', id);
       // ignore: avoid_print
       print('Update response: $resp');

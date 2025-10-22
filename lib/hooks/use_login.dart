@@ -32,10 +32,23 @@ Future<Map<String, dynamic>?> loginUser(
       } else if (roleRaw == 'admin' || roleRaw == 'faculty admin') {
         final a = await supabase
             .from('admins')
-            .select('full_name')
+            .select(
+              'full_name, faculty_id, faculty:faculties(id, faculty_name)',
+            )
             .eq('username', username)
             .maybeSingle();
-        if (a != null) fullName = (a['full_name'] ?? '').toString().trim();
+        if (a != null) {
+          fullName = (a['full_name'] ?? '').toString().trim();
+          // attach faculty_name to response if available
+          if (a['faculty'] != null && a['faculty'] is Map) {
+            final facultyName = ((a['faculty'] as Map)['faculty_name'] ?? '')
+                .toString()
+                .trim();
+            if (facultyName.isNotEmpty) {
+              // we'll include this in the returned map below
+            }
+          }
+        }
       } else if (roleRaw == 'student') {
         final s = await supabase
             .from('students')
