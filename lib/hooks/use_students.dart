@@ -411,10 +411,8 @@ class UseStudents {
         }
 
         if (uhId != null && uhId.isNotEmpty) {
-          await _supabase
-              .from('students')
-              .update({'user_handling_id': uhId, 'user_id': uhId})
-              .eq('id', id);
+          // If you added user_handling_id/user_id columns to students, update them here.
+          // For the default schema we only ensure username/password are kept in sync.
         }
       } catch (e) {
         debugPrint(

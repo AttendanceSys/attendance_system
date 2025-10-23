@@ -7,13 +7,16 @@ Future<Map<String, dynamic>?> loginUser(
   String username,
   String password,
 ) async {
+  print('🔍 username=$username, password=$password');
   try {
     final response = await supabase
         .from('user_handling')
         .select()
-        .eq('usernames', username)
-        .eq('passwords', password)
+        .eq('username', username)
+        .eq('password', password)
         .maybeSingle();
+
+    print('🔍 Supabase response=$response');
 
     if (response == null) return null;
 
@@ -64,14 +67,14 @@ Future<Map<String, dynamic>?> loginUser(
       );
       out['full_name'] = (fullName != null && fullName.isNotEmpty)
           ? fullName
-          : (response['usernames'] ?? username);
+          : (response['username'] ?? username);
       return out;
     } catch (e) {
       // If any lookup fails, return the base row with username as fallback
       final Map<String, dynamic> out = Map<String, dynamic>.from(
         response as Map,
       );
-      out['full_name'] = response['usernames'] ?? username;
+      out['full_name'] = response['username'] ?? username;
       return out;
     }
   } catch (e) {

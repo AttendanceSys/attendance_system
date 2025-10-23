@@ -6,7 +6,7 @@ class UseCourses {
 
   bool _looksLikeUuid(String s) {
     final uuidReg = RegExp(
-      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\$',
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
     );
     return uuidReg.hasMatch(s);
   }
@@ -51,7 +51,7 @@ class UseCourses {
       var query = _supabase
           .from('courses')
           .select(
-            'id, course_code, course_name, teacher_assigned, class, semister, created_at, faculty_id, faculty:faculties(id,faculty_name), teacher_assigned:teachers(id, teacher_name, username), class:classes(id, class_name)',
+            'id, course_code, course_name, teacher_assigned, class, semester, created_at, faculty_id, faculty:faculties(id,faculty_name), teacher_assigned:teachers(id, teacher_name, username), class:classes(id, class_name)',
           )
           .order('created_at', ascending: false);
 
@@ -145,7 +145,7 @@ class UseCourses {
       final dynamic response = await _supabase
           .from('courses')
           .select(
-            'id, course_code, course_name, teacher_assigned, class, semister, created_at, faculty_id, faculty:faculties(id,faculty_name), teacher_assigned:teachers(id, teacher_name, username), class:classes(id, class_name)',
+            'id, course_code, course_name, teacher_assigned, class, semester, created_at, faculty_id, faculty:faculties(id,faculty_name), teacher_assigned:teachers(id, teacher_name, username), class:classes(id, class_name)',
           )
           .eq('id', id)
           .maybeSingle();
@@ -163,7 +163,7 @@ class UseCourses {
       final Map<String, dynamic> data = {
         'course_code': course.code,
         'course_name': course.name,
-        'semister': course.semester.toString(),
+        'semester': course.semester.toString(),
       };
 
       final teacherDisplay = course.teacher;
@@ -207,7 +207,7 @@ class UseCourses {
       final Map<String, dynamic> data = {
         'course_code': course.code,
         'course_name': course.name,
-        'semister': course.semester.toString(),
+        'semester': course.semester.toString(),
       };
 
       final teacherDisplay = course.teacher;

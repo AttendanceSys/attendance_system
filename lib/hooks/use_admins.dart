@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'use_user_handling.dart' show upsertUserHandling;
+import 'use_faculty_scope.dart' show FacultyScope;
 
 class Admin {
   final String id; // uuid (DB generated)
@@ -61,6 +62,7 @@ class Admin {
 
 class UseAdmins {
   final SupabaseClient _supabase = Supabase.instance.client;
+  final FacultyScope _facultyScope = FacultyScope();
 
   // Resolve current authenticated admin's faculty id (local, avoids cross-file helper)
   Future<String?> _resolveCurrentAdminFacultyId() async {
@@ -157,8 +159,21 @@ class UseAdmins {
             .toList();
       }
 
-      // Try to resolve the current admin's faculty id
-      String? facultyId = await _resolveCurrentAdminFacultyId();
+      debugPrint('UseAdmins.fetchAdmins: current auth user id=${current.id}');
+
+      // Try to resolve the current admin's faculty id via centralized FacultyScope first
+      String? facultyId = await _facultyScope.resolveCurrentFacultyId();
+      debugPrint(
+        'UseAdmins.fetchAdmins: FacultyScope.resolveCurrentFacultyId -> $facultyId',
+      );
+
+      // If FacultyScope returned null, fall back to the local resolver
+      if (facultyId == null) {
+        facultyId = await _resolveCurrentAdminFacultyId();
+        debugPrint(
+          'UseAdmins.fetchAdmins: _resolveCurrentAdminFacultyId fallback -> $facultyId',
+        );
+      }
 
       // Fallback: if resolver couldn't find a faculty, try to locate the admin row
       // associated with the current auth user and derive faculty from it.
@@ -304,11 +319,13 @@ class UseAdmins {
         password,
       );
 
-      // Link admin to user_handling
+      // NOTE: the DB schema links admins -> user_handling by username, not by
+      // an id FK. If you have a user_handling_id column in admins, change this
+      // to update that column. Otherwise we ensure username is present.
       if (uhId != null && uhId.isNotEmpty) {
         await _supabase
             .from('admins')
-            .update({'user_handling_id': uhId, 'user_id': uhId})
+            .update({'username': username})
             .eq('id', adminId);
       }
     } catch (e) {

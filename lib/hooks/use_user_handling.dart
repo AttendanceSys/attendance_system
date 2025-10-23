@@ -20,20 +20,20 @@ Future<String?> upsertUserHandling(
     final existing = await client
         .from('user_handling')
         .select('id')
-        .eq('usernames', username)
+        .eq('username', username)
         .maybeSingle();
 
     if (existing != null && existing['id'] != null) {
       // Update existing row
       final updateData = <String, dynamic>{
         'role': normalizedRoleForDb,
-        if (password != null && password.isNotEmpty) 'passwords': password,
+        if (password != null && password.isNotEmpty) 'password': password,
       };
 
       final updated = await client
           .from('user_handling')
           .update(updateData)
-          .eq('usernames', username)
+          .eq('username', username)
           .select()
           .maybeSingle();
 
@@ -45,9 +45,9 @@ Future<String?> upsertUserHandling(
 
     // Insert new row
     final insertData = <String, dynamic>{
-      'usernames': username,
+      'username': username,
       'role': normalizedRoleForDb,
-      if (password != null && password.isNotEmpty) 'passwords': password,
+      if (password != null && password.isNotEmpty) 'password': password,
     };
 
     final inserted = await client
@@ -90,9 +90,9 @@ class UserHandling {
     return UserHandling(
       id: json['id'] as String,
       authUid: json['auth_uid'] as String?,
-      usernames: json['usernames'] as String?,
+      usernames: json['username'] as String?,
       role: (json['role'] ?? '') as String,
-      passwords: json['passwords'] as String?,
+      passwords: json['password'] as String?,
       createdAt: json['created_at'] == null
           ? null
           : DateTime.tryParse(json['created_at'].toString()),
@@ -102,9 +102,9 @@ class UserHandling {
   Map<String, dynamic> toUpdateJson() {
     return {
       'auth_uid': authUid,
-      'usernames': usernames,
+      'username': usernames,
       'role': role,
-      'passwords': passwords,
+      'password': passwords,
     };
   }
 }
@@ -131,9 +131,9 @@ class StudentHandling {
     return StudentHandling(
       id: json['id'] as String,
       authUid: json['auth_uid'] as String?,
-      usernames: json['usernames'] as String?,
+      usernames: json['username'] as String?,
       role: (json['role'] ?? 'student') as String,
-      passwords: json['passwords'] as String?,
+      passwords: json['password'] as String?,
       createdAt: json['created_at'] == null
           ? null
           : DateTime.tryParse(json['created_at'].toString()),
@@ -154,7 +154,7 @@ class UseStudentHandling {
     try {
       final List<dynamic> userRows = await _supabase
           .from('user_handling')
-          .select('id, usernames, role, passwords, created_at')
+          .select('id, username, role, password, created_at')
           .eq('role', 'student');
 
       final List<dynamic> studentRows = await _supabase
@@ -171,7 +171,7 @@ class UseStudentHandling {
 
       final filtered = userRows
           .where((json) {
-            final uname = (json['usernames'] ?? '').toString().trim();
+            final uname = (json['username'] ?? '').toString().trim();
             return studentUsernames.contains(uname);
           })
           .map((json) => StudentHandling.fromJson(json as Map<String, dynamic>))
@@ -209,11 +209,11 @@ class UseStudentHandling {
             pwd,
           );
           if (uhId != null && uhId.isNotEmpty) {
-            // update students table to reference the created/updated user_handling row
-            await _supabase
-                .from('students')
-                .update({'user_handling_id': uhId, 'user_id': uhId})
-                .eq('username', username);
+            // NOTE: the database schema uses `students.username` to link to
+            // `user_handling.username` (no user_handling_id column). We avoid
+            // writing non-existent columns here. If you added `user_handling_id`
+            // to the students table, change this to update that column.
+            debugPrint('Resolved user_handling id for $username -> $uhId');
           }
         } catch (e) {
           debugPrint(
@@ -292,7 +292,7 @@ class UseUserHandling {
     try {
       final dynamic rowsRaw = await _supabase
           .from('user_handling')
-          .select('id, usernames, role, passwords, created_at');
+          .select('id, username, role, password, created_at');
 
       debugPrint('RAW user_handling response: $rowsRaw');
 
@@ -309,7 +309,7 @@ class UseUserHandling {
 
         // Map 'admin' to 'faculty admin' dynamically for display purposes
         if (role == 'admin') {
-          final username = (json['usernames'] ?? '').toString().trim();
+          final username = (json['username'] ?? '').toString().trim();
           if (username.isNotEmpty) {
             Map<String, dynamic>? adminRow;
             try {
@@ -354,9 +354,9 @@ class UseUserHandling {
           UserHandling(
             id: json['id'] as String,
             authUid: json['auth_uid'] as String?,
-            usernames: json['usernames'] as String?,
+            usernames: json['username'] as String?,
             role: role,
-            passwords: json['passwords'] as String?,
+            passwords: json['password'] as String?,
             createdAt: json['created_at'] == null
                 ? null
                 : DateTime.tryParse(json['created_at'].toString()),
@@ -379,7 +379,7 @@ class UseUserHandling {
     try {
       final dynamic rows = await _supabase
           .from('user_handling')
-          .select('id, usernames, role, passwords, created_at');
+          .select('id, username, role, password, created_at');
       debugPrint('debugFetchUserHandlingRaw -> $rows');
       if (rows is List) return rows;
       return <dynamic>[];
@@ -422,7 +422,7 @@ class UseUserHandling {
       // Find the user_handling row for this auth uid
       final uh = await client
           .from('user_handling')
-          .select('id, usernames, role')
+          .select('id, username, role')
           .eq('auth_uid', authUid)
           .maybeSingle();
 
@@ -431,28 +431,15 @@ class UseUserHandling {
       if (role != 'admin') return null;
 
       final uhId = (uh['id'] ?? '')?.toString() ?? '';
-      final username = (uh['usernames'] ?? '')?.toString() ?? '';
+      final username = (uh['username'] ?? '')?.toString() ?? '';
 
       // Try to find an admins row linked to this user_handling id
       Map<String, dynamic>? adminRow;
-      if (uhId.isNotEmpty) {
-        final ar = await client
-            .from('admins')
-            .select(
-              'id, faculty_id, faculty_name, user_handling_id, user_id, username',
-            )
-            .eq('user_handling_id', uhId)
-            .maybeSingle();
-        if (ar != null) adminRow = ar;
-      }
-
-      // Fallback: try matching by username
-      if (adminRow == null && username.isNotEmpty) {
+      // admins table in DB references user_handling by username. Try lookup by username.
+      if (username.isNotEmpty) {
         final ar2 = await client
             .from('admins')
-            .select(
-              'id, faculty_id, faculty_name, user_handling_id, user_id, username',
-            )
+            .select('id, faculty_id, faculty_name, username')
             .eq('username', username)
             .maybeSingle();
         if (ar2 != null) adminRow = ar2;
@@ -501,15 +488,15 @@ class UseUserHandling {
           : roleLower;
 
       final updateData = <String, dynamic>{
-        'usernames': username,
+        'username': username,
         'role': normalizedRoleForDb,
-        if (password != null && password.isNotEmpty) 'passwords': password,
+        if (password != null && password.isNotEmpty) 'password': password,
       };
 
       // Verify the row exists (helps catch id mismatches)
       final existingRow = await _supabase
           .from('user_handling')
-          .select('id, usernames, role')
+          .select('id, username, role')
           .eq('id', id)
           .maybeSingle();
 
@@ -535,41 +522,28 @@ class UseUserHandling {
 
       debugPrint('✅ Updated user_handling row: $updatedRow');
 
-      final oldUsername = (existingRow['usernames'] ?? '').toString().trim();
+      final oldUsername = (existingRow['username'] ?? '').toString().trim();
       // final oldPassword = (existingRow['passwords'] ?? '').toString();
       // Propagate username changes to related tables (students, teachers, admins)
       try {
         final newUsername = username;
-        if (newUsername.isNotEmpty) {
-          // Update by user_handling_id where link exists
+        if (newUsername.isNotEmpty &&
+            oldUsername.isNotEmpty &&
+            oldUsername != newUsername) {
+          // Propagate username change by updating related tables where they still
+          // reference the old username. We avoid writing non-existent foreign id columns.
           await _supabase
               .from('students')
               .update({'username': newUsername})
-              .eq('user_handling_id', id);
+              .eq('username', oldUsername);
           await _supabase
               .from('teachers')
               .update({'username': newUsername})
-              .eq('user_handling_id', id);
+              .eq('username', oldUsername);
           await _supabase
               .from('admins')
               .update({'username': newUsername})
-              .eq('user_handling_id', id);
-
-          // Also update by old username fallback (if link wasn't established)
-          if (oldUsername.isNotEmpty && oldUsername != newUsername) {
-            await _supabase
-                .from('students')
-                .update({'username': newUsername})
-                .eq('username', oldUsername);
-            await _supabase
-                .from('teachers')
-                .update({'username': newUsername})
-                .eq('username', oldUsername);
-            await _supabase
-                .from('admins')
-                .update({'username': newUsername})
-                .eq('username', oldUsername);
-          }
+              .eq('username', oldUsername);
         }
       } catch (e) {
         debugPrint('Failed to propagate username to related tables: $e');
@@ -577,36 +551,21 @@ class UseUserHandling {
 
       // Propagate password changes as well
       try {
-        if (password != null && password.isNotEmpty) {
-          // Update linked rows by user_handling_id first
+        if (password != null && password.isNotEmpty && oldUsername.isNotEmpty) {
+          // Update by old username where link is established. Avoid writing to
+          // non-existent foreign id columns.
           await _supabase
               .from('students')
               .update({'password': password})
-              .eq('user_handling_id', id);
+              .eq('username', oldUsername);
           await _supabase
               .from('teachers')
               .update({'password': password})
-              .eq('user_handling_id', id);
+              .eq('username', oldUsername);
           await _supabase
               .from('admins')
               .update({'password': password})
-              .eq('user_handling_id', id);
-
-          // Fallback: update by old username where link isn't established
-          if (oldUsername.isNotEmpty) {
-            await _supabase
-                .from('students')
-                .update({'password': password})
-                .eq('username', oldUsername);
-            await _supabase
-                .from('teachers')
-                .update({'password': password})
-                .eq('username', oldUsername);
-            await _supabase
-                .from('admins')
-                .update({'password': password})
-                .eq('username', oldUsername);
-          }
+              .eq('username', oldUsername);
         }
       } catch (e) {
         debugPrint('Failed to propagate password to related tables: $e');

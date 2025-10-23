@@ -19,7 +19,7 @@ class Course {
   factory Course.fromMap(Map<String, dynamic> map) {
     int sem = 1;
     try {
-      final s = map['semister'] ?? map['semester'];
+      final s = map['semester'] ?? map['semister'];
       if (s is int) sem = s;
       if (s is String) sem = int.tryParse(s) ?? 1;
     } catch (_) {
@@ -88,7 +88,7 @@ class Course {
       if (name.isNotEmpty) 'course_name': name,
       if (teacher.isNotEmpty) 'teacher_assigned': teacher,
       if (className.isNotEmpty) 'class': className,
-      'semister': semester.toString(),
+      'semester': semester.toString(),
     };
   }
 }

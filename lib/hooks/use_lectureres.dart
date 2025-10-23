@@ -166,9 +166,11 @@ class UseTeachers {
 
         // If we have a user_handling id, ensure the teacher row references it
         if (uhId != null && uhId.isNotEmpty) {
+          // Keep the teacher.username in sync. If the DB has a user_handling_id
+          // column, update it instead.
           await _supabase
               .from('teachers')
-              .update({'user_handling_id': uhId, 'user_id': uhId})
+              .update({'username': newUsername})
               .eq('id', id);
         }
       } catch (e) {
