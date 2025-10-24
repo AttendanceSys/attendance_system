@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/faculty.dart';
 
+final supabase = Supabase.instance.client;
+
 class AddFacultyPopupDemoPage extends StatelessWidget {
-  const AddFacultyPopupDemoPage({super.key});
+  final String currentUsername; // username of logged-in user
+  const AddFacultyPopupDemoPage({super.key, required this.currentUsername});
 
   @override
   Widget build(BuildContext context) {
@@ -11,19 +15,12 @@ class AddFacultyPopupDemoPage extends StatelessWidget {
       body: Center(
         child: ElevatedButton(
           onPressed: () async {
-            final result = await showDialog(
+            // Show popup; the popup itself will perform the RPC (create/update)
+            await showDialog<Faculty>(
               context: context,
-              builder: (context) => const AddFacultyPopup(),
+              builder: (context) =>
+                  AddFacultyPopup(currentUsername: currentUsername),
             );
-            if (result != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    "Faculty Added: ${result['facultyCode']} (${result['facultyName']})",
-                  ),
-                ),
-              );
-            }
           },
           child: const Text('Show Add Faculty Popup'),
         ),
@@ -34,7 +31,12 @@ class AddFacultyPopupDemoPage extends StatelessWidget {
 
 class AddFacultyPopup extends StatefulWidget {
   final Faculty? faculty;
-  const AddFacultyPopup({super.key, this.faculty});
+  final String currentUsername;
+  const AddFacultyPopup({
+    super.key,
+    this.faculty,
+    required this.currentUsername,
+  });
 
   @override
   State<AddFacultyPopup> createState() => _AddFacultyPopupState();
@@ -83,7 +85,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start, // Left align title
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   widget.faculty == null ? "Add Faculty" : "Edit Faculty",
@@ -91,9 +93,9 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.left,
                 ),
                 const SizedBox(height: 24),
+
                 TextFormField(
                   initialValue: _facultyCode,
                   decoration: const InputDecoration(
@@ -105,6 +107,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                       val == null || val.isEmpty ? "Enter faculty code" : null,
                 ),
                 const SizedBox(height: 16),
+
                 TextFormField(
                   initialValue: _facultyName,
                   decoration: const InputDecoration(
@@ -116,6 +119,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                       val == null || val.isEmpty ? "Enter faculty name" : null,
                 ),
                 const SizedBox(height: 16),
+
                 GestureDetector(
                   onTap: () async {
                     final pickedDate = await showDatePicker(
@@ -148,63 +152,74 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    SizedBox(
-                      height: 40,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.black54),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          minimumSize: const Size(90, 40),
-                        ),
-                        child: const Text(
-                          "Cancel",
-                          style: TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text("Cancel"),
                     ),
                     const SizedBox(width: 12),
-                    SizedBox(
-                      height: 40,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop(
-                              Faculty(
-                                code: _facultyCode!,
-                                name: _facultyName!,
-                                createdAt: DateTime.now(),
-                                establishmentDate: _establishmentDate!,
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (_formKey.currentState!.validate()) {
+                          final facultyToSave = Faculty(
+                            code: _facultyCode!,
+                            name: _facultyName!,
+                            establishmentDate: _establishmentDate!,
+                            createdAt: DateTime.now(),
+                          );
+
+                          final messenger = ScaffoldMessenger.of(context);
+                          Navigator.of(context).pop(facultyToSave);
+
+                          try {
+                            if (widget.faculty == null) {
+                              // 🔹 Add new faculty
+                              await supabase.rpc(
+                                'create_faculty',
+                                params: {
+                                  'p_code': facultyToSave.code,
+                                  'p_name': facultyToSave.name,
+                                  'p_establishment_date': facultyToSave
+                                      .establishmentDate
+                                      .toIso8601String(),
+                                  'p_created_by': widget.currentUsername,
+                                },
+                              );
+                            } else {
+                              // 🔹 Update existing faculty
+                              await supabase.rpc(
+                                'update_faculty',
+                                params: {
+                                  'p_code': widget.faculty!.code, // old code
+                                  'p_new_code': facultyToSave.code,
+                                  'p_new_name': facultyToSave.name,
+                                  'p_new_establishment_date': facultyToSave
+                                      .establishmentDate
+                                      .toIso8601String(),
+                                  'p_updated_by': widget.currentUsername,
+                                },
+                              );
+                            }
+
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text("✅ Faculty saved successfully"),
+                              ),
+                            );
+                          } catch (e) {
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text("❌ Failed to save faculty: $e"),
                               ),
                             );
                           }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[900],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          minimumSize: const Size(90, 40),
-                        ),
-                        child: const Text(
-                          "Save",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
+                        }
+                      },
+                      child: const Text("Save"),
                     ),
                   ],
                 ),

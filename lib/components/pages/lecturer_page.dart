@@ -3,6 +3,7 @@ import '../cards/searchBar.dart';
 import '../../models/lecturer.dart';
 import '../popup/add_lecturer_popup.dart';
 import '../../hooks/use_lectureres.dart';
+import '../../hooks/use_user_handling.dart';
 
 class LecturersPage extends StatefulWidget {
   const LecturersPage({super.key});
@@ -95,7 +96,20 @@ class _LecturersPageState extends State<LecturersPage> {
         password: result.password,
         createdAt: teacher.createdAt,
       );
-      await _useTeachers.updateTeacher(teacher.id, updatedTeacher);
+
+      // Resolve the current username to pass as `updatedBy` for RPC role checks.
+      String currentUsername = '';
+      try {
+        currentUsername = await UseUserHandling().resolveCurrentUsername();
+      } catch (e) {
+        debugPrint('Failed to resolve current username: $e');
+      }
+
+      await _useTeachers.updateTeacher(
+        teacher.id,
+        updatedTeacher,
+        updatedBy: currentUsername.isNotEmpty ? currentUsername : null,
+      );
       await _fetchTeachers();
     }
   }
@@ -221,8 +235,9 @@ class _LecturersPageState extends State<LecturersPage> {
                                   horizontal: 0,
                                 ),
                               ),
-                              onPressed:
-                                  _selectedIndex == null ? null : _showEditLecturerPopup,
+                              onPressed: _selectedIndex == null
+                                  ? null
+                                  : _showEditLecturerPopup,
                               child: const Text(
                                 "Edit",
                                 style: TextStyle(
@@ -247,8 +262,9 @@ class _LecturersPageState extends State<LecturersPage> {
                                   horizontal: 0,
                                 ),
                               ),
-                              onPressed:
-                                  _selectedIndex == null ? null : _confirmDeleteLecturer,
+                              onPressed: _selectedIndex == null
+                                  ? null
+                                  : _confirmDeleteLecturer,
                               child: const Text(
                                 "Delete",
                                 style: TextStyle(

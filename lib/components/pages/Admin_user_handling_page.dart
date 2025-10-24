@@ -27,8 +27,8 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
   List<UserHandling> get _filteredRows {
     final q = _searchText.toLowerCase();
     return _rows.where((r) {
-      final username = (r.usernames ?? '').toLowerCase();
-      final role = (r.role ?? '').toLowerCase();
+      final username = (r.username ?? '').toLowerCase();
+      final role = (r.role).toLowerCase();
       // filter by search (username or role)
       final matchesSearch = username.contains(q) || role.contains(q);
       return matchesSearch;
@@ -64,7 +64,8 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
           } catch (e) {
             // If none of the common methods exist, rethrow a descriptive error.
             throw Exception(
-                'No suitable fetch method found on UseUserHandling. Tried fetchUsersWithSync, fetchUsers, fetchAllUsers. Error: $e');
+              'No suitable fetch method found on UseUserHandling. Tried fetchUsersWithSync, fetchUsers, fetchAllUsers. Error: $e',
+            );
           }
         }
       }
@@ -102,10 +103,12 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
 
     // Build AppUser for the popup (UI model)
     final appUser = AppUser(
-      username: row.usernames ?? '',
+      username: row.username ?? '',
       role: // show 'faculty admin' instead of raw 'admin' for display
-          (row.role?.toLowerCase().trim() == 'admin') ? 'faculty admin' : (row.role ?? ''),
-      password: row.passwords ?? '',
+      (row.role.toLowerCase().trim() == 'admin')
+          ? 'faculty admin'
+          : (row.role),
+      password: row.password ?? '',
     );
 
     final result = await showDialog<AppUser>(
@@ -119,10 +122,12 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
     final updatedRow = UserHandling(
       id: row.id,
       authUid: row.authUid,
-      usernames: result.username,
+      username: result.username,
       // Normalize role back to DB form: map 'faculty admin' -> 'admin'
-      role: (result.role.toLowerCase().trim() == 'faculty admin') ? 'admin' : result.role,
-      passwords: result.password,
+      role: (result.role.toLowerCase().trim() == 'faculty admin')
+          ? 'admin'
+          : result.role,
+      password: result.password,
       createdAt: row.createdAt,
     );
 
@@ -140,14 +145,14 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User updated')),
-        );
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(const SnackBar(content: Text('User updated')));
       }
     } catch (e) {
       debugPrint('Edit user failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
           SnackBar(content: Text('Failed to update user: $e')),
         );
       }
@@ -162,7 +167,9 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Delete User"),
-        content: Text("Are you sure you want to delete '${row.usernames ?? ''}'?"),
+        content: Text(
+          "Are you sure you want to delete '${row.username ?? ''}'?",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -280,7 +287,9 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                                 horizontal: 0,
                               ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _showEditUserPopup,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _showEditUserPopup,
                             child: const Text(
                               "Edit",
                               style: TextStyle(
@@ -305,7 +314,9 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                                 horizontal: 0,
                               ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _confirmDeleteUser,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _confirmDeleteUser,
                             child: const Text(
                               "Delete",
                               style: TextStyle(
@@ -375,19 +386,21 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
         for (int index = 0; index < _filteredRows.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                _filteredRows[index].usernames ?? '',
+                _filteredRows[index].username ?? '',
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
                 // display "faculty admin" instead of raw 'admin'
-                (_filteredRows[index].role?.toLowerCase().trim() == 'admin')
+                (_filteredRows[index].role.toLowerCase().trim() == 'admin')
                     ? 'faculty admin'
-                    : (_filteredRows[index].role ?? ''),
+                    : (_filteredRows[index].role),
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
@@ -415,18 +428,20 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
         for (int index = 0; index < _filteredRows.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                _filteredRows[index].usernames ?? '',
+                _filteredRows[index].username ?? '',
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                (_filteredRows[index].role?.toLowerCase().trim() == 'admin')
+                (_filteredRows[index].role.toLowerCase().trim() == 'admin')
                     ? 'faculty admin'
-                    : (_filteredRows[index].role ?? ''),
+                    : (_filteredRows[index].role),
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),

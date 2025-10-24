@@ -33,11 +33,16 @@ class FacultyScope {
       if (current == null) return null;
 
       // Try reading faculty_id from user_handling (if you populated it)
-      final uh = await _supabase
-          .from('user_handling')
-          .select('faculty_id, role, usernames')
-          .eq('auth_uid', current.id)
-          .maybeSingle();
+      Map<String, dynamic>? uh;
+      try {
+        uh = await _supabase
+            .from('user_handling')
+            .select('faculty_id, role, usernames')
+            .eq('auth_uid', current.id)
+            .maybeSingle();
+      } catch (e) {
+        debugPrint('user_handling auth_uid lookup failed: $e');
+      }
 
       if (uh != null) {
         final role = _normalizeRole(uh['role']);

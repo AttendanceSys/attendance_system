@@ -1,27 +1,20 @@
 class Faculty {
   final String code;
   final String name;
-  final DateTime createdAt;
   final DateTime establishmentDate;
+  final DateTime createdAt;
 
   Faculty({
     required this.code,
     required this.name,
-    required this.createdAt,
     required this.establishmentDate,
+    required this.createdAt,
   });
 
-  Faculty copyWith({
-    String? code,
-    String? name,
-    DateTime? createdAt,
-    DateTime? establishmentDate,
-  }) {
-    return Faculty(
-      code: code ?? this.code,
-      name: name ?? this.name,
-      createdAt: createdAt ?? this.createdAt,
-      establishmentDate: establishmentDate ?? this.establishmentDate,
-    );
-  }
+  Map<String, dynamic> toJson() => {
+        'faculty_code': code,
+        'faculty_name': name,
+        'establishment_date': establishmentDate.toIso8601String(),
+        'created_at': createdAt.toIso8601String(),
+      };
 }

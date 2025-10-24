@@ -31,16 +31,42 @@ class UseFaculties {
 
   Future<void> addFaculty(Faculty faculty) async {
     try {
-      final resp = await _supabase.from('faculties').insert({
+      // If a user is authenticated, include their auth UID so RLS policies
+      // that require auth.uid or created_by will succeed.
+      final String? authUid = _supabase.auth.currentUser?.id;
+
+      final payload = {
         'faculty_code': faculty.code,
         'faculty_name': faculty.name,
         'establishment_date': faculty.establishmentDate.toIso8601String().split(
           'T',
         )[0],
-      });
+      };
+      if (authUid != null) {
+        // Common column names used in policies: created_by, auth_uid, user_id
+        // Add all plausible fields to maximize compatibility with different schemas.
+        payload['created_by'] = authUid;
+        payload['auth_uid'] = authUid;
+        payload['user_id'] = authUid;
+      }
+
+      final resp = await _supabase.from('faculties').insert(payload);
       print('Add faculty response: $resp');
     } catch (e) {
-      print('Error adding faculty: $e');
+      // Supabase PostgrestException contains useful fields; try to print them
+      if (e is PostgrestException) {
+        print('Error adding faculty: ${e.message} (code: ${e.code})');
+        final details = e.details?.toString() ?? '';
+        final hint = e.hint?.toString() ?? '';
+        if (details.isNotEmpty) {
+          print('Details: $details');
+        }
+        if (hint.isNotEmpty) {
+          print('Hint: $hint');
+        }
+      } else {
+        print('Error adding faculty: $e');
+      }
     }
   }
 
@@ -64,13 +90,23 @@ class UseFaculties {
 
   Future<void> deleteFaculty(String code) async {
     try {
-      final resp = await _supabase
-          .from('faculties')
-          .delete()
-          .eq('faculty_code', code);
-      print('Delete faculty response: $resp');
+      final actor =
+          _supabase.auth.currentUser?.email ?? _supabase.auth.currentUser?.id;
+      final resp = await _supabase.rpc(
+        'delete_faculty',
+        params: {'p_code': code, 'p_deleted_by': actor},
+      );
+      print('Delete faculty RPC response: $resp');
     } catch (e) {
-      print('Error deleting faculty: $e');
+      if (e is PostgrestException) {
+        print('Error deleting faculty: ${e.message} (code: ${e.code})');
+        final details = e.details?.toString() ?? '';
+        final hint = e.hint?.toString() ?? '';
+        if (details.isNotEmpty) print('Details: $details');
+        if (hint.isNotEmpty) print('Hint: $hint');
+      } else {
+        print('Error deleting faculty: $e');
+      }
     }
   }
 }

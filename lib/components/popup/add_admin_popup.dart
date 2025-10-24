@@ -6,7 +6,6 @@ class AddAdminPopup extends StatefulWidget {
   final Admin? admin;
   final List<String> facultyNames;
 
-
   const AddAdminPopup({super.key, this.admin, required this.facultyNames});
 
   @override
@@ -26,14 +25,19 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
     super.initState();
     _adminId = widget.admin?.id;
     _fullName = widget.admin?.fullName;
-    _facultyName = widget.admin?.facultyName;
+    _facultyName = widget.admin?.facultyName ?? '';
+    // Normalize empty facultyName to empty string sentinel so DropdownButton finds the 'Select One' item
+    if (_facultyName == null || _facultyName!.trim().isEmpty) {
+      _facultyName = '';
+    }
     _password = widget.admin?.password;
   }
 
   @override
   Widget build(BuildContext context) {
-    final double dialogWidth =
-        MediaQuery.of(context).size.width > 600 ? 400 : double.infinity;
+    final double dialogWidth = MediaQuery.of(context).size.width > 600
+        ? 400
+        : double.infinity;
 
     return Dialog(
       elevation: 8,
@@ -96,16 +100,34 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                     hintText: "Faculty Name",
                     border: OutlineInputBorder(),
                   ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text("Select One"),
-                    ),
-                    ...widget.facultyNames.map(
-                      (name) =>
-                          DropdownMenuItem(value: name, child: Text(name)),
-                    ),
-                  ],
+                  // Build items from a deduplicated, trimmed list. Also ensure
+                  // the current value (editing case) is included so Dropdown
+                  // always has exactly one matching item.
+                  items: () {
+                    final Set<String> names = widget.facultyNames
+                        .where((s) => s.trim().isNotEmpty)
+                        .map((s) => s.trim())
+                        .toSet();
+                    if (widget.admin?.facultyName != null &&
+                        widget.admin!.facultyName!.trim().isNotEmpty) {
+                      names.add(widget.admin!.facultyName.trim());
+                    }
+                    final sorted = names.toList()..sort();
+                    return [
+                      const DropdownMenuItem<String>(
+                        value: '',
+                        child: Text("Select One"),
+                      ),
+                      ...sorted
+                          .map(
+                            (name) => DropdownMenuItem(
+                              value: name,
+                              child: Text(name),
+                            ),
+                          )
+                          .toList(),
+                    ];
+                  }(),
                   onChanged: (val) => setState(() => _facultyName = val),
                   validator: (val) =>
                       val == null || val.isEmpty ? "Select faculty name" : null,
@@ -173,16 +195,41 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                       child: ElevatedButton(
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop(
-                              Admin(
-                                id: _adminId!,
-                                fullName: _fullName!,
-                                facultyName: _facultyName!,
-                                password: _password!,
+                            // Capture the messenger before popping so we don't
+                            // try to look up an ancestor on a deactivated context.
+                            final messenger = ScaffoldMessenger.of(context);
+                            final result = Admin(
+                              id: _adminId!,
+                              fullName: _fullName!,
+                              facultyName: _facultyName!,
+                              password: _password!,
+                            );
+                            Navigator.of(context).pop(result);
+                            // Show success snackbar using the captured messenger.
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.check_circle,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      "Successfully Saved",
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: Colors.black87,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                duration: const Duration(seconds: 2),
                               ),
                             );
-                            // Show success snackbar after saving
-                            SuccessSnackbar.show(context, message: "Successfully Saved");
                           }
                         },
                         style: ElevatedButton.styleFrom(

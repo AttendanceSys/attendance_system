@@ -30,7 +30,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
   List<UserHandling> get _filteredUsers => _users
       .where(
         (user) =>
-            (user.usernames ?? '').toLowerCase().contains(
+            (user.username ?? '').toLowerCase().contains(
               _searchText.toLowerCase(),
             ) ||
             user.role.toLowerCase().contains(_searchText.toLowerCase()),
@@ -42,9 +42,9 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
     final userRow = _filteredUsers[_selectedIndex!];
 
     final appUser = AppUser(
-      username: userRow.usernames ?? '',
+      username: userRow.username ?? '',
       role: userRow.role,
-      password: userRow.passwords ?? '',
+      password: userRow.password ?? '',
     );
 
     final result = await showDialog<AppUser>(
@@ -56,9 +56,9 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
       final updated = UserHandling(
         id: userRow.id,
         authUid: userRow.authUid,
-        usernames: result.username,
+        username: result.username,
         role: result.role.toLowerCase(),
-        passwords: result.password,
+        password: result.password,
         createdAt: userRow.createdAt,
       );
 
@@ -94,7 +94,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
       builder: (context) => AlertDialog(
         title: const Text("Delete User"),
         content: Text(
-          "Are you sure you want to delete '${user.usernames ?? ''}'?",
+          "Are you sure you want to delete '${user.username ?? ''}'?",
         ),
         actions: [
           TextButton(
@@ -142,9 +142,9 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
             (s) => UserHandling(
               id: s.id,
               authUid: s.authUid,
-              usernames: s.usernames,
+              username: s.username,
               role: s.role,
-              passwords: s.passwords,
+              password: s.password,
               createdAt: s.createdAt,
             ),
           )
@@ -354,7 +354,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                _filteredUsers[index].usernames ?? '',
+                _filteredUsers[index].username ?? '',
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
@@ -398,7 +398,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                _filteredUsers[index].usernames ?? '',
+                _filteredUsers[index].username ?? '',
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(

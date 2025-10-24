@@ -1,14 +1,14 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'use_user_handling.dart' show upsertUserHandling;
-import 'use_faculty_scope.dart' show FacultyScope;
 
 class Admin {
   final String id; // uuid (DB generated)
   final String? username; // FK to login username (unique)
   final String? fullName;
-  final String? facultyName; // FK to faculties.faculty_name
-  final String? facultyId; // FK to faculties.id
+  final String?
+  facultyName; // FK to faculties.faculty_name (read-only convenience)
+  final String? facultyId; // FK to faculties.id (uuid)
   final String? password; // stored but never displayed in tables
   final DateTime? createdAt;
 
@@ -55,99 +55,101 @@ class Admin {
       'full_name': fullName,
       'faculty_id': facultyId,
       'password': password,
-      // created_at is DB-managed (default now())
     };
   }
 }
 
 class UseAdmins {
   final SupabaseClient _supabase = Supabase.instance.client;
-  final FacultyScope _facultyScope = FacultyScope();
 
-  // Resolve current authenticated admin's faculty id (local, avoids cross-file helper)
-  Future<String?> _resolveCurrentAdminFacultyId() async {
+  // Fetch faculties as id/name pairs for dropdowns
+  Future<List<Map<String, String>>> fetchFacultyOptions() async {
+    try {
+      final List<dynamic> rows = await _supabase
+          .from('faculties')
+          .select('id, faculty_name')
+          .order('faculty_name', ascending: true);
+      return rows
+          .map((e) {
+            final m = e as Map<String, dynamic>;
+            return {
+              'id': (m['id'] ?? '').toString(),
+              'name': (m['faculty_name'] ?? '').toString(),
+            };
+          })
+          .where((m) => (m['id']?.isNotEmpty ?? false))
+          .toList();
+    } catch (e) {
+      debugPrint('fetchFacultyOptions error: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch faculties with id and name so caller can map names -> ids.
+  Future<List<Map<String, String>>> fetchFaculties() async {
+    try {
+      final List<dynamic> rows = await _supabase
+          .from('faculties')
+          .select('id, faculty_name');
+      return rows
+          .map((e) => (e as Map<String, dynamic>))
+          .where(
+            (m) =>
+                m['faculty_name'] != null &&
+                (m['faculty_name'] as String).isNotEmpty,
+          )
+          .map(
+            (m) => {
+              'id': m['id'].toString(),
+              'name': m['faculty_name'].toString(),
+            },
+          )
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to fetch faculties: $e');
+    }
+  }
+
+  // Resolve current authenticated user's username by auth.uid -> user_handling
+  Future<String> _resolveCurrentUsername() async {
     try {
       final current = _supabase.auth.currentUser;
-      if (current == null) return null;
-      final authUid = current.id;
+      if (current == null) return '';
 
-      final uh = await _supabase
-          .from('user_handling')
-          .select('id, usernames, role')
-          .eq('auth_uid', authUid)
-          .maybeSingle();
-      if (uh == null) {
-        debugPrint('UseAdmins: no user_handling row for auth uid $authUid');
-        return null;
-      }
-      final role = (uh['role'] ?? '').toString().trim().toLowerCase();
-      // accept both 'admin' and 'faculty admin' variants
-      if (role != 'admin' && role != 'faculty admin' && role != 'faculty_admin')
-        return null;
-
-      final uhId = (uh['id'] ?? '').toString();
-      final username = (uh['usernames'] ?? '').toString();
-
-      Map<String, dynamic>? adminRow;
-      if (uhId.isNotEmpty) {
-        final ar = await _supabase
-            .from('admins')
-            .select(
-              'faculty_id, faculty_name, user_handling_id, user_id, username',
-            )
-            .eq('user_handling_id', uhId)
+      // prefer mapping via auth_uid column in user_handling
+      try {
+        final uh = await _supabase
+            .from('user_handling')
+            .select('username')
+            .eq('auth_uid', current.id)
             .maybeSingle();
-        if (ar != null) adminRow = ar;
-      }
-
-      if (adminRow == null && username.isNotEmpty) {
-        final ar2 = await _supabase
-            .from('admins')
-            .select(
-              'faculty_id, faculty_name, user_handling_id, user_id, username',
-            )
-            .eq('username', username)
-            .maybeSingle();
-        if (ar2 != null) adminRow = ar2;
-      }
-
-      if (adminRow == null) return null;
-      final facultyId = (adminRow['faculty_id'] ?? '').toString();
-      if (facultyId.isNotEmpty) {
-        debugPrint(
-          'UseAdmins: resolved faculty_id from admins row: $facultyId',
-        );
-        return facultyId;
-      }
-      final facultyName = (adminRow['faculty_name'] ?? '').toString();
-      if (facultyName.isNotEmpty) {
-        debugPrint(
-          'UseAdmins: looking up faculty id for faculty_name="$facultyName"',
-        );
-        final f = await _supabase
-            .from('faculties')
-            .select('id')
-            .eq('faculty_name', facultyName)
-            .maybeSingle();
-        if (f != null && f['id'] != null) {
-          debugPrint('UseAdmins: resolved faculty_name -> id ${f['id']}');
-          return f['id'].toString();
+        if (uh != null && uh['username'] != null) {
+          return uh['username'].toString();
         }
+      } catch (e) {
+        debugPrint('mapping auth_uid -> username failed: $e');
       }
 
-      return null;
+      // fallback to email
+      if (current.email != null && current.email!.isNotEmpty) {
+        return current.email!;
+      }
+
+      // final fallback to auth uid
+      return current.id;
     } catch (e) {
-      debugPrint('UseAdmins._resolveCurrentAdminFacultyId error: $e');
-      return null;
+      debugPrint('UseAdmins._resolveCurrentUsername error: $e');
+      return '';
     }
   }
 
   Future<List<Admin>> fetchAdmins() async {
     try {
-      // If there's no authenticated user (e.g., public listing), return all admins.
       final current = _supabase.auth.currentUser;
       if (current == null) {
-        debugPrint('UseAdmins.fetchAdmins: no auth user, returning all admins');
+        debugPrint(
+          'UseAdmins.fetchAdmins: no auth user, returning all admins (public case)',
+        );
         final rowsAll = await _supabase
             .from('admins')
             .select(
@@ -159,326 +161,223 @@ class UseAdmins {
             .toList();
       }
 
-      debugPrint('UseAdmins.fetchAdmins: current auth user id=${current.id}');
-
-      // Try to resolve the current admin's faculty id via centralized FacultyScope first
-      String? facultyId = await _facultyScope.resolveCurrentFacultyId();
-      debugPrint(
-        'UseAdmins.fetchAdmins: FacultyScope.resolveCurrentFacultyId -> $facultyId',
-      );
-
-      // If FacultyScope returned null, fall back to the local resolver
-      if (facultyId == null) {
-        facultyId = await _resolveCurrentAdminFacultyId();
-        debugPrint(
-          'UseAdmins.fetchAdmins: _resolveCurrentAdminFacultyId fallback -> $facultyId',
-        );
-      }
-
-      // Fallback: if resolver couldn't find a faculty, try to locate the admin row
-      // associated with the current auth user and derive faculty from it.
-      if (facultyId == null || facultyId.isEmpty) {
-        try {
-          final uh = await _supabase
-              .from('user_handling')
-              .select('id, usernames')
-              .eq('auth_uid', current.id)
-              .maybeSingle();
-          if (uh != null) {
-            final uhId = (uh['id'] ?? '').toString();
-            final username = (uh['usernames'] ?? '').toString();
-            Map<String, dynamic>? adminRow;
-            if (uhId.isNotEmpty) {
-              final ar = await _supabase
-                  .from('admins')
-                  .select('faculty_id, faculty_name')
-                  .eq('user_handling_id', uhId)
-                  .maybeSingle();
-              if (ar != null) adminRow = ar;
-            }
-            if (adminRow == null && username.isNotEmpty) {
-              final ar2 = await _supabase
-                  .from('admins')
-                  .select('faculty_id, faculty_name')
-                  .eq('username', username)
-                  .maybeSingle();
-              if (ar2 != null) adminRow = ar2;
-            }
-            if (adminRow != null) {
-              final fid = (adminRow['faculty_id'] ?? '').toString();
-              if (fid.isNotEmpty) {
-                facultyId = fid;
-                debugPrint(
-                  'UseAdmins.fetchAdmins: fallback facultyId from adminRow=$facultyId',
-                );
-              } else {
-                final fname = (adminRow['faculty_name'] ?? '').toString();
-                if (fname.isNotEmpty) {
-                  final f = await _supabase
-                      .from('faculties')
-                      .select('id')
-                      .eq('faculty_name', fname)
-                      .maybeSingle();
-                  if (f != null && f['id'] != null) {
-                    facultyId = f['id'].toString();
-                    debugPrint(
-                      'UseAdmins.fetchAdmins: fallback facultyName->id $facultyId',
-                    );
+      // If authenticated, try to determine faculty_id of current admin (restrict results)
+      String? facultyId;
+      // try to find mapping in user_handling using auth_uid
+      try {
+        final uh = await _supabase
+            .from('user_handling')
+            .select('id, username, role, faculty_id')
+            .eq('auth_uid', current.id)
+            .maybeSingle();
+        if (uh != null) {
+          final role = (uh['role'] ?? '').toString().trim().toLowerCase();
+          if (role == 'admin' ||
+              role == 'faculty admin' ||
+              role == 'faculty_admin') {
+            // prefer faculty_id column on user_handling if set
+            final fid = (uh['faculty_id'] ?? '').toString();
+            if (fid.isNotEmpty) {
+              facultyId = fid;
+            } else {
+              // try admins table by username
+              final username = (uh['username'] ?? '').toString();
+              if (username.isNotEmpty) {
+                final ar = await _supabase
+                    .from('admins')
+                    .select('faculty_id, faculty_name')
+                    .eq('username', username)
+                    .maybeSingle();
+                if (ar != null) {
+                  final aFid = (ar['faculty_id'] ?? '').toString();
+                  if (aFid.isNotEmpty)
+                    facultyId = aFid;
+                  else {
+                    final fname = (ar['faculty_name'] ?? '').toString();
+                    if (fname.isNotEmpty) {
+                      final f = await _supabase
+                          .from('faculties')
+                          .select('id')
+                          .eq('faculty_name', fname)
+                          .maybeSingle();
+                      if (f != null && f['id'] != null)
+                        facultyId = f['id'].toString();
+                    }
                   }
                 }
               }
             }
           }
-        } catch (e) {
-          debugPrint('UseAdmins.fetchAdmins: fallback lookup error: $e');
         }
+      } catch (e) {
+        debugPrint('faculty resolution error: $e');
       }
 
+      // Query admins: if facultyId known, filter; else return empty to avoid leaking
       List<dynamic> rows = [];
-
       if (facultyId != null && facultyId.isNotEmpty) {
-        // Query admins by faculty_id; select nested faculty relation so UI can show name
-        try {
-          rows = await _supabase
-              .from('admins')
-              .select(
-                'id, username, full_name, faculty_id, faculty:faculties(id,faculty_name), password, created_at',
-              )
-              .eq('faculty_id', facultyId)
-              .order('created_at', ascending: false);
-          debugPrint(
-            'UseAdmins.fetchAdmins: rows by faculty_id -> ${rows.length}',
-          );
-        } catch (e) {
-          debugPrint('UseAdmins.fetchAdmins: query by faculty_id failed: $e');
-          rows = [];
-        }
-
-        // Fallback: if no rows, try matching by faculty_name
-        if (rows.isEmpty) {
-          try {
-            final f = await _supabase
-                .from('faculties')
-                .select('faculty_name')
-                .eq('id', facultyId)
-                .maybeSingle();
-            final facultyName = (f == null)
-                ? ''
-                : (f['faculty_name'] ?? '').toString();
-            if (facultyName.isNotEmpty) {
-              rows = await _supabase
-                  .from('admins')
-                  .select(
-                    'id, username, full_name, faculty_name, password, created_at',
-                  )
-                  .eq('faculty_name', facultyName)
-                  .order('created_at', ascending: false);
-              debugPrint(
-                'UseAdmins.fetchAdmins: rows by faculty_name -> ${rows.length}',
-              );
-            }
-          } catch (_) {
-            rows = [];
-          }
-        }
+        rows = await _supabase
+            .from('admins')
+            .select(
+              'id, username, full_name, faculty_id, faculty:faculties(id,faculty_name), password, created_at',
+            )
+            .eq('faculty_id', facultyId)
+            .order('created_at', ascending: false);
+      } else {
+        // if no faculty resolved, return empty list (safe)
+        return <Admin>[];
       }
-
-      // If we still don't have a resolved faculty or rows, return empty list to avoid leaking data
-      if (rows.isEmpty) return <Admin>[];
 
       return rows
           .map((e) => Admin.fromJson(e as Map<String, dynamic>))
           .toList();
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('fetchAdmins error: $e\n$st');
       throw Exception('Failed to fetch admins: $e');
     }
   }
 
   Future<void> addAdmin(Admin admin) async {
     try {
-      final payload = admin.toJson();
-      // Insert admin and get the inserted row (to get the id)
-      final inserted = await _supabase
-          .from('admins')
-          .insert(payload)
-          .select()
-          .maybeSingle();
+      // Validate required fields (username + facultyId expected)
+      final username = admin.username?.trim() ?? '';
+      final password = admin.password?.trim() ?? '';
+      final facultyId = admin.facultyId?.trim();
 
-      if (inserted == null || inserted['id'] == null) {
-        throw Exception('Failed to insert admin');
+      if (username.isEmpty) {
+        throw Exception('Admin username is required');
       }
-      final adminId = inserted['id'] as String;
-      final username = admin.username ?? '';
-      final password = admin.password ?? '';
-
-      // Upsert user_handling row
-      final uhId = await upsertUserHandling(
-        _supabase,
-        username,
-        'admin',
-        password,
-      );
-
-      // NOTE: the DB schema links admins -> user_handling by username, not by
-      // an id FK. If you have a user_handling_id column in admins, change this
-      // to update that column. Otherwise we ensure username is present.
-      if (uhId != null && uhId.isNotEmpty) {
-        await _supabase
-            .from('admins')
-            .update({'username': username})
-            .eq('id', adminId);
+      if (password.isEmpty) {
+        throw Exception('Admin password is required');
       }
-    } catch (e) {
+
+      // Resolve actor (creator). We need a canonical username to pass to the RPC.
+      final creator = await _resolveCurrentUsername();
+
+      if (creator.isEmpty) {
+        debugPrint(
+          'addAdmin: no authenticated creator found - RPC call may fail authentication/authorization checks',
+        );
+      }
+
+      // If you require facultyId, validate here and throw / show validation in UI if missing.
+      if (facultyId == null || facultyId.isEmpty) {
+        debugPrint(
+          'addAdmin: facultyId is missing - admin will be created with p_faculty_id=null unless your UI prevents it',
+        );
+      }
+
+      final params = {
+        'p_full_name': admin.fullName ?? '',
+        'p_username': username,
+        'p_password': password,
+        'p_faculty_id': (facultyId != null && facultyId.isNotEmpty)
+            ? facultyId
+            : null,
+        'p_created_by': creator,
+      };
+
+      debugPrint('create_admin RPC params: $params');
+      try {
+        final res = await _supabase.rpc('create_admin', params: params);
+        debugPrint('create_admin RPC response: ${res ?? '<<null>>'}');
+      } catch (e) {
+        if (e is PostgrestException) {
+          debugPrint('create_admin RPC error: ${e.message} (code: ${e.code})');
+          debugPrint('Details: ${e.details}, Hint: ${e.hint}');
+          rethrow;
+        }
+        rethrow;
+      }
+    } catch (e, st) {
+      debugPrint('addAdmin error: $e\n$st');
       throw Exception('Failed to add admin: $e');
     }
   }
 
   Future<void> updateAdmin(String id, Admin admin) async {
     try {
-      final payload = admin.toJson();
+      // Resolve actor username (must be someone with permission e.g., super_admin)
+      final actor = await _resolveCurrentUsername();
 
-      // Fetch existing admin row to get old username and possible user_handling link
-      final existing = await _supabase
-          .from('admins')
-          .select('username, user_handling_id')
-          .eq('id', id)
-          .maybeSingle();
-
-      final oldUsername = (existing != null && existing['username'] != null)
-          ? existing['username'].toString().trim()
-          : '';
-      final existingUhId =
-          (existing != null && existing['user_handling_id'] != null)
-          ? existing['user_handling_id'].toString()
-          : null;
-
-      await _supabase.from('admins').update(payload).eq('id', id);
-
-      // Try to update existing user_handling row first to avoid duplicates
-      try {
-        final newUsername = (admin.username ?? '').trim();
-        final newPassword = (admin.password ?? '').trim();
-
-        String? uhId;
-
-        if (existingUhId != null && existingUhId.isNotEmpty) {
-          final updateData = <String, dynamic>{
-            if (newUsername.isNotEmpty) 'usernames': newUsername,
-            'role': 'admin',
-            if (newPassword.isNotEmpty) 'passwords': newPassword,
-          };
-
-          try {
-            final updated = await _supabase
-                .from('user_handling')
-                .update(updateData)
-                .eq('id', existingUhId)
-                .select()
-                .maybeSingle();
-            if (updated != null && updated['id'] != null)
-              uhId = updated['id'] as String;
-          } catch (e) {
-            debugPrint(
-              'Failed to update user_handling by id $existingUhId: $e',
-            );
-          }
-        }
-
-        if ((uhId == null || uhId.isEmpty) && oldUsername.isNotEmpty) {
-          try {
-            final updated = await _supabase
-                .from('user_handling')
-                .update({
-                  if (newUsername.isNotEmpty) 'usernames': newUsername,
-                  'role': 'admin',
-                  if (newPassword.isNotEmpty) 'passwords': newPassword,
-                })
-                .eq('usernames', oldUsername)
-                .select()
-                .maybeSingle();
-            if (updated != null && updated['id'] != null)
-              uhId = updated['id'] as String;
-          } catch (e) {
-            debugPrint(
-              'Failed to update user_handling by old username $oldUsername: $e',
-            );
-          }
-        }
-
-        // Fallback to upsert if we still have no id
-        if (uhId == null || uhId.isEmpty) {
-          try {
-            final created = await upsertUserHandling(
-              _supabase,
-              newUsername,
-              'admin',
-              newPassword,
-            );
-            if (created != null && created.isNotEmpty) uhId = created;
-          } catch (e) {
-            debugPrint(
-              'Fallback upsertUserHandling failed for $newUsername: $e',
-            );
-          }
-        }
-
-        if (uhId != null && uhId.isNotEmpty) {
-          await _supabase
-              .from('admins')
-              .update({'user_handling_id': uhId, 'user_id': uhId})
-              .eq('id', id);
-        }
-      } catch (e) {
+      if (actor.isEmpty) {
         debugPrint(
-          'Failed to upsert/link user_handling for admin ${admin.username}: $e',
+          'updateAdmin: no authenticated actor available; p_updated_by will be empty',
         );
       }
-    } catch (e) {
+
+      final pFacultyId =
+          (admin.facultyId != null && admin.facultyId!.trim().isNotEmpty)
+          ? admin.facultyId!.trim()
+          : null;
+
+      final params = {
+        'p_username': admin.username ?? '',
+        'p_full_name': admin.fullName ?? '',
+        'p_password': admin.password ?? '',
+        'p_faculty_id': pFacultyId,
+        'p_updated_by': actor,
+      };
+
+      debugPrint('update_admin RPC params: $params');
+
+      try {
+        final res = await _supabase.rpc('update_admin', params: params);
+        debugPrint('update_admin RPC response: ${res ?? '<<null>>'}');
+      } catch (e) {
+        if (e is PostgrestException) {
+          debugPrint('update_admin RPC error: ${e.message} (code: ${e.code})');
+          debugPrint('Details: ${e.details}, Hint: ${e.hint}');
+          rethrow;
+        }
+        rethrow;
+      }
+    } catch (e, st) {
+      debugPrint('updateAdmin error: $e\n$st');
       throw Exception('Failed to update admin: $e');
     }
   }
 
   Future<void> deleteAdmin(String id) async {
     try {
-      // Fetch the admin row to get the username or user_handling_id
-      final admin = await _supabase
+      // Find admin username by id
+      final existing = await _supabase
           .from('admins')
-          .select('username, user_handling_id')
+          .select('username')
           .eq('id', id)
           .maybeSingle();
+      final username = (existing != null && existing['username'] != null)
+          ? existing['username'].toString()
+          : '';
 
-      String? username = admin?['username'] as String?;
-      String? uhId = admin?['user_handling_id'] as String?;
-
-      // Delete the admin row
-      await _supabase.from('admins').delete().eq('id', id);
-
-      // Delete the user_handling row (by id if possible, else by username)
-      if (uhId != null && uhId.isNotEmpty) {
-        await _supabase.from('user_handling').delete().eq('id', uhId);
-      } else if (username != null && username.isNotEmpty) {
-        await _supabase
-            .from('user_handling')
-            .delete()
-            .eq('usernames', username);
+      if (username.isEmpty) {
+        throw Exception('Admin username not found for id $id');
       }
-    } catch (e) {
-      throw Exception('Failed to delete admin: $e');
-    }
-  }
 
-  // Load FK options for popup dropdown
-  Future<List<String>> fetchFacultyNames() async {
-    try {
-      final List<dynamic> rows = await _supabase
-          .from('faculties')
-          .select('faculty_name');
-      return rows
-          .map((e) => (e as Map<String, dynamic>)['faculty_name'] as String)
-          .where((s) => s.isNotEmpty)
-          .toList();
-    } catch (e) {
-      throw Exception('Failed to fetch faculty names: $e');
+      final actor = await _resolveCurrentUsername();
+      if (actor.isEmpty) {
+        debugPrint(
+          'deleteAdmin: no authenticated actor available; p_deleted_by will be empty',
+        );
+      }
+
+      final delParams = {'p_username': username, 'p_deleted_by': actor};
+      debugPrint('delete_admin RPC params: $delParams');
+
+      try {
+        final res = await _supabase.rpc('delete_admin', params: delParams);
+        debugPrint('delete_admin RPC response: ${res ?? '<<null>>'}');
+      } catch (e) {
+        if (e is PostgrestException) {
+          debugPrint('delete_admin RPC error: ${e.message} (code: ${e.code})');
+          debugPrint('Details: ${e.details}, Hint: ${e.hint}');
+          rethrow;
+        }
+        rethrow;
+      }
+    } catch (e, st) {
+      debugPrint('deleteAdmin error: $e\n$st');
+      throw Exception('Failed to delete admin: $e');
     }
   }
 }

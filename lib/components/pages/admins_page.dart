@@ -17,6 +17,7 @@ class _AdminsPageState extends State<AdminsPage> {
 
   List<api.Admin> _admins = [];
   List<String> _facultyNames = [];
+  Map<String, String> _facultyNameToId = {};
 
   bool _isLoading = false;
   String? _loadError;
@@ -53,6 +54,7 @@ class _AdminsPageState extends State<AdminsPage> {
 
     List<api.Admin> admins = [];
     List<String> faculties = [];
+    final Map<String, String> nameToId = {};
     String? err;
 
     try {
@@ -64,7 +66,12 @@ class _AdminsPageState extends State<AdminsPage> {
     }
 
     try {
-      faculties = await _useAdmins.fetchFacultyNames();
+      final facs = await _useAdmins.fetchFaculties();
+      for (final f in facs) {
+        nameToId[f['name'] ?? ''] = f['id'] ?? '';
+      }
+      faculties = nameToId.keys.toList()..sort();
+      _facultyNameToId = nameToId;
       debugPrint('AdminsPage._loadAll: fetched ${faculties.length} faculties');
     } catch (e, st) {
       debugPrint('AdminsPage._loadAll: fetchFacultyNames failed: $e\n$st');
@@ -150,11 +157,14 @@ class _AdminsPageState extends State<AdminsPage> {
         if (existing.isNotEmpty) {
           await _useAdmins.deleteAdmin(existing.first.id);
         }
+        // Convert faculty name to id for the DB insert (if available)
+        final facultyId = _facultyNameToId[result.facultyName] ?? null;
         final admin = api.Admin(
           id: '', // DB will generate uuid
           username: result.id,
           fullName: result.fullName,
           facultyName: result.facultyName,
+          facultyId: facultyId,
           password: result.password,
           createdAt: DateTime.now(),
         );
@@ -221,11 +231,13 @@ class _AdminsPageState extends State<AdminsPage> {
         if (existing.isNotEmpty) {
           await _useAdmins.deleteAdmin(existing.first.id);
         }
+        final facultyId = _facultyNameToId[result.facultyName] ?? null;
         final updated = api.Admin(
           id: admin.id, // keep DB uuid
           username: result.id,
           fullName: result.fullName,
           facultyName: result.facultyName,
+          facultyId: facultyId,
           password: result.password,
           createdAt: admin.createdAt,
         );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/faculty.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../hooks/use_faculties.dart';
 import '../popup/add_faculty_popup.dart';
 import '../cards/searchBar.dart';
@@ -58,12 +59,16 @@ class _FacultiesPageState extends State<FacultiesPage> {
   }
 
   Future<void> _showAddFacultyPopup() async {
+    final currentUsername =
+        Supabase.instance.client.auth.currentUser?.email ??
+        Supabase.instance.client.auth.currentUser?.id ??
+        '';
     final result = await showDialog<Faculty>(
       context: context,
-      builder: (context) => const AddFacultyPopup(),
+      builder: (context) => AddFacultyPopup(currentUsername: currentUsername),
     );
     if (result != null) {
-      await _useFaculties.addFaculty(result);
+      // The popup performs the RPC (create/update). Just refresh the list.
       await _fetchFaculties();
     }
   }
@@ -71,12 +76,17 @@ class _FacultiesPageState extends State<FacultiesPage> {
   Future<void> _showEditFacultyPopup() async {
     if (_selectedIndex == null) return;
     final faculty = _filteredFaculties[_selectedIndex!];
+    final currentUsername =
+        Supabase.instance.client.auth.currentUser?.email ??
+        Supabase.instance.client.auth.currentUser?.id ??
+        '';
     final result = await showDialog<Faculty>(
       context: context,
-      builder: (context) => AddFacultyPopup(faculty: faculty),
+      builder: (context) =>
+          AddFacultyPopup(faculty: faculty, currentUsername: currentUsername),
     );
     if (result != null) {
-      await _useFaculties.updateFaculty(faculty.code, result);
+      // Popup already ran the update RPC; refresh list.
       await _fetchFaculties();
     }
   }

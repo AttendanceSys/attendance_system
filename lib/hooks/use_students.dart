@@ -12,11 +12,17 @@ class UseStudents {
       if (current == null) return null;
       final authUid = current.id;
 
-      final uh = await _supabase
-          .from('user_handling')
-          .select('id, usernames, role')
-          .eq('auth_uid', authUid)
-          .maybeSingle();
+      Map<String, dynamic>? uh;
+      try {
+        final res = await _supabase
+            .from('user_handling')
+            .select('id, usernames, role')
+            .eq('auth_uid', authUid)
+            .maybeSingle();
+        if (res != null) uh = res as Map<String, dynamic>?;
+      } catch (e) {
+        debugPrint('user_handling auth_uid lookup failed in students: $e');
+      }
       if (uh == null) return null;
       final role = (uh['role'] ?? '').toString().trim().toLowerCase();
       if (role != 'admin') return null;
