@@ -34,5 +34,23 @@
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+  <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-auth.js"></script>
+
+  <script>
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBeSSiJHWeh8Www64JQKx6LhcjfT7zTlrI",
+      authDomain: "attendancesystem-9350f.firebaseapp.com",
+      projectId: "attendancesystem-9350f",
+      storageBucket: "attendancesystem-9350f.appspot.com",
+      messagingSenderId: "15742427682",
+      appId: "1:15742427682:web:2534bdb5287500318fe07b"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+  </script>
 </body>
 </html>

@@ -43,7 +43,7 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
       ),
     ),
     FacultiesPage(),
-    LecturersPage(),
+    TeachersPage(),
     AdminsPage(),
     UserHandlingPage(),
   ];

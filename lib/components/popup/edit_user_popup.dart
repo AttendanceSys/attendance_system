@@ -53,13 +53,14 @@ class _EditUserPopupState extends State<EditUserPopup> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "Edit Users",
+                  "Edit User",
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _username,
                   decoration: const InputDecoration(
+                    hintText: "Username",
                     border: OutlineInputBorder(),
                   ),
                   validator: (val) =>
@@ -70,6 +71,7 @@ class _EditUserPopupState extends State<EditUserPopup> {
                 TextFormField(
                   initialValue: _password,
                   decoration: const InputDecoration(
+                    hintText: "Password",
                     border: OutlineInputBorder(),
                   ),
                   validator: (val) =>
@@ -110,9 +112,14 @@ class _EditUserPopupState extends State<EditUserPopup> {
                           if (_formKey.currentState!.validate()) {
                             Navigator.of(context).pop(
                               AppUser(
+                                id: widget.user.id,
                                 username: _username,
                                 role: widget.user.role,
                                 password: _password,
+                                facultyId: widget.user.facultyId,
+                                status: widget.user.status, // Retain current status
+                                createdAt: widget.user.createdAt,
+                                updatedAt: DateTime.now(), // Updated timestamp
                               ),
                             );
                           }

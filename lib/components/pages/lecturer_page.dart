@@ -1,68 +1,207 @@
 import 'package:flutter/material.dart';
-import '../cards/searchBar.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/lecturer.dart';
+import '../cards/searchBar.dart';
 import '../popup/add_lecturer_popup.dart';
 
-class LecturersPage extends StatefulWidget {
-  const LecturersPage({super.key});
+class TeachersPage extends StatefulWidget {
+  const TeachersPage({super.key});
 
   @override
-  State<LecturersPage> createState() => _LecturersPageState();
+  State<TeachersPage> createState() => _TeachersPageState();
 }
 
-class _LecturersPageState extends State<LecturersPage> {
-  final List<Lecturer> _lecturers = [
-    Lecturer(id: 'SNU1234', name: 'Cali', password: '*******'),
-    Lecturer(id: 'SNU5678', name: 'Amina', password: '*******'),
-    Lecturer(id: 'SNU9101', name: 'Yusuf', password: '*******'),
-    Lecturer(id: 'SNU1121', name: 'Fatima', password: '*******'),
-  ];
+class _TeachersPageState extends State<TeachersPage> {
+  final CollectionReference teachersCollection = FirebaseFirestore.instance
+      .collection('teachers');
+  final CollectionReference facultiesCollection = FirebaseFirestore.instance
+      .collection('faculties');
+  final CollectionReference usersCollection = FirebaseFirestore.instance
+      .collection('users');
 
+  List<Teacher> _teachers = [];
+  List<String> _facultyNames = [];
   String _searchText = '';
   int? _selectedIndex;
 
-  List<Lecturer> get _filteredLecturers => _lecturers
-      .where((lecturer) =>
-          lecturer.id.toLowerCase().contains(_searchText.toLowerCase()) ||
-          lecturer.name.toLowerCase().contains(_searchText.toLowerCase()))
-      .toList();
+  @override
+  void initState() {
+    super.initState();
+    _fetchTeachers();
+    _fetchFaculties();
+  }
 
-  Future<void> _showAddLecturerPopup() async {
-    final result = await showDialog<Lecturer>(
-      context: context,
-      builder: (context) => const AddLecturerPopup(),
-    );
-    if (result != null) {
+  Future<void> _fetchTeachers() async {
+    try {
+      final snapshot = await teachersCollection.get();
+
       setState(() {
-        _lecturers.add(result);
-        _selectedIndex = null;
+        _teachers = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+
+          return Teacher(
+            id: doc.id, // Auto-generated Firestore document ID
+            teacherName: data['teacher_name'] ?? '',
+            username: data['username'] ?? '',
+            password: data['password'] ?? '',
+            facultyId: (data['faculty_id'] as DocumentReference?)?.id ?? '',
+            createdAt:
+                (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          );
+        }).toList();
       });
+
+      print("Fetched ${_teachers.length} teachers");
+    } catch (e) {
+      print("Error fetching teachers: $e");
     }
   }
 
-  Future<void> _showEditLecturerPopup() async {
-    if (_selectedIndex == null) return;
-    final lecturer = _filteredLecturers[_selectedIndex!];
-    final result = await showDialog<Lecturer>(
-      context: context,
-      builder: (context) => AddLecturerPopup(lecturer: lecturer),
-    );
-    if (result != null) {
-      int mainIndex = _lecturers.indexOf(lecturer);
+  Future<void> _fetchFaculties() async {
+    try {
+      final snapshot = await facultiesCollection.get();
+
       setState(() {
-        _lecturers[mainIndex] = result;
+        _facultyNames = snapshot.docs
+            .map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return data['faculty_name'] ?? '';
+            })
+            .cast<String>()
+            .toList(); // Explicitly cast to List<String>
       });
+
+      print("Fetched ${_facultyNames.length} faculties");
+    } catch (e) {
+      print("Error fetching faculties: $e");
     }
   }
 
-  Future<void> _confirmDeleteLecturer() async {
+  Future<void> _addTeacher(Teacher teacher) async {
+    final teacherData = {
+      'teacher_name': teacher.teacherName,
+      'username': teacher.username,
+      'password': teacher.password,
+      'faculty_id': FirebaseFirestore.instance.doc(
+        '/faculties/${teacher.facultyId}',
+      ),
+      'created_at': FieldValue.serverTimestamp(),
+    };
+
+    final userData = {
+      'username': teacher.username,
+      'password': teacher.password,
+      'role': 'teacher',
+      'faculty_id': FirebaseFirestore.instance.doc(
+        '/faculties/${teacher.facultyId}',
+      ),
+      'created_at': FieldValue.serverTimestamp(),
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+
+    // Add to teachers collection
+    await teachersCollection.add(teacherData);
+
+    // Add to users collection
+    await usersCollection.add(userData);
+
+    _fetchTeachers();
+  }
+
+  Future<void> _updateTeacher(Teacher teacher) async {
+    final teacherData = {
+      'teacher_name': teacher.teacherName,
+      'username': teacher.username,
+      'password': teacher.password,
+      'faculty_id': FirebaseFirestore.instance.doc(
+        '/faculties/${teacher.facultyId}',
+      ),
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+
+    final userData = {
+      'username': teacher.username,
+      'password': teacher.password,
+      'faculty_id': FirebaseFirestore.instance.doc(
+        '/faculties/${teacher.facultyId}',
+      ),
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+
+    // Fetch the old teacher data to check for username changes
+    final oldTeacherSnapshot = await teachersCollection.doc(teacher.id).get();
+    final oldTeacherData = oldTeacherSnapshot.data() as Map<String, dynamic>;
+    final oldUsername = oldTeacherData['username'];
+
+    // Update in teachers collection
+    await teachersCollection.doc(teacher.id).update(teacherData);
+
+    // Update in users collection
+    await usersCollection
+        .where(
+          'username',
+          isEqualTo: oldUsername,
+        ) // Use old username to find the user
+        .get()
+        .then((snapshot) {
+          for (var doc in snapshot.docs) {
+            doc.reference.update(userData);
+          }
+        });
+
+    _fetchTeachers();
+  }
+
+  Future<void> _deleteTeacher(Teacher teacher) async {
+    // Delete from teachers collection
+    await teachersCollection.doc(teacher.id).delete();
+
+    // Delete from users collection
+    await usersCollection
+        .where('username', isEqualTo: teacher.username)
+        .get()
+        .then((snapshot) {
+          for (var doc in snapshot.docs) {
+            doc.reference.delete();
+          }
+        });
+
+    _fetchTeachers();
+  }
+
+  Future<void> _showAddTeacherPopup() async {
+    final result = await showDialog<Teacher>(
+      context: context,
+      builder: (context) => AddTeacherPopup(facultyNames: _facultyNames),
+    );
+    if (result != null) {
+      _addTeacher(result);
+    }
+  }
+
+  Future<void> _showEditTeacherPopup() async {
     if (_selectedIndex == null) return;
-    final lecturer = _filteredLecturers[_selectedIndex!];
+    final teacher = _teachers[_selectedIndex!];
+    final result = await showDialog<Teacher>(
+      context: context,
+      builder: (context) =>
+          AddTeacherPopup(teacher: teacher, facultyNames: _facultyNames),
+    );
+    if (result != null) {
+      _updateTeacher(result);
+    }
+  }
+
+  Future<void> _confirmDeleteTeacher() async {
+    if (_selectedIndex == null) return;
+    final teacher = _teachers[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Lecturer"),
-        content: Text("Are you sure you want to delete '${lecturer.name}'?"),
+        title: const Text("Delete Teacher"),
+        content: Text(
+          "Are you sure you want to delete '${teacher.teacherName}'?",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -77,10 +216,7 @@ class _LecturersPageState extends State<LecturersPage> {
       ),
     );
     if (confirm == true) {
-      setState(() {
-        _lecturers.remove(lecturer);
-        _selectedIndex = null;
-      });
+      _deleteTeacher(teacher);
     }
   }
 
@@ -102,7 +238,7 @@ class _LecturersPageState extends State<LecturersPage> {
         children: [
           const SizedBox(height: 8),
           const Text(
-            "Lecturers",
+            "Teachers",
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -118,9 +254,9 @@ class _LecturersPageState extends State<LecturersPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SearchAddBar(
-                      hintText: "Search Lecturer...",
-                      buttonText: "Add Lecturer",
-                      onAddPressed: _showAddLecturerPopup,
+                      hintText: "Search Teacher...",
+                      buttonText: "Add Teacher",
+                      onAddPressed: _showAddTeacherPopup,
                       onChanged: (value) {
                         setState(() {
                           _searchText = value;
@@ -141,12 +277,20 @@ class _LecturersPageState extends State<LecturersPage> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _showEditLecturerPopup,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _showEditTeacherPopup,
                             child: const Text(
                               "Edit",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -160,12 +304,20 @@ class _LecturersPageState extends State<LecturersPage> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _confirmDeleteLecturer,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _confirmDeleteTeacher,
                             child: const Text(
                               "Delete",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -200,10 +352,10 @@ class _LecturersPageState extends State<LecturersPage> {
   Widget _buildDesktopTable() {
     return Table(
       columnWidths: const {
-        0: FixedColumnWidth(64),   // No
-        1: FixedColumnWidth(140),  // Lecturer ID
-        2: FixedColumnWidth(140),  // Lecturer Name
-        3: FixedColumnWidth(120),  // Password
+        0: FixedColumnWidth(64), // No
+        1: FixedColumnWidth(140), // Username
+        2: FixedColumnWidth(140), // Teacher Name
+        3: FixedColumnWidth(120), // Faculty
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -212,21 +364,32 @@ class _LecturersPageState extends State<LecturersPage> {
         TableRow(
           children: [
             _tableHeaderCell("No"),
-            _tableHeaderCell("Lecturer ID"),
-            _tableHeaderCell("Lecturer Name"),
-            _tableHeaderCell("Password"),
+            _tableHeaderCell("Username"),
+            _tableHeaderCell("Teacher Name"),
+            _tableHeaderCell("Faculty"),
           ],
         ),
-        for (int index = 0; index < _filteredLecturers.length; index++)
+        for (int index = 0; index < _teachers.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredLecturers[index].id, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredLecturers[index].name, onTap: () => _handleRowTap(index)),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _teachers[index].username,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _teachers[index].teacherName,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _teachers[index].facultyId,
+                onTap: () => _handleRowTap(index),
+              ),
             ],
           ),
       ],
@@ -243,21 +406,32 @@ class _LecturersPageState extends State<LecturersPage> {
         TableRow(
           children: [
             _tableHeaderCell("No"),
-            _tableHeaderCell("Lecturer ID"),
-            _tableHeaderCell("Lecturer Name"),
-            _tableHeaderCell("Password"),
+            _tableHeaderCell("Username"),
+            _tableHeaderCell("Teacher Name"),
+            _tableHeaderCell("Faculty"),
           ],
         ),
-        for (int index = 0; index < _filteredLecturers.length; index++)
+        for (int index = 0; index < _teachers.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredLecturers[index].id, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredLecturers[index].name, onTap: () => _handleRowTap(index)),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _teachers[index].username,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _teachers[index].teacherName,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _teachers[index].facultyId,
+                onTap: () => _handleRowTap(index),
+              ),
             ],
           ),
       ],
@@ -281,10 +455,7 @@ class _LecturersPageState extends State<LecturersPage> {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(
-          text,
-          overflow: TextOverflow.ellipsis,
-        ),
+        child: Text(text, overflow: TextOverflow.ellipsis),
       ),
     );
   }

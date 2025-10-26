@@ -4,6 +4,8 @@ import 'package:attendance_system/screens/faculty_admin_page.dart';
 import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
 // <-- Import your teacher page!
 import 'package:attendance_system/screens/teacher_main_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,7 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
   bool _isLoggingIn = false;
 
-  void _handleLogin() {
+  void _handleLogin() async {
     if (_isLoggingIn) return;
     setState(() {
       _isLoggingIn = true;
@@ -26,55 +28,64 @@ class _LoginScreenState extends State<LoginScreen> {
 
     String username = _usernameController.text.trim();
     String password = _passwordController.text;
-    final bool isMobile = MediaQuery.of(context).size.width < 600;
 
-    // Example credentials
-    if (username == 'admin' && password == 'admin123') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const SuperAdminPage()),
-      ).then((_) {
-        if (mounted) setState(() => _isLoggingIn = false);
-      });
-    } else if (username == 'a' && password == 'b') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const FacultyAdminPage()),
-      ).then((_) {
-        if (mounted) setState(() => _isLoggingIn = false);
-      });
-    } else if (username == 'student' && password == 'student123') {
-      if (!isMobile) {
-        // Only allow student login on mobile devices
-        setState(() {
-          _errorMessage = 'Student login is allowed on mobile devices only.';
-          _isLoggingIn = false;
-        });
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const StudentViewAttendanceMobile()),
-        ).then((_) {
-          if (mounted) setState(() => _isLoggingIn = false);
-        });
-      }
-    }
-    // Teacher login
-    else if (username == 'teacher' && password == 'teacher123') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const TeacherMainPage()),
-      ).then((_) {
-        if (mounted) setState(() => _isLoggingIn = false);
-      });
-    }
-    else {
-      if (mounted) {
+    try {
+      // Query the users collection
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('username', isEqualTo: username)
+          .where('password', isEqualTo: password)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        // No matching user found
         setState(() {
           _errorMessage = 'Invalid username or password';
           _isLoggingIn = false;
         });
+        return;
       }
+
+      // Get the user data
+      final userData = snapshot.docs.first.data();
+      final role = userData['role'];
+      final status = userData['status'];
+
+      // Check if the user is disabled
+      if (status == 'disabled') {
+        setState(() {
+          _errorMessage = 'Your account is disabled';
+          _isLoggingIn = false;
+        });
+        return;
+      }
+      // Navigate based on role
+      if (role == 'Super admin') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const SuperAdminPage()),
+        );
+      } else if (role == 'admin') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const FacultyAdminPage()),
+        );
+      } else if (role == 'teacher') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const TeacherMainPage()),
+        );
+      } else {
+        setState(() {
+          _errorMessage = 'Role not supported';
+          _isLoggingIn = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'An error occurred during login';
+        _isLoggingIn = false;
+      });
     }
   }
 

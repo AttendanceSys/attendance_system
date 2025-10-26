@@ -1,25 +1,20 @@
 import 'package:flutter/material.dart';
-import '../../models/user_model.dart';
+import '../../models/user.dart';
 
-class EditUserPopup extends StatefulWidget {
-  final AppUser user;
-  const EditUserPopup({super.key, required this.user});
+class AddUserPopup extends StatefulWidget {
+  const AddUserPopup({super.key});
 
   @override
-  State<EditUserPopup> createState() => _EditUserPopupState();
+  State<AddUserPopup> createState() => _AddUserPopupState();
 }
 
-class _EditUserPopupState extends State<EditUserPopup> {
+class _AddUserPopupState extends State<AddUserPopup> {
   final _formKey = GlobalKey<FormState>();
-  late String _username;
-  late String _password;
-
-  @override
-  void initState() {
-    super.initState();
-    _username = widget.user.username;
-    _password = widget.user.password;
-  }
+  String? _username;
+  String? _password;
+  String? _role;
+  String? _facultyId;
+  String? _status;
 
   @override
   Widget build(BuildContext context) {
@@ -53,13 +48,13 @@ class _EditUserPopupState extends State<EditUserPopup> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "Edit Users",
+                  "Add User",
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: _username,
                   decoration: const InputDecoration(
+                    hintText: "Username",
                     border: OutlineInputBorder(),
                   ),
                   validator: (val) =>
@@ -68,14 +63,50 @@ class _EditUserPopupState extends State<EditUserPopup> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  initialValue: _password,
                   decoration: const InputDecoration(
+                    hintText: "Password",
                     border: OutlineInputBorder(),
                   ),
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter password" : null,
                   obscureText: true,
                   onChanged: (val) => _password = val,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(
+                    hintText: "Role",
+                    border: OutlineInputBorder(),
+                  ),
+                  items: ['teacher', 'admin', 'student', 'super_admin']
+                      .map((role) =>
+                          DropdownMenuItem(value: role, child: Text(role)))
+                      .toList(),
+                  onChanged: (val) => setState(() => _role = val),
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Select role" : null,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(
+                    hintText: "Status",
+                    border: OutlineInputBorder(),
+                  ),
+                  items: ['active', 'inactive', 'disabled']
+                      .map((status) =>
+                          DropdownMenuItem(value: status, child: Text(status)))
+                      .toList(),
+                  onChanged: (val) => setState(() => _status = val),
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Select status" : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  decoration: const InputDecoration(
+                    hintText: "Faculty ID (optional)",
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) => _facultyId = val,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -110,9 +141,14 @@ class _EditUserPopupState extends State<EditUserPopup> {
                           if (_formKey.currentState!.validate()) {
                             Navigator.of(context).pop(
                               AppUser(
-                                username: _username,
-                                role: widget.user.role,
-                                password: _password,
+                                id: '',
+                                username: _username!,
+                                role: _role!,
+                                password: _password!,
+                                facultyId: _facultyId ?? '',
+                                status: _status!,
+                                createdAt: DateTime.now(),
+                                updatedAt: DateTime.now(),
                               ),
                             );
                           }
@@ -144,4 +180,3 @@ class _EditUserPopupState extends State<EditUserPopup> {
     );
   }
 }
-

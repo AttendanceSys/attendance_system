@@ -1,37 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/faculty.dart';
 
-class AddFacultyPopupDemoPage extends StatelessWidget {
-  const AddFacultyPopupDemoPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Add Faculty Popup Demo')),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () async {
-            final result = await showDialog(
-              context: context,
-              builder: (context) => const AddFacultyPopup(),
-            );
-            if (result != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    "Faculty Added: ${result['facultyCode']} (${result['facultyName']})",
-                  ),
-                ),
-              );
-            }
-          },
-          child: const Text('Show Add Faculty Popup'),
-        ),
-      ),
-    );
-  }
-}
-
 class AddFacultyPopup extends StatefulWidget {
   final Faculty? faculty;
   const AddFacultyPopup({super.key, this.faculty});
@@ -51,7 +20,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
     super.initState();
     _facultyCode = widget.faculty?.code;
     _facultyName = widget.faculty?.name;
-    _establishmentDate = widget.faculty?.createdAt;
+    _establishmentDate = widget.faculty?.establishmentDate;
   }
 
   @override
@@ -83,7 +52,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start, // Left align title
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   widget.faculty == null ? "Add Faculty" : "Edit Faculty",
@@ -91,7 +60,6 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.left,
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
@@ -181,9 +149,11 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                           if (_formKey.currentState!.validate()) {
                             Navigator.of(context).pop(
                               Faculty(
+                                id: widget.faculty?.id ?? '',
                                 code: _facultyCode!,
                                 name: _facultyName!,
-                                createdAt: _establishmentDate!,
+                                createdAt: DateTime.now(),
+                                establishmentDate: _establishmentDate!,
                               ),
                             );
                           }

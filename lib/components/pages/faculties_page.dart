@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/faculty.dart';
 import '../popup/add_faculty_popup.dart';
 import '../cards/searchBar.dart';
@@ -11,23 +12,70 @@ class FacultiesPage extends StatefulWidget {
 }
 
 class _FacultiesPageState extends State<FacultiesPage> {
-  final List<Faculty> _faculties = [
-    Faculty(code: 'SCI', name: 'Science', createdAt: DateTime(2023, 6, 12)),
-    Faculty(code: 'MED', name: 'Medicine', createdAt: DateTime(2023, 6, 12)),
-    Faculty(code: 'EDU', name: 'Education', createdAt: DateTime(2023, 6, 12)),
-    Faculty(code: 'ENG', name: 'Engineering', createdAt: DateTime(2023, 6, 12)),
-  ];
+  final CollectionReference facultiesCollection =
+      FirebaseFirestore.instance.collection('faculties');
 
+  List<Faculty> _faculties = [];
   String _searchText = '';
   int? _selectedIndex;
 
-  List<Faculty> get _filteredFaculties => _faculties
-      .where(
-        (faculty) =>
-            faculty.code.toLowerCase().contains(_searchText.toLowerCase()) ||
-            faculty.name.toLowerCase().contains(_searchText.toLowerCase()),
-      )
-      .toList();
+  @override
+  void initState() {
+    super.initState();
+    _fetchFaculties();
+  }
+
+  Future<void> _fetchFaculties() async {
+    try {
+      final snapshot = await facultiesCollection.get();
+
+      if (snapshot.docs.isEmpty) {
+        print("No faculties found");
+      } else {
+        print("Fetched ${snapshot.docs.length} faculties");
+      }
+
+      setState(() {
+        _faculties = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return Faculty(
+            id: doc.id,
+            code: data['faculty_code'] ?? 'N/A',
+            name: data['faculty_name'] ?? 'N/A',
+            createdAt: (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            establishmentDate: DateTime.parse(data['establishment_date'] ?? DateTime.now().toIso8601String()),
+          );
+        }).toList();
+      });
+    } catch (e) {
+      print("Error fetching faculties: $e");
+    }
+  }
+
+  Future<void> _addFaculty(Faculty faculty) async {
+    await facultiesCollection.add({
+      'faculty_code': faculty.code,
+      'faculty_name': faculty.name,
+      'created_at': FieldValue.serverTimestamp(),
+      'establishment_date': faculty.establishmentDate.toIso8601String(),
+    });
+    _fetchFaculties();
+  }
+
+  Future<void> _updateFaculty(Faculty faculty) async {
+    await facultiesCollection.doc(faculty.id).update({
+      'faculty_code': faculty.code,
+      'faculty_name': faculty.name,
+      'created_at': FieldValue.serverTimestamp(),
+      'establishment_date': faculty.establishmentDate.toIso8601String(),
+    });
+    _fetchFaculties();
+  }
+
+  Future<void> _deleteFaculty(Faculty faculty) async {
+    await facultiesCollection.doc(faculty.id).delete();
+    _fetchFaculties();
+  }
 
   Future<void> _showAddFacultyPopup() async {
     final result = await showDialog<Faculty>(
@@ -35,31 +83,25 @@ class _FacultiesPageState extends State<FacultiesPage> {
       builder: (context) => const AddFacultyPopup(),
     );
     if (result != null) {
-      setState(() {
-        _faculties.add(result);
-        _selectedIndex = null;
-      });
+      _addFaculty(result);
     }
   }
 
   Future<void> _showEditFacultyPopup() async {
     if (_selectedIndex == null) return;
-    final faculty = _filteredFaculties[_selectedIndex!];
+    final faculty = _faculties[_selectedIndex!];
     final result = await showDialog<Faculty>(
       context: context,
       builder: (context) => AddFacultyPopup(faculty: faculty),
     );
     if (result != null) {
-      int mainIndex = _faculties.indexOf(faculty);
-      setState(() {
-        _faculties[mainIndex] = result;
-      });
+      _updateFaculty(result);
     }
   }
 
   Future<void> _confirmDeleteFaculty() async {
     if (_selectedIndex == null) return;
-    final faculty = _filteredFaculties[_selectedIndex!];
+    final faculty = _faculties[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -79,25 +121,8 @@ class _FacultiesPageState extends State<FacultiesPage> {
       ),
     );
     if (confirm == true) {
-      setState(() {
-        _faculties.remove(faculty);
-        _selectedIndex = null;
-      });
+      _deleteFaculty(faculty);
     }
-  }
-
-  String _monthString(int month) {
-    const months = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ];
-    return months[month - 1];
-  }
-
-  void _handleRowTap(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
   }
 
   @override
@@ -227,19 +252,19 @@ class _FacultiesPageState extends State<FacultiesPage> {
             _tableHeaderCell("Created At"),
           ],
         ),
-        for (int index = 0; index < _filteredFaculties.length; index++)
+        for (int index = 0; index < _faculties.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredFaculties[index].code, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredFaculties[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_faculties[index].code, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_faculties[index].name, onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                "${_filteredFaculties[index].createdAt.day.toString().padLeft(2, '0')} "
-                "${_monthString(_filteredFaculties[index].createdAt.month)} "
-                "${_filteredFaculties[index].createdAt.year}",
+                "${_faculties[index].createdAt.day.toString().padLeft(2, '0')} "
+                "${_monthString(_faculties[index].createdAt.month)} "
+                "${_faculties[index].createdAt.year}",
                 onTap: () => _handleRowTap(index),
               ),
             ],
@@ -263,19 +288,19 @@ class _FacultiesPageState extends State<FacultiesPage> {
             _tableHeaderCell("Created At"),
           ],
         ),
-        for (int index = 0; index < _filteredFaculties.length; index++)
+        for (int index = 0; index < _faculties.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredFaculties[index].code, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredFaculties[index].name, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_faculties[index].code, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(_faculties[index].name, onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                "${_filteredFaculties[index].createdAt.day.toString().padLeft(2, '0')} "
-                "${_monthString(_filteredFaculties[index].createdAt.month)} "
-                "${_filteredFaculties[index].createdAt.year}",
+                "${_faculties[index].createdAt.day.toString().padLeft(2, '0')} "
+                "${_monthString(_faculties[index].createdAt.month)} "
+                "${_faculties[index].createdAt.year}",
                 onTap: () => _handleRowTap(index),
               ),
             ],
@@ -307,5 +332,19 @@ class _FacultiesPageState extends State<FacultiesPage> {
         ),
       ),
     );
+  }
+
+  String _monthString(int month) {
+    const months = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
+    return months[month - 1];
+  }
+
+  void _handleRowTap(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 }

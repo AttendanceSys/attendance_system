@@ -192,6 +192,8 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   String? selectedSection;
   DateTime? selectedDate;
   String? selectedStudentId;
+  String? selectedStudentName;
+  String? selectedStudentClass;
   String searchText = '';
 
   // --- Calculated lists ---
@@ -327,8 +329,31 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                       searchText: searchText,
                       classSectionStudents: classSectionStudents,
                       onStudentSelected: (studentId) {
+                        // derive name and class from current selection
+                        final students =
+                            classSectionStudents[selectedClass]?[selectedSection] ??
+                            [];
+                        final student = students.firstWhere(
+                          (s) => s['id'] == studentId,
+                          orElse: () => <String, dynamic>{},
+                        );
+                        if (student.isEmpty) {
+                          // Defensive: if we can't find the student data, do not switch to details view.
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Student data not available.'),
+                            ),
+                          );
+                          return;
+                        }
                         setState(() {
                           selectedStudentId = studentId;
+                          selectedStudentName = student['name'] != null
+                              ? student['name'].toString()
+                              : null;
+                          // keep selectedClass/selectedSection for lookups; create a readable label
+                          selectedStudentClass =
+                              '$selectedClass${selectedSection != "None" ? selectedSection : ""}';
                         });
                       },
                       onStatusChanged: (studentId, newStatus) {
@@ -350,6 +375,8 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                   : showStudentDetails
                   ? StudentDetailsPanel(
                       studentId: selectedStudentId!,
+                      studentName: selectedStudentName,
+                      studentClass: selectedStudentClass,
                       selectedDate: selectedDate,
                       attendanceRecords: filteredRecordsForStudent,
                       searchText:
@@ -357,6 +384,8 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                       onBack: () {
                         setState(() {
                           selectedStudentId = null;
+                          selectedStudentName = null;
+                          selectedStudentClass = null;
                         });
                       },
                       onEdit: _updateAttendanceForStudent,
@@ -412,7 +441,7 @@ class _FiltersRow extends StatelessWidget {
       runSpacing: 12,
       children: [
         _DropdownFilter(
-          hint: "Department",
+          hint: "Dep",
           value: selectedDepartment,
           items: departments,
           onChanged: (val) => onChanged(department: val),
@@ -625,7 +654,27 @@ class _AttendanceTable extends StatelessWidget {
                     DataCell(Text(row['id']?.toString() ?? '')),
                     DataCell(
                       InkWell(
-                        onTap: () => onStudentSelected(row['id']),
+                        onTap: () {
+                          try {
+                            final idVal = row['id']?.toString() ?? '';
+                            if (idVal.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Student id is missing.'),
+                                ),
+                              );
+                              return;
+                            }
+                            onStudentSelected(idVal);
+                          } catch (e, st) {
+                            debugPrint('Error selecting student: $e\n$st');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error selecting student: $e'),
+                              ),
+                            );
+                          }
+                        },
                         child: Text(
                           row['name']?.toString() ?? '',
                           style: const TextStyle(

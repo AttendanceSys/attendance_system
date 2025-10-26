@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/admin.dart';
 import '../popup/add_admin_popup.dart';
 import '../cards/searchBar.dart';
@@ -11,29 +12,154 @@ class AdminsPage extends StatefulWidget {
 }
 
 class _AdminsPageState extends State<AdminsPage> {
-  final List<Admin> _admins = [
-    Admin(id: 'SNU1234', fullName: 'Cali', facultyName: 'ENG', password: '*******'),
-    Admin(id: 'SNU5678', fullName: 'Amina', facultyName: 'ENG', password: '*******'),
-    Admin(id: 'SNU9101', fullName: 'Yusuf', facultyName: 'ENG', password: '*******'),
-    Admin(id: 'SNU1121', fullName: 'Fatima', facultyName: 'ENG', password: '*******'),
-  ];
+  final CollectionReference adminsCollection = FirebaseFirestore.instance
+      .collection('admins');
+  final CollectionReference facultiesCollection = FirebaseFirestore.instance
+      .collection('faculties');
+  final CollectionReference usersCollection = FirebaseFirestore.instance
+      .collection('users'); // Reference to users collection
 
-  final List<String> _facultyNames = [
-    'ENG',
-    'SCI',
-    'MED',
-    'EDU',
-  ];
-
+  List<Admin> _admins = [];
+  List<String> _facultyNames = [];
   String _searchText = '';
   int? _selectedIndex;
 
-  List<Admin> get _filteredAdmins => _admins
-      .where((admin) =>
-          admin.id.toLowerCase().contains(_searchText.toLowerCase()) ||
-          admin.fullName.toLowerCase().contains(_searchText.toLowerCase()) ||
-          admin.facultyName.toLowerCase().contains(_searchText.toLowerCase()))
-      .toList();
+  @override
+  void initState() {
+    super.initState();
+    _fetchAdmins();
+    _fetchFaculties();
+  }
+
+  Future<void> _fetchAdmins() async {
+    try {
+      final snapshot = await adminsCollection.get();
+
+      setState(() {
+        _admins = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+
+          return Admin(
+            id: doc.id,
+            username: data['username'] ?? 'N/A',
+            fullName: data['full_name'] ?? 'N/A',
+            facultyId: (data['faculty_id'] as DocumentReference?)?.id ?? 'N/A',
+            password: data['password'] ?? '',
+            createdAt:
+                (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          );
+        }).toList();
+      });
+
+      print("Fetched ${_admins.length} admins");
+    } catch (e) {
+      print("Error fetching admins: $e");
+    }
+  }
+
+  Future<void> _fetchFaculties() async {
+    try {
+      final snapshot = await facultiesCollection.get();
+
+      setState(() {
+        _facultyNames = snapshot.docs
+            .map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return data['faculty_name'] ?? 'N/A';
+            })
+            .cast<String>()
+            .toList();
+      });
+
+      print("Fetched ${_facultyNames.length} faculties");
+    } catch (e) {
+      print("Error fetching faculties: $e");
+    }
+  }
+
+  Future<void> _addAdmin(Admin admin) async {
+    final adminData = {
+      'username': admin.username,
+      'full_name': admin.fullName,
+      'faculty_id': facultiesCollection.doc(admin.facultyId),
+      'password': admin.password,
+      'created_at': FieldValue.serverTimestamp(),
+    };
+
+    final userData = {
+      'username': admin.username,
+      'password': admin.password,
+      'role': 'admin',
+      'faculty_id': facultiesCollection.doc(admin.facultyId),
+      'created_at': FieldValue.serverTimestamp(),
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+
+    // Add to admins collection
+    await adminsCollection.add(adminData);
+
+    // Add to users collection
+    await usersCollection.add(userData);
+
+    _fetchAdmins();
+  }
+
+  Future<void> _updateAdmin(Admin admin) async {
+    final adminData = {
+      'username': admin.username,
+      'full_name': admin.fullName,
+      'faculty_id': facultiesCollection.doc(admin.facultyId),
+      'password': admin.password,
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+
+    final userData = {
+      'username': admin.username, // Update username
+      'password': admin.password,
+      'faculty_id': facultiesCollection.doc(admin.facultyId),
+      'updated_at': FieldValue.serverTimestamp(),
+    };
+
+    // Fetch the old admin data to check for username changes
+    final oldAdminSnapshot = await adminsCollection.doc(admin.id).get();
+    final oldAdminData = oldAdminSnapshot.data() as Map<String, dynamic>;
+    final oldUsername = oldAdminData['username'];
+
+    // Update in admins collection
+    await adminsCollection.doc(admin.id).update(adminData);
+
+    // Update in users collection
+    await usersCollection
+        .where(
+          'username',
+          isEqualTo: oldUsername,
+        ) // Use old username to find the user
+        .get()
+        .then((snapshot) {
+          for (var doc in snapshot.docs) {
+            doc.reference.update(userData);
+          }
+        });
+
+    _fetchAdmins();
+  }
+
+  Future<void> _deleteAdmin(Admin admin) async {
+    // Delete from admins collection
+    await adminsCollection.doc(admin.id).delete();
+
+    // Delete from users collection
+    await usersCollection
+        .where('username', isEqualTo: admin.username)
+        .get()
+        .then((snapshot) {
+          for (var doc in snapshot.docs) {
+            doc.reference.delete();
+          }
+        });
+
+    _fetchAdmins();
+  }
 
   Future<void> _showAddAdminPopup() async {
     final result = await showDialog<Admin>(
@@ -41,31 +167,26 @@ class _AdminsPageState extends State<AdminsPage> {
       builder: (context) => AddAdminPopup(facultyNames: _facultyNames),
     );
     if (result != null) {
-      setState(() {
-        _admins.add(result);
-        _selectedIndex = null;
-      });
+      _addAdmin(result);
     }
   }
 
   Future<void> _showEditAdminPopup() async {
     if (_selectedIndex == null) return;
-    final admin = _filteredAdmins[_selectedIndex!];
+    final admin = _admins[_selectedIndex!];
     final result = await showDialog<Admin>(
       context: context,
-      builder: (context) => AddAdminPopup(admin: admin, facultyNames: _facultyNames),
+      builder: (context) =>
+          AddAdminPopup(admin: admin, facultyNames: _facultyNames),
     );
     if (result != null) {
-      int mainIndex = _admins.indexOf(admin);
-      setState(() {
-        _admins[mainIndex] = result;
-      });
+      _updateAdmin(result);
     }
   }
 
   Future<void> _confirmDeleteAdmin() async {
     if (_selectedIndex == null) return;
-    final admin = _filteredAdmins[_selectedIndex!];
+    final admin = _admins[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -85,10 +206,7 @@ class _AdminsPageState extends State<AdminsPage> {
       ),
     );
     if (confirm == true) {
-      setState(() {
-        _admins.remove(admin);
-        _selectedIndex = null;
-      });
+      _deleteAdmin(admin);
     }
   }
 
@@ -149,12 +267,20 @@ class _AdminsPageState extends State<AdminsPage> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _showEditAdminPopup,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _showEditAdminPopup,
                             child: const Text(
                               "Edit",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -168,12 +294,20 @@ class _AdminsPageState extends State<AdminsPage> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _confirmDeleteAdmin,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _confirmDeleteAdmin,
                             child: const Text(
                               "Delete",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -208,11 +342,11 @@ class _AdminsPageState extends State<AdminsPage> {
   Widget _buildDesktopTable() {
     return Table(
       columnWidths: const {
-        0: FixedColumnWidth(64),    // No
-        1: FixedColumnWidth(120),   // Admin ID
-        2: FixedColumnWidth(140),   // Full Name
-        3: FixedColumnWidth(120),   // Faculty Name
-        4: FixedColumnWidth(120),   // Password
+        0: FixedColumnWidth(64), // No
+        1: FixedColumnWidth(120), // Admin ID
+        2: FixedColumnWidth(140), // Full Name
+        3: FixedColumnWidth(120), // Faculty Name
+        4: FixedColumnWidth(120), // Password
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -227,16 +361,27 @@ class _AdminsPageState extends State<AdminsPage> {
             _tableHeaderCell("Password"),
           ],
         ),
-        for (int index = 0; index < _filteredAdmins.length; index++)
+        for (int index = 0; index < _admins.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].id, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].fullName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].facultyName, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _admins[index].username,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _admins[index].fullName,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _admins[index].facultyId,
+                onTap: () => _handleRowTap(index),
+              ),
               _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
             ],
           ),
@@ -260,16 +405,27 @@ class _AdminsPageState extends State<AdminsPage> {
             _tableHeaderCell("Password"),
           ],
         ),
-        for (int index = 0; index < _filteredAdmins.length; index++)
+        for (int index = 0; index < _admins.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].id, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].fullName, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_filteredAdmins[index].facultyName, onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _admins[index].username,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _admins[index].fullName,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _admins[index].facultyId,
+                onTap: () => _handleRowTap(index),
+              ),
               _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
             ],
           ),
@@ -294,10 +450,7 @@ class _AdminsPageState extends State<AdminsPage> {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(
-          text,
-          overflow: TextOverflow.ellipsis,
-        ),
+        child: Text(text, overflow: TextOverflow.ellipsis),
       ),
     );
   }

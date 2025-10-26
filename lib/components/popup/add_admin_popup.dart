@@ -13,18 +13,18 @@ class AddAdminPopup extends StatefulWidget {
 
 class _AddAdminPopupState extends State<AddAdminPopup> {
   final _formKey = GlobalKey<FormState>();
-  String? _adminId;
   String? _fullName;
-  String? _facultyName;
+  String? _facultyId;
   String? _password;
+  String? _username;
 
   @override
   void initState() {
     super.initState();
-    _adminId = widget.admin?.id;
     _fullName = widget.admin?.fullName;
-    _facultyName = widget.admin?.facultyName;
+    _facultyId = widget.admin?.facultyId;
     _password = widget.admin?.password;
+    _username = widget.admin?.username;
   }
 
   @override
@@ -67,17 +67,6 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: _adminId,
-                  decoration: const InputDecoration(
-                    hintText: "Admin ID",
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) => _adminId = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter admin ID" : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
                   initialValue: _fullName,
                   decoration: const InputDecoration(
                     hintText: "Full Name",
@@ -89,22 +78,16 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _facultyName,
+                  value: _facultyId,
                   decoration: const InputDecoration(
                     hintText: "Faculty Name",
                     border: OutlineInputBorder(),
                   ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: null,
-                      child: Text("Select One"),
-                    ),
-                    ...widget.facultyNames.map(
-                      (name) =>
-                          DropdownMenuItem(value: name, child: Text(name)),
-                    ),
-                  ],
-                  onChanged: (val) => setState(() => _facultyName = val),
+                  items: widget.facultyNames.map(
+                    (name) =>
+                        DropdownMenuItem(value: name, child: Text(name)),
+                  ).toList(),
+                  onChanged: (val) => setState(() => _facultyId = val),
                   validator: (val) =>
                       val == null || val.isEmpty ? "Select faculty name" : null,
                 ),
@@ -119,6 +102,17 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                   onChanged: (val) => _password = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter password" : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  initialValue: _username,
+                  decoration: const InputDecoration(
+                    hintText: "Username",
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) => _username = val,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Enter username" : null,
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -153,10 +147,12 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                           if (_formKey.currentState!.validate()) {
                             Navigator.of(context).pop(
                               Admin(
-                                id: _adminId!,
+                                id: widget.admin?.id ?? '',
                                 fullName: _fullName!,
-                                facultyName: _facultyName!,
+                                facultyId: _facultyId!,
                                 password: _password!,
+                                username: _username!,
+                                createdAt: DateTime.now(),
                               ),
                             );
                           }

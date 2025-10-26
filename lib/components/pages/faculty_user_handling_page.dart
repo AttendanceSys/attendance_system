@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../models/user.dart';
-import '../popup/edit_user_popup.dart';
+import '../../models/user_model.dart';
+import '../popup/edit_faculty_user_popup.dart';
 import '../cards/searchBar.dart';
 
 class FacultyUserHandlingPage extends StatefulWidget {

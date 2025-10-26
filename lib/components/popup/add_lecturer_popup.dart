@@ -1,27 +1,30 @@
 import 'package:flutter/material.dart';
 import '../../models/lecturer.dart';
 
-class AddLecturerPopup extends StatefulWidget {
-  final Lecturer? lecturer;
+class AddTeacherPopup extends StatefulWidget {
+  final Teacher? teacher;
+  final List<String> facultyNames;
 
-  const AddLecturerPopup({super.key, this.lecturer});
+  const AddTeacherPopup({super.key, this.teacher, required this.facultyNames});
 
   @override
-  State<AddLecturerPopup> createState() => _AddLecturerPopupState();
+  State<AddTeacherPopup> createState() => _AddTeacherPopupState();
 }
 
-class _AddLecturerPopupState extends State<AddLecturerPopup> {
+class _AddTeacherPopupState extends State<AddTeacherPopup> {
   final _formKey = GlobalKey<FormState>();
-  String? _lecturerName;
-  String? _lecturerId;
+  String? _teacherName;
+  String? _username;
   String? _password;
+  String? _facultyId;
 
   @override
   void initState() {
     super.initState();
-    _lecturerName = widget.lecturer?.name;
-    _lecturerId = widget.lecturer?.id;
-    _password = widget.lecturer?.password;
+    _teacherName = widget.teacher?.teacherName;
+    _username = widget.teacher?.username;
+    _password = widget.teacher?.password;
+    _facultyId = widget.teacher?.facultyId;
   }
 
   @override
@@ -56,7 +59,7 @@ class _AddLecturerPopupState extends State<AddLecturerPopup> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.lecturer == null ? "Add Lecturer" : "Edit Lecturer",
+                  widget.teacher == null ? "Add Teacher" : "Edit Teacher",
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -64,25 +67,42 @@ class _AddLecturerPopupState extends State<AddLecturerPopup> {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: _lecturerId,
+                  initialValue: _username,
                   decoration: const InputDecoration(
-                    hintText: "Lecturer ID",
+                    hintText: "Username",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _lecturerId = val,
+                  onChanged: (val) => _username = val,
                   validator: (val) =>
-                      val == null || val.isEmpty ? "Enter lecturer ID" : null,
+                      val == null || val.isEmpty ? "Enter username" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  initialValue: _lecturerName,
+                  initialValue: _teacherName,
                   decoration: const InputDecoration(
-                    hintText: "Lecturer Name",
+                    hintText: "Teacher Name",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _lecturerName = val,
+                  onChanged: (val) => _teacherName = val,
                   validator: (val) =>
-                      val == null || val.isEmpty ? "Enter lecturer name" : null,
+                      val == null || val.isEmpty ? "Enter teacher name" : null,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _facultyId,
+                  decoration: const InputDecoration(
+                    hintText: "Faculty",
+                    border: OutlineInputBorder(),
+                  ),
+                  items: widget.facultyNames
+                      .map(
+                        (name) =>
+                            DropdownMenuItem(value: name, child: Text(name)),
+                      )
+                      .toList(),
+                  onChanged: (val) => setState(() => _facultyId = val),
+                  validator: (val) =>
+                      val == null || val.isEmpty ? "Select faculty" : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -128,10 +148,14 @@ class _AddLecturerPopupState extends State<AddLecturerPopup> {
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
                             Navigator.of(context).pop(
-                              Lecturer(
-                                id: _lecturerId!,
-                                name: _lecturerName!,
+                              Teacher(
+                                id: widget.teacher?.id ?? '',
+                                teacherName: _teacherName!,
+                                username: _username!,
                                 password: _password!,
+                                facultyId: _facultyId!,
+                                createdAt:
+                                    widget.teacher?.createdAt ?? DateTime.now(),
                               ),
                             );
                           }
