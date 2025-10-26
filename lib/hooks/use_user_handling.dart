@@ -655,8 +655,8 @@ class UseUserHandling {
         );
       }
 
-  final oldUsername = (existingRow['username'] ?? '').toString().trim();
-  final newUsername = username;
+      final oldUsername = (existingRow['username'] ?? '').toString().trim();
+      final newUsername = username;
 
       // If username is changing, we must ensure the *new* username exists in
       // `user_handling` before updating referencing tables (otherwise the DB

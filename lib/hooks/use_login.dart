@@ -34,7 +34,8 @@ Future<Map<String, dynamic>?> loginUser(
     try {
       if ((response as Map).containsKey('is_disabled')) {
         final isDisabled = response['is_disabled'];
-        if (isDisabled == true || (isDisabled is String && isDisabled.toLowerCase() == 'true')) {
+        if (isDisabled == true ||
+            (isDisabled is String && isDisabled.toLowerCase() == 'true')) {
           final out = Map<String, dynamic>.from(response as Map);
           out['disabled'] = true;
           out['auth_source'] = 'direct';
