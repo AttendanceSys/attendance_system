@@ -129,6 +129,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
           : result.role,
       password: result.password,
       createdAt: row.createdAt,
+      isDisabled: row.isDisabled,
     );
 
     // Persist update to Supabase
@@ -159,16 +160,20 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
     }
   }
 
-  Future<void> _confirmDeleteUser() async {
+  Future<void> _confirmDisableUser() async {
     if (_selectedIndex == null) return;
     final row = _filteredRows[_selectedIndex!];
+
+    final willDisable = !(row.isDisabled);
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete User"),
+        title: Text(willDisable ? "Disable User" : "Enable User"),
         content: Text(
-          "Are you sure you want to delete '${row.username ?? ''}'?",
+          willDisable
+              ? "Are you sure you want to disable '${row.username ?? ''}'?"
+              : "Are you sure you want to enable '${row.username ?? ''}'?",
         ),
         actions: [
           TextButton(
@@ -177,21 +182,55 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Delete"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: willDisable ? Colors.orange : Colors.green,
+            ),
+            child: Text(willDisable ? "Disable" : "Enable"),
           ),
         ],
       ),
     );
 
-    if (confirm == true) {
-      // If your data layer supports deletion, call it here. UseUserHandling in your
-      // current code doesn't expose delete, so we only remove locally.
-      // If you add a delete method, call it before updating local state.
-      setState(() {
-        _rows.removeWhere((r) => r.id == row.id);
-        _selectedIndex = null;
-      });
+    if (confirm != true) return;
+
+    try {
+      // call backend to set is_disabled flag
+      final dynamic ds = _dataSource;
+      await ds.setUserDisabled(row.id, willDisable);
+
+      // update local list only (preserve other fields)
+      final mainIndex = _rows.indexWhere((r) => r.id == row.id);
+      if (mainIndex != -1) {
+        final existing = _rows[mainIndex];
+        final updated = UserHandling(
+          id: existing.id,
+          authUid: existing.authUid,
+          username: existing.username,
+          role: existing.role,
+          password: existing.password,
+          createdAt: existing.createdAt,
+          isDisabled: willDisable,
+        );
+        setState(() {
+          _rows[mainIndex] = updated;
+          _selectedIndex = null;
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(willDisable ? 'User disabled' : 'User enabled'),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Disable/Enable user failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to change user status: $e')),
+        );
+      }
     }
   }
 
@@ -316,10 +355,14 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                             ),
                             onPressed: _selectedIndex == null
                                 ? null
-                                : _confirmDeleteUser,
-                            child: const Text(
-                              "Delete",
-                              style: TextStyle(
+                                : _confirmDisableUser,
+                            child: Text(
+                              (_selectedIndex != null &&
+                                      _filteredRows.length > _selectedIndex! &&
+                                      _filteredRows[_selectedIndex!].isDisabled)
+                                  ? "Enable"
+                                  : "Disable",
+                              style: const TextStyle(
                                 fontSize: 15,
                                 color: Colors.white,
                               ),
@@ -403,7 +446,10 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                     : (_filteredRows[index].role),
                 onTap: () => _handleRowTap(index),
               ),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _filteredRows[index].isDisabled ? 'Disabled' : '••••••••',
+                onTap: () => _handleRowTap(index),
+              ),
             ],
           ),
       ],
@@ -444,7 +490,10 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                     : (_filteredRows[index].role),
                 onTap: () => _handleRowTap(index),
               ),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _filteredRows[index].isDisabled ? 'Disabled' : '••••••••',
+                onTap: () => _handleRowTap(index),
+              ),
             ],
           ),
       ],

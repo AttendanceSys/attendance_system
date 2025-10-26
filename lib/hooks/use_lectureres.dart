@@ -75,27 +75,67 @@ class UseTeachers {
     String? facultyId,
     String? createdBy,
   }) async {
+    // Insert directly into the teachers table and create/upsert user_handling
     try {
-      final rpcParams = {
-        'p_teacher_name': teacher.teacherName,
-        'p_username': teacher.username,
-        'p_password': teacher.password,
-        'p_faculty_id': facultyId,
-        'p_created_by': createdBy,
+      final insertData = <String, dynamic>{
+        'teacher_name': teacher.teacherName,
+        'faculty_id': facultyId ?? teacher.facultyId,
+        'created_at': DateTime.now().toIso8601String(),
       };
 
-      final resp = await _supabase.rpc('create_teacher', params: rpcParams);
-      print('Add teacher RPC response: $resp');
-
-      Map<String, dynamic>? row;
-      if (resp == null) return null;
-      if (resp is List && resp.isNotEmpty) {
-        row = Map<String, dynamic>.from(resp[0]);
-      } else if (resp is Map) {
-        row = Map<String, dynamic>.from(resp);
+      // Ensure user_handling row exists before creating teacher when username provided
+      final uname = (teacher.username ?? '').toString().trim();
+      if (uname.isNotEmpty) {
+        try {
+          await upsertUserHandling(
+            _supabase,
+            uname,
+            'teacher',
+            teacher.password,
+          );
+          insertData['username'] = uname;
+          // Also write the password to the teachers row if provided
+          if (teacher.password != null && teacher.password!.isNotEmpty) {
+            insertData['password'] = teacher.password;
+          }
+        } catch (e) {
+          debugPrint('upsertUserHandling before teacher insert failed: $e');
+          // If upsert failed, propagate to avoid FK violation
+          rethrow;
+        }
+      } else {
+        insertData['username'] = null;
+        insertData['password'] = teacher.password;
       }
 
-      return row != null ? Teacher.fromJson(row) : null;
+      final tmpRaw = await _supabase
+          .from('teachers')
+          .insert(insertData)
+          .select()
+          .limit(1);
+
+      Map<String, dynamic>? insertedRow;
+      if ((tmpRaw as List).isNotEmpty) {
+        insertedRow = Map<String, dynamic>.from(tmpRaw[0] as Map);
+      }
+
+      if (insertedRow != null) {
+        // Ensure user_handling has an account
+        try {
+          await upsertUserHandling(
+            _supabase,
+            (teacher.username ?? '').trim(),
+            'teacher',
+            teacher.password,
+          );
+        } catch (e) {
+          debugPrint('upsertUserHandling failed after teacher insert: $e');
+        }
+
+        return Teacher.fromJson(insertedRow);
+      }
+
+      return null;
     } catch (e) {
       debugPrint('Error adding teacher: $e');
       return null;
@@ -144,6 +184,14 @@ class UseTeachers {
     try {
       final data = teacher.toJson();
       data.remove('id');
+      // Avoid updating the username directly to prevent FK constraint failures
+      // when the corresponding user_handling row does not yet exist. We'll
+      // synchronize username/password in user_handling after ensuring its row
+      // exists and then set the teachers.username separately.
+      data.remove('username');
+      // Also avoid storing password in teachers update path; keep password
+      // authoritative in user_handling when possible.
+      data.remove('password');
 
       // Get the old username first
       final existing = await _supabase
@@ -161,78 +209,126 @@ class UseTeachers {
       // signature (username-based). The DB function returns void, so do not
       // call .select() here. If the RPC call fails, fall back to client-side
       // updates below.
-      try {
-        debugPrint(
-          'Calling update_teacher RPC with: p_username=$oldUsername, p_new_username=${teacher.username}, p_new_teacher_name=${teacher.teacherName}, p_new_faculty_id=${teacher.facultyId}, p_updated_by=$updater',
-        );
-        debugPrint(
-          'Auth context: authUserId=${_supabase.auth.currentUser?.id}, authEmail=${_supabase.auth.currentUser?.email}',
-        );
-
-        await _supabase.rpc(
-          'update_teacher',
-          params: {
-            'p_username': oldUsername, // current username (identifier)
-            'p_new_username': teacher.username,
-            'p_new_teacher_name': teacher.teacherName,
-            'p_new_password': teacher.password,
-            'p_new_faculty_id': teacher.facultyId,
-            'p_updated_by': updater,
-          },
-        );
-        // RPC succeeded — done.
-        debugPrint('update_teacher RPC invoked successfully');
-        return;
-      } catch (e) {
-        debugPrint(
-          'update_teacher RPC failed, falling back to client update: $e',
-        );
-        // continue to fallback logic
-      }
-
-      // Fallback: Update teacher info in teachers table directly
-      final resp = await _supabase.from('teachers').update(data).eq('id', id);
-      print('Update teacher response: $resp');
-
-      // Update user_handling account
+      // Update teacher info in teachers table directly
+      // Determine new username/password for use below
       final newUsername = (teacher.username ?? '').trim();
       final newPassword = (teacher.password ?? '').trim();
 
+      // First update the teachers row WITHOUT changing the username to avoid
+      // triggering DB-side behavior that could create duplicates when an
+      // upsert on user_handling inserts triggers other tables. We'll handle
+      // username changes separately after ensuring user_handling exists.
+      final resp = await _supabase.from('teachers').update(data).eq('id', id);
+      debugPrint('Update teacher response: $resp (updated_by=$updater)');
+
+      // Handle username/password synchronization in user_handling
       if (oldUsername.isNotEmpty) {
+        // Try to update existing user_handling that matches the old username
         final updateData = <String, dynamic>{
-          if (newUsername.isNotEmpty) 'username': newUsername,
-          'role': 'teacher',
           if (newPassword.isNotEmpty) 'password': newPassword,
+          'role': 'teacher',
         };
 
-        try {
-          final updated = await _supabase
-              .from('user_handling')
-              .update(updateData)
-              .eq('username', oldUsername)
-              .select();
-          if (updated.isEmpty) {
-            // If old username not found, fallback to upsert
+        if (newUsername.isNotEmpty && newUsername != oldUsername) {
+          // Ensure target user_handling exists first (insert or update)
+          try {
+            await upsertUserHandling(
+              _supabase,
+              newUsername,
+              'teacher',
+              newPassword,
+            );
+          } catch (e) {
+            debugPrint('upsertUserHandling for new username failed: $e');
+          }
+
+          // Now update teachers.username to the newUsername
+          try {
+            await _supabase
+                .from('teachers')
+                .update({'username': newUsername})
+                .eq('id', id)
+                .select();
+          } catch (e) {
+            debugPrint('Failed to set new username on teacher record: $e');
+          }
+
+          // Also update the teacher's stored password column (if present)
+          if (newPassword.isNotEmpty) {
             try {
-              await upsertUserHandling(
-                _supabase,
-                newUsername,
-                'teacher',
-                newPassword,
-              );
-            } catch (e, st) {
-              debugPrint(
-                'Fallback upsertUserHandling failed for $newUsername: $e\n$st',
-              );
+              await _supabase
+                  .from('teachers')
+                  .update({'password': newPassword})
+                  .eq('id', id)
+                  .select();
+            } catch (e) {
+              debugPrint('Failed to update teacher password field: $e');
             }
           }
-        } catch (e) {
-          debugPrint(
-            'Failed to update user_handling by old username $oldUsername: $e',
-          );
+
+          // Remove old user_handling only if it's safe (no remaining references)
+          try {
+            final deleted = await safeDeleteUserHandling(
+              _supabase,
+              oldUsername,
+            );
+            if (!deleted) {
+              debugPrint(
+                'Skipped deleting old user_handling $oldUsername because references exist',
+              );
+            }
+          } catch (e) {
+            debugPrint(
+              'Failed to attempt safe delete of old user_handling $oldUsername: $e',
+            );
+          }
+        } else {
+          // username unchanged — just update password/role on existing user_handling
+          try {
+            final updated = await _supabase
+                .from('user_handling')
+                .update(updateData)
+                .eq('username', oldUsername)
+                .select();
+            if (updated.isEmpty) {
+              // If update returned no rows, fallback to upsert newUsername
+              if (newUsername.isNotEmpty) {
+                try {
+                  await upsertUserHandling(
+                    _supabase,
+                    newUsername,
+                    'teacher',
+                    newPassword,
+                  );
+                } catch (e) {
+                  debugPrint(
+                    'Fallback upsertUserHandling failed for $newUsername: $e',
+                  );
+                }
+              }
+            }
+            // Mirror password change into teachers table for UI consistency
+            if (newPassword.isNotEmpty) {
+              try {
+                await _supabase
+                    .from('teachers')
+                    .update({'password': newPassword})
+                    .eq('id', id)
+                    .select();
+              } catch (e) {
+                debugPrint(
+                  'Failed to mirror password change to teachers table: $e',
+                );
+              }
+            }
+          } catch (e) {
+            debugPrint(
+              'Failed to update user_handling by old username $oldUsername: $e',
+            );
+          }
         }
       } else if (newUsername.isNotEmpty) {
-        // Fallback — create new user_handling record
+        // Teacher previously had no username; ensure user_handling exists and set it
         try {
           await upsertUserHandling(
             _supabase,
@@ -240,10 +336,27 @@ class UseTeachers {
             'teacher',
             newPassword,
           );
-        } catch (e, st) {
-          debugPrint(
-            'Fallback upsertUserHandling failed for $newUsername: $e\n$st',
-          );
+          await _supabase
+              .from('teachers')
+              .update({'username': newUsername})
+              .eq('id', id)
+              .select();
+
+          if (newPassword.isNotEmpty) {
+            try {
+              await _supabase
+                  .from('teachers')
+                  .update({'password': newPassword})
+                  .eq('id', id)
+                  .select();
+            } catch (e) {
+              debugPrint(
+                'Failed to set password on newly-updated teacher record: $e',
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('Failed to create/set user_handling for teacher: $e');
         }
       }
     } catch (e) {
@@ -273,17 +386,18 @@ class UseTeachers {
           .select();
       print('Delete teacher response: $resp');
 
-      // Delete linked user_handling record
+      // Delete linked user_handling record (safely) — only if no other references exist
       if (username != null && username.isNotEmpty) {
         try {
-          await _supabase
-              .from('user_handling')
-              .delete()
-              .eq('username', username)
-              .select();
+          final deleted = await safeDeleteUserHandling(_supabase, username);
+          if (!deleted) {
+            debugPrint(
+              'Skipped deleting linked user_handling $username because references exist',
+            );
+          }
         } catch (e) {
           debugPrint(
-            'Failed to delete linked user_handling for username=$username: $e',
+            'Failed to attempt safe delete of linked user_handling for username=$username: $e',
           );
         }
       }

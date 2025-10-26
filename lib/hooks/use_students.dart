@@ -448,12 +448,38 @@ class UseStudents {
 
       // Delete the user_handling row (by id if possible, else by username)
       if (uhId != null && uhId.isNotEmpty) {
-        await _supabase.from('user_handling').delete().eq('id', uhId);
+        // Try to resolve username for the user_handling row and perform a safe delete
+        try {
+          final uh = await _supabase
+              .from('user_handling')
+              .select('username')
+              .eq('id', uhId)
+              .maybeSingle();
+          final resolvedUsername = (uh != null && uh['username'] != null)
+              ? uh['username'].toString().trim()
+              : '';
+
+          if (resolvedUsername.isNotEmpty) {
+            await safeDeleteUserHandling(_supabase, resolvedUsername);
+          } else {
+            // fallback: try delete by id but ignore failures
+            try {
+              await _supabase.from('user_handling').delete().eq('id', uhId);
+            } catch (e) {
+              debugPrint('Failed to delete user_handling by id $uhId: $e');
+            }
+          }
+        } catch (e) {
+          debugPrint('Failed to resolve user_handling by id $uhId: $e');
+        }
       } else if (username != null && username.isNotEmpty) {
-        await _supabase
-            .from('user_handling')
-            .delete()
-            .eq('usernames', username);
+        try {
+          await safeDeleteUserHandling(_supabase, username);
+        } catch (e) {
+          debugPrint(
+            'Failed to attempt safe delete of user_handling for username=$username: $e',
+          );
+        }
       }
     } catch (e) {
       throw Exception('Failed to delete student: $e');

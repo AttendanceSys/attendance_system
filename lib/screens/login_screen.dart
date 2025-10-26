@@ -65,6 +65,16 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    // If loginUser returns a marker indicating the account is disabled,
+    // show a clear message and do not proceed.
+    if (user.containsKey('disabled') && user['disabled'] == true) {
+      setState(() {
+        _errorMessage = 'Account disabled. Contact administrator.';
+        _isLoggingIn = false;
+      });
+      return;
+    }
+
     final role = user['role'];
     final fullName = (user['full_name'] ?? user['usernames'] ?? username)
         .toString();

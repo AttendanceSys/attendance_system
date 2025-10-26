@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'use_user_handling.dart' show upsertUserHandling;
+import 'use_user_handling.dart';
 
 class Admin {
   final String id; // uuid (DB generated)
@@ -277,18 +277,56 @@ class UseAdmins {
         'p_created_by': creator,
       };
 
-      debugPrint('create_admin RPC params: $params');
+      debugPrint('create_admin params: $params');
+      // Insert directly into admins table and ensure user_handling exists
+      final insertData = <String, dynamic>{
+        'username': username,
+        'full_name': admin.fullName ?? '',
+        'faculty_id': facultyId,
+        'password': password,
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      // Ensure user_handling row exists for login BEFORE inserting into admins
       try {
-        final res = await _supabase.rpc('create_admin', params: params);
-        debugPrint('create_admin RPC response: ${res ?? '<<null>>'}');
-      } catch (e) {
-        if (e is PostgrestException) {
-          debugPrint('create_admin RPC error: ${e.message} (code: ${e.code})');
-          debugPrint('Details: ${e.details}, Hint: ${e.hint}');
-          rethrow;
+        final uhId = await upsertUserHandling(
+          _supabase,
+          username,
+          'admin',
+          password,
+        );
+        if (uhId == null) {
+          throw Exception(
+            'Failed to create or find user_handling for $username',
+          );
         }
+      } catch (e) {
+        debugPrint('upsertUserHandling failed before admin insert: $e');
         rethrow;
       }
+
+      final tmp = await _supabase
+          .from('admins')
+          .insert(insertData)
+          .select()
+          .limit(1);
+      Map<String, dynamic>? inserted;
+      if ((tmp as List).isNotEmpty) {
+        inserted = Map<String, dynamic>.from(tmp[0] as Map);
+      }
+
+      if (inserted == null) {
+        throw Exception('Failed to insert admin directly');
+      }
+
+      // Ensure user_handling row exists for login
+      try {
+        await upsertUserHandling(_supabase, username, 'admin', password);
+      } catch (e) {
+        debugPrint('upsertUserHandling failed after admin insert: $e');
+      }
+
+      return;
     } catch (e, st) {
       debugPrint('addAdmin error: $e\n$st');
       throw Exception('Failed to add admin: $e');
@@ -319,17 +357,97 @@ class UseAdmins {
         'p_updated_by': actor,
       };
 
-      debugPrint('update_admin RPC params: $params');
-
+      debugPrint('update_admin params: $params');
+      // Update admins table directly and sync user_handling
       try {
-        final res = await _supabase.rpc('update_admin', params: params);
-        debugPrint('update_admin RPC response: ${res ?? '<<null>>'}');
-      } catch (e) {
-        if (e is PostgrestException) {
-          debugPrint('update_admin RPC error: ${e.message} (code: ${e.code})');
-          debugPrint('Details: ${e.details}, Hint: ${e.hint}');
-          rethrow;
+        // Get existing username before update
+        final existing = await _supabase
+            .from('admins')
+            .select('username')
+            .eq('id', id)
+            .maybeSingle();
+        final oldUsername = (existing != null && existing['username'] != null)
+            ? existing['username'].toString()
+            : '';
+
+        // Update admins row by id but avoid changing username here to prevent
+        // FK violations. We'll handle username changes separately below.
+        final updateData = admin.toJson();
+        updateData.remove('id');
+        // remove username from initial update so FK is not enforced mid-update
+        updateData.remove('username');
+
+        await _supabase.from('admins').update(updateData).eq('id', id).select();
+
+        // Update user_handling: if username changed, ensure new user_handling exists
+        final newUsername = (admin.username ?? '').trim();
+        final newPassword = (admin.password ?? '').trim();
+
+        if (newUsername.isNotEmpty && newUsername != oldUsername) {
+          // Ensure target user_handling exists (insert or update)
+          try {
+            final uhId = await upsertUserHandling(
+              _supabase,
+              newUsername,
+              'admin',
+              newPassword,
+            );
+            if (uhId == null)
+              debugPrint('upsertUserHandling returned null for $newUsername');
+          } catch (e) {
+            debugPrint(
+              'upsertUserHandling failed for new admin username $newUsername: $e',
+            );
+          }
+
+          // Now update admins.username to the newUsername
+          try {
+            await _supabase
+                .from('admins')
+                .update({'username': newUsername})
+                .eq('id', id)
+                .select();
+          } catch (e) {
+            debugPrint('Failed to set new username on admin record: $e');
+          }
+
+          // Optionally remove old user_handling if present
+          if (oldUsername.isNotEmpty && oldUsername != newUsername) {
+            try {
+              final deleted = await safeDeleteUserHandling(
+                _supabase,
+                oldUsername,
+              );
+              if (!deleted) {
+                debugPrint(
+                  'Skipped deleting old user_handling $oldUsername because references exist',
+                );
+              }
+            } catch (e) {
+              debugPrint(
+                'Failed to attempt safe delete of old user_handling $oldUsername: $e',
+              );
+            }
+          }
+        } else if (newUsername.isNotEmpty) {
+          // username unchanged or was previously empty - ensure role/password are synced
+          try {
+            await upsertUserHandling(
+              _supabase,
+              newUsername,
+              'admin',
+              newPassword,
+            );
+          } catch (e) {
+            debugPrint(
+              'upsertUserHandling failed during admin update sync: $e',
+            );
+          }
         }
+
+        return;
+      } catch (e) {
+        debugPrint('Fallback update admin direct failed: $e');
         rethrow;
       }
     } catch (e, st) {
@@ -362,19 +480,24 @@ class UseAdmins {
       }
 
       final delParams = {'p_username': username, 'p_deleted_by': actor};
-      debugPrint('delete_admin RPC params: $delParams');
-
-      try {
-        final res = await _supabase.rpc('delete_admin', params: delParams);
-        debugPrint('delete_admin RPC response: ${res ?? '<<null>>'}');
-      } catch (e) {
-        if (e is PostgrestException) {
-          debugPrint('delete_admin RPC error: ${e.message} (code: ${e.code})');
-          debugPrint('Details: ${e.details}, Hint: ${e.hint}');
-          rethrow;
+      debugPrint('delete_admin params: $delParams');
+      // Delete admin row directly and remove user_handling
+      await _supabase.from('admins').delete().eq('id', id).select();
+      if (username.isNotEmpty) {
+        try {
+          final deleted = await safeDeleteUserHandling(_supabase, username);
+          if (!deleted) {
+            debugPrint(
+              'Skipped deleting linked user_handling $username because references exist',
+            );
+          }
+        } catch (e) {
+          debugPrint(
+            'Failed to attempt safe delete of linked user_handling for username=$username: $e',
+          );
         }
-        rethrow;
       }
+      return;
     } catch (e, st) {
       debugPrint('deleteAdmin error: $e\n$st');
       throw Exception('Failed to delete admin: $e');

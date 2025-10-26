@@ -102,6 +102,51 @@ Future<String?> upsertUserHandling(
   }
 }
 
+/// Safely delete a `user_handling` row by username only if no other tables
+/// reference it. Returns true if deleted, false if skipped or failed.
+Future<bool> safeDeleteUserHandling(
+  SupabaseClient client,
+  String username,
+) async {
+  try {
+    if (username.trim().isEmpty) return false;
+
+    // Check referencing tables for any existing rows that reference this username.
+    final tablesToCheck = ['teachers', 'admins', 'students'];
+    for (final t in tablesToCheck) {
+      try {
+        final res = await client
+            .from(t)
+            .select('id')
+            .eq('username', username)
+            .limit(1);
+        if (res is List && res.isNotEmpty) {
+          // Found a reference, so skip deletion
+          debugPrint(
+            'safeDeleteUserHandling: found reference in $t, skipping delete for $username',
+          );
+          return false;
+        }
+      } catch (e) {
+        // If a table doesn't exist in a given schema, ignore and continue
+        debugPrint('safeDeleteUserHandling: check on $t failed (ignored): $e');
+      }
+    }
+
+    // No references found — perform delete
+    await client
+        .from('user_handling')
+        .delete()
+        .eq('username', username)
+        .select();
+    debugPrint('safeDeleteUserHandling: deleted user_handling for $username');
+    return true;
+  } catch (e, st) {
+    debugPrint('safeDeleteUserHandling error for $username: $e\n$st');
+    return false;
+  }
+}
+
 /// Represents a user entry from the `user_handling` table.
 class UserHandling {
   final String id;
@@ -110,6 +155,7 @@ class UserHandling {
   final String role;
   final String? password;
   final DateTime? createdAt;
+  final bool isDisabled;
 
   UserHandling({
     required this.id,
@@ -118,6 +164,7 @@ class UserHandling {
     this.username,
     this.password,
     this.createdAt,
+    this.isDisabled = false,
   });
 
   factory UserHandling.fromJson(Map<String, dynamic> json) {
@@ -130,6 +177,11 @@ class UserHandling {
       createdAt: json['created_at'] == null
           ? null
           : DateTime.tryParse(json['created_at'].toString()),
+      isDisabled: (json['is_disabled'] == null)
+          ? false
+          : (json['is_disabled'] is bool)
+          ? json['is_disabled'] as bool
+          : (json['is_disabled'].toString().toLowerCase() == 'true'),
     );
   }
 
@@ -139,6 +191,7 @@ class UserHandling {
       'username': username,
       'role': role,
       'password': password,
+      'is_disabled': isDisabled,
     };
   }
 }
@@ -151,6 +204,7 @@ class StudentHandling {
   final String role;
   final String? password;
   final DateTime? createdAt;
+  final bool isDisabled;
 
   StudentHandling({
     required this.id,
@@ -159,6 +213,7 @@ class StudentHandling {
     this.username,
     this.password,
     this.createdAt,
+    this.isDisabled = false,
   });
 
   factory StudentHandling.fromJson(Map<String, dynamic> json) {
@@ -171,6 +226,11 @@ class StudentHandling {
       createdAt: json['created_at'] == null
           ? null
           : DateTime.tryParse(json['created_at'].toString()),
+      isDisabled: (json['is_disabled'] == null)
+          ? false
+          : (json['is_disabled'] is bool)
+          ? json['is_disabled'] as bool
+          : (json['is_disabled'].toString().toLowerCase() == 'true'),
     );
   }
 }
@@ -188,7 +248,7 @@ class UseStudentHandling {
     try {
       final List<dynamic> userRows = await _supabase
           .from('user_handling')
-          .select('id, username, role, password, created_at')
+          .select('id, username, role, password, created_at, is_disabled')
           .eq('role', 'student');
 
       final List<dynamic> studentRows = await _supabase
@@ -322,7 +382,7 @@ class UseUserHandling {
     try {
       final dynamic rowsRaw = await _supabase
           .from('user_handling')
-          .select('id, username, role, password, created_at');
+          .select('id, username, role, password, created_at, is_disabled');
 
       debugPrint('RAW user_handling response: $rowsRaw');
 
@@ -388,6 +448,11 @@ class UseUserHandling {
             createdAt: json['created_at'] == null
                 ? null
                 : DateTime.tryParse(json['created_at'].toString()),
+            isDisabled: (json['is_disabled'] == null)
+                ? false
+                : (json['is_disabled'] is bool)
+                ? json['is_disabled'] as bool
+                : (json['is_disabled'].toString().toLowerCase() == 'true'),
           ),
         );
       }
@@ -397,6 +462,23 @@ class UseUserHandling {
     } catch (e, st) {
       debugPrint('fetchUsers error: $e\n$st');
       throw Exception('Failed to fetch user_handling: $e');
+    }
+  }
+
+  /// Update only the `is_disabled` flag for a user_handling row by id.
+  /// This is an instance method so callers can call `UseUserHandling().setUserDisabled(...)`.
+  Future<void> setUserDisabled(String id, bool disabled) async {
+    try {
+      await _supabase
+          .from('user_handling')
+          .update({'is_disabled': disabled})
+          .eq('id', id)
+          .select()
+          .maybeSingle();
+      debugPrint('setUserDisabled: id=$id -> $disabled');
+    } catch (e, st) {
+      debugPrint('setUserDisabled error for id=$id: $e\n$st');
+      throw Exception('Failed to set is_disabled on user_handling: $e');
     }
   }
 
@@ -442,7 +524,7 @@ class UseUserHandling {
     try {
       final dynamic rows = await _supabase
           .from('user_handling')
-          .select('id, username, role, password, created_at');
+          .select('id, username, role, password, created_at, is_disabled');
       debugPrint('debugFetchUserHandlingRaw -> $rows');
       if (rows is List) return rows;
       return <dynamic>[];
@@ -573,30 +655,36 @@ class UseUserHandling {
         );
       }
 
-      // Perform update and return updated row
-      final updatedRow = await _supabase
-          .from('user_handling')
-          .update(updateData)
-          .eq('id', id)
-          .select()
-          .maybeSingle();
+  final oldUsername = (existingRow['username'] ?? '').toString().trim();
+  final newUsername = username;
 
-      if (updatedRow == null) {
-        throw Exception(
-          "Failed to update user_handling for $username (id=$id)",
-        );
-      }
+      // If username is changing, we must ensure the *new* username exists in
+      // `user_handling` before updating referencing tables (otherwise the DB
+      // will reject the update with FK violations). Strategy:
+      // 1) Upsert a user_handling row for the new username (may create new row)
+      // 2) Update referencing tables (students/teachers/admins) to point to the new username
+      // 3) Safely delete the old user_handling row (only if it's no longer referenced)
+      // If username is unchanged, perform a normal update on the existing row.
+      if (newUsername.isNotEmpty &&
+          oldUsername.isNotEmpty &&
+          oldUsername != newUsername) {
+        try {
+          // Ensure new username exists (insert or update). Use the normalized role
+          // and provided password so the new row is created with the correct data.
+          final newUhId = await upsertUserHandling(
+            _supabase,
+            newUsername,
+            normalizedRoleForDb,
+            password,
+          );
 
-      debugPrint('✅ Updated user_handling row: $updatedRow');
+          if (newUhId == null || newUhId.isEmpty) {
+            throw Exception(
+              'Failed to create or ensure user_handling for new username: $newUsername',
+            );
+          }
 
-      final oldUsername = (existingRow['username'] ?? '').toString().trim();
-
-      // Propagate username changes to related tables where they still reference the old username.
-      try {
-        final newUsername = username;
-        if (newUsername.isNotEmpty &&
-            oldUsername.isNotEmpty &&
-            oldUsername != newUsername) {
+          // Now it is safe to point referencing rows to the new username.
           await _supabase
               .from('students')
               .update({'username': newUsername})
@@ -609,26 +697,63 @@ class UseUserHandling {
               .from('admins')
               .update({'username': newUsername})
               .eq('username', oldUsername);
+
+          // After references moved, attempt to delete the old user_handling row.
+          // Use safeDeleteUserHandling which checks for remaining references.
+          try {
+            await safeDeleteUserHandling(_supabase, oldUsername);
+          } catch (e) {
+            debugPrint(
+              'Warning: failed to delete old user_handling $oldUsername (ignored): $e',
+            );
+          }
+
+          debugPrint('✅ Username migrated: $oldUsername -> $newUsername');
+        } catch (e, st) {
+          debugPrint('Failed to migrate username to new value: $e\n$st');
+          throw Exception(
+            'Failed to update referencing tables for username change: $e',
+          );
         }
-      } catch (e, st) {
-        debugPrint('Failed to propagate username to related tables: $e\n$st');
+      } else {
+        // No username change — update the existing user_handling row in-place.
+        final updatedRow = await _supabase
+            .from('user_handling')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .maybeSingle();
+
+        if (updatedRow == null) {
+          throw Exception(
+            "Failed to update user_handling for $username (id=$id)",
+          );
+        }
+
+        debugPrint('✅ Updated user_handling row: $updatedRow');
       }
 
-      // Propagate password changes as well
+      // Propagate password changes as well. Use the current username value
+      // (prefer newUsername if set, otherwise oldUsername) to locate rows.
       try {
-        if (password != null && password.isNotEmpty && oldUsername.isNotEmpty) {
+        final targetUsernameForPwd = (newUsername.isNotEmpty)
+            ? newUsername
+            : oldUsername;
+        if (password != null &&
+            password.isNotEmpty &&
+            targetUsernameForPwd.isNotEmpty) {
           await _supabase
               .from('students')
               .update({'password': password})
-              .eq('username', oldUsername);
+              .eq('username', targetUsernameForPwd);
           await _supabase
               .from('teachers')
               .update({'password': password})
-              .eq('username', oldUsername);
+              .eq('username', targetUsernameForPwd);
           await _supabase
               .from('admins')
               .update({'password': password})
-              .eq('username', oldUsername);
+              .eq('username', targetUsernameForPwd);
         }
       } catch (e, st) {
         debugPrint('Failed to propagate password to related tables: $e\n$st');
@@ -678,10 +803,11 @@ class UseUserHandling {
         await syncRolesFromAdminsAndTeachers();
         return await fetchUsers();
       }
+      debugPrint('Sync complete ✅ (updated existing rows only)');
     } catch (e, st) {
-      debugPrint('Teacher check failed: $e\n$st');
+      debugPrint('syncRolesFromAdminsAndTeachers error: $e\n$st');
+      throw Exception('Failed to sync roles: $e');
     }
-
     return users;
   }
 

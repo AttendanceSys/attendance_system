@@ -19,9 +19,9 @@ class MyApp extends StatelessWidget {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
-    url: 'https://lramktivhjyjlvkhkost.supabase.co',
+    url: 'https://eitslpixcfsxyfdvuclb.supabase.co',
     anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxyYW1rdGl2aGp5amx2a2hrb3N0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5MjE0MTIsImV4cCI6MjA3MDQ5NzQxMn0.ZBi0t9LIAbWIPQtG0v7_NF5BRjvVcV6DClclJ-5e_TI',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpdHNscGl4Y2ZzeHlmZHZ1Y2xiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyOTE3NDIsImV4cCI6MjA3Njg2Nzc0Mn0.UTQoWGFaMaTY2KUi9PH_8GqPRsmeHy_GsR4DmZSXBA8',
   );
   runApp(const MyApp());
 }

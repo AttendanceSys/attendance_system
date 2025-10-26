@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/faculty.dart';
+import '../../hooks/use_faculties.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -173,37 +174,22 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                           );
 
                           final messenger = ScaffoldMessenger.of(context);
-                          Navigator.of(context).pop(facultyToSave);
-
+                          final service = UseFaculties();
                           try {
                             if (widget.faculty == null) {
-                              // 🔹 Add new faculty
-                              await supabase.rpc(
-                                'create_faculty',
-                                params: {
-                                  'p_code': facultyToSave.code,
-                                  'p_name': facultyToSave.name,
-                                  'p_establishment_date': facultyToSave
-                                      .establishmentDate
-                                      .toIso8601String(),
-                                  'p_created_by': widget.currentUsername,
-                                },
-                              );
+                              // Add new faculty (direct insert)
+                              await service.addFaculty(facultyToSave);
                             } else {
-                              // 🔹 Update existing faculty
-                              await supabase.rpc(
-                                'update_faculty',
-                                params: {
-                                  'p_code': widget.faculty!.code, // old code
-                                  'p_new_code': facultyToSave.code,
-                                  'p_new_name': facultyToSave.name,
-                                  'p_new_establishment_date': facultyToSave
-                                      .establishmentDate
-                                      .toIso8601String(),
-                                  'p_updated_by': widget.currentUsername,
-                                },
+                              // Update existing faculty by old code
+                              await service.updateFaculty(
+                                widget.faculty!.code,
+                                facultyToSave,
                               );
                             }
+
+                            // Only close the dialog after the DB operation succeeds
+                            if (mounted)
+                              Navigator.of(context).pop(facultyToSave);
 
                             messenger.showSnackBar(
                               const SnackBar(
