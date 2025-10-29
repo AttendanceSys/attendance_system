@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../models/user_model.dart';
-import '../popup/edit_faculty_user_popup.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../models/user.dart';
+import '../../services/session.dart';
+import '../popup/edit_user_popup.dart';
 import '../cards/searchBar.dart';
 
 class FacultyUserHandlingPage extends StatefulWidget {
@@ -12,65 +14,148 @@ class FacultyUserHandlingPage extends StatefulWidget {
 }
 
 class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
-  final List<AppUser> _users = [
-    AppUser(username: 'FAC1234', role: 'Faculty Admin', password: '*******'),
-    AppUser(username: 'TEACH5678', role: 'Teacher', password: '*******'),
-    AppUser(username: 'ASSIST1122', role: 'Assistant', password: '*******'),
-    AppUser(username: 'FAC2345', role: 'Faculty Admin', password: '*******'),
-  ];
+  final CollectionReference usersCollection = FirebaseFirestore.instance
+      .collection('users');
 
+  List<AppUser> _students = [];
   String _searchText = '';
   int? _selectedIndex;
 
-  List<AppUser> get _filteredUsers => _users
+  // (no per-row password visibility needed here)
+
+  List<AppUser> get _filteredStudents => _students
       .where(
-        (user) =>
-            user.username.toLowerCase().contains(_searchText.toLowerCase()) ||
-            user.role.toLowerCase().contains(_searchText.toLowerCase()),
+        (student) =>
+            student.username.toLowerCase().contains(
+              _searchText.toLowerCase(),
+            ) ||
+            student.status.toLowerCase().contains(_searchText.toLowerCase()),
       )
       .toList();
 
-  Future<void> _showEditUserPopup() async {
-    if (_selectedIndex == null) return;
-    final user = _filteredUsers[_selectedIndex!];
-    final result = await showDialog<AppUser>(
-      context: context,
-      builder: (context) => EditUserPopup(user: user),
-    );
-    if (result != null) {
-      int mainIndex = _users.indexOf(user);
+  @override
+  void initState() {
+    super.initState();
+    _fetchStudents();
+  }
+
+  bool _recordMatchesFaculty(Map<String, dynamic> data) {
+    if (Session.facultyRef == null) return true;
+    final sessionId = Session.facultyRef!.id;
+    final sessionPath = '/${Session.facultyRef!.path}';
+
+    final cand =
+        data['faculty_ref'] ??
+        data['faculty_id'] ??
+        data['faculty'] ??
+        data['facultyId'];
+    if (cand == null) return false;
+    if (cand is DocumentReference) return cand.id == sessionId;
+    if (cand is String) {
+      if (cand == sessionId) return true;
+      if (cand == sessionPath) return true;
+      final normalized = cand.startsWith('/') ? cand : '/$cand';
+      if (normalized == sessionPath) return true;
+      final parts = cand.split('/').where((p) => p.isNotEmpty).toList();
+      if (parts.isNotEmpty && parts.last == sessionId) return true;
+    }
+    return false;
+  }
+
+  Future<void> _fetchStudents() async {
+    try {
+      // Always fetch students by role, then apply robust client-side faculty scoping.
+      final Query q = usersCollection.where('role', isEqualTo: 'student');
+      final snap = await q.get();
+      final docs = snap.docs;
       setState(() {
-        _users[mainIndex] = result;
+        _students = docs
+            .map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              // normalize faculty id into string for display/matching
+              final facultyId = (data['faculty_id'] is DocumentReference)
+                  ? (data['faculty_id'] as DocumentReference).id
+                  : (data['faculty_id']?.toString() ?? '');
+
+              return AppUser(
+                id: doc.id,
+                username: data['username'] ?? '',
+                role: data['role'] ?? 'student',
+                password: data['password'] ?? '',
+                facultyId: facultyId,
+                status: data['status'] ?? 'enabled',
+                createdAt:
+                    (data['created_at'] as Timestamp?)?.toDate() ??
+                    DateTime.now(),
+                updatedAt:
+                    (data['updated_at'] as Timestamp?)?.toDate() ??
+                    DateTime.now(),
+              );
+            })
+            .where((u) {
+              // if Session.facultyRef is null then show all; otherwise apply client-side filter as backup
+              if (Session.facultyRef == null) return true;
+              final raw =
+                  docs.firstWhere((d) => d.id == u.id).data()
+                      as Map<String, dynamic>;
+              return _recordMatchesFaculty(raw);
+            })
+            .toList();
+
+        // no per-row password visibility tracking required here
       });
+    } catch (e) {
+      print('Error fetching students for faculty user handling: $e');
     }
   }
 
-  Future<void> _confirmDeleteUser() async {
+  Future<void> _showEditStudentPopup() async {
     if (_selectedIndex == null) return;
-    final user = _filteredUsers[_selectedIndex!];
-    final confirm = await showDialog<bool>(
+    final student = _filteredStudents[_selectedIndex!];
+    final result = await showDialog<AppUser>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Delete User"),
-        content: Text("Are you sure you want to delete '${user.username}'?"),
+      builder: (context) => EditUserPopup(user: student),
+    );
+    if (result != null) {
+      await usersCollection.doc(student.id).update(result.toFirestore());
+      await _fetchStudents();
+    }
+  }
+
+  Future<void> _confirmDeleteStudent(AppUser s) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete student'),
+        content: Text('Delete ${s.username}?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("Cancel"),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Delete"),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
-    if (confirm == true) {
-      setState(() {
-        _users.remove(user);
-        _selectedIndex = null;
-      });
+    if (ok == true) {
+      try {
+        await usersCollection.doc(s.id).delete();
+        await _fetchStudents();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Student deleted'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        print('Error deleting student: $e');
+      }
     }
   }
 
@@ -138,7 +223,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
                             ),
                             onPressed: _selectedIndex == null
                                 ? null
-                                : _showEditUserPopup,
+                                : _showEditStudentPopup,
                             child: const Text(
                               "Edit",
                               style: TextStyle(
@@ -165,7 +250,9 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
                             ),
                             onPressed: _selectedIndex == null
                                 ? null
-                                : _confirmDeleteUser,
+                                : () => _confirmDeleteStudent(
+                                    _filteredStudents[_selectedIndex!],
+                                  ),
                             child: const Text(
                               "Delete",
                               style: TextStyle(
@@ -206,10 +293,10 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
   Widget _buildDesktopTable() {
     return Table(
       columnWidths: const {
-        0: FixedColumnWidth(64),   // No
-        1: FixedColumnWidth(160),  // Username
-        2: FixedColumnWidth(160),  // Role
-        3: FixedColumnWidth(120),  // Password
+        0: FixedColumnWidth(64), // No
+        1: FixedColumnWidth(160), // Username
+        2: FixedColumnWidth(160), // Role
+        3: FixedColumnWidth(120), // Password
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -223,7 +310,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
             _tableHeaderCell("Password"),
           ],
         ),
-        for (int index = 0; index < _filteredUsers.length; index++)
+        for (int index = 0; index < _filteredStudents.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index
@@ -233,11 +320,11 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                _filteredUsers[index].username,
+                _filteredStudents[index].username,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                _filteredUsers[index].role,
+                _filteredStudents[index].role,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
@@ -262,7 +349,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
             _tableHeaderCell("Password"),
           ],
         ),
-        for (int index = 0; index < _filteredUsers.length; index++)
+        for (int index = 0; index < _filteredStudents.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index
@@ -272,11 +359,11 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                _filteredUsers[index].username,
+                _filteredStudents[index].username,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                _filteredUsers[index].role,
+                _filteredStudents[index].role,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
@@ -303,10 +390,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(
-          text,
-          overflow: TextOverflow.ellipsis,
-        ),
+        child: Text(text, overflow: TextOverflow.ellipsis),
       ),
     );
   }

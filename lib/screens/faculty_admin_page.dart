@@ -7,7 +7,7 @@ import '../layouts/faculty_admin_layout.dart';
 import '../components/faculty_dashboard_stats_grid.dart';
 import '../components/pages/faculty_user_handling_page.dart';
 import '../components/pages/attendance_page.dart';
-import '../components/pages/timetable_page.dart';
+import 'package:attendance_system/components/pages/timetable_page.dart';
 
 class FacultyAdminPage extends StatelessWidget {
   const FacultyAdminPage({super.key});

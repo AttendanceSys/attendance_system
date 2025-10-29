@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:attendance_system/screens/super_admin_page.dart';
 import 'package:attendance_system/screens/faculty_admin_page.dart';
-import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
 // <-- Import your teacher page!
 import 'package:attendance_system/screens/teacher_main_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/session.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -59,7 +59,60 @@ class _LoginScreenState extends State<LoginScreen> {
         });
         return;
       }
-      // Navigate based on role
+      // store username in session
+      Session.username = username;
+
+      // Try to fetch the admin's full name and faculty_ref from the 'admins' collection.
+      String? displayName;
+      try {
+        final adminSnap = await FirebaseFirestore.instance
+            .collection('admins')
+            .where('username', isEqualTo: username)
+            .limit(1)
+            .get();
+        if (adminSnap.docs.isNotEmpty) {
+          final adminData = adminSnap.docs.first.data();
+          displayName =
+              (adminData['full_name'] ??
+                      adminData['name'] ??
+                      adminData['display_name'])
+                  as String?;
+
+          // populate facultyRef in session if available
+          final facCandidate =
+              adminData['faculty_ref'] ??
+              adminData['faculty_id'] ??
+              adminData['faculty'];
+          // Normalize and set Session.facultyRef from whatever shape the admin doc uses
+          Session.setFacultyFromField(facCandidate);
+        }
+      } catch (e) {
+        // ignore and fallback below
+      }
+
+      // fallback to user document fields or username
+      displayName ??=
+          (userData['name'] ??
+                  userData['full_name'] ??
+                  userData['display_name'] ??
+                  username)
+              as String;
+
+      // if faculty not found on admins doc, try users doc
+      if (Session.facultyRef == null) {
+        final userFac =
+            userData['faculty_ref'] ??
+            userData['faculty_id'] ??
+            userData['faculty'];
+        Session.setFacultyFromField(userFac);
+      }
+
+      Session.name = displayName;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
+      await Future.delayed(const Duration(milliseconds: 700));
+
       if (role == 'Super admin') {
         Navigator.pushReplacement(
           context,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/session.dart';
 
-class AdminSidebar extends StatelessWidget {
+class AdminSidebar extends StatefulWidget {
   final Function(int) onItemSelected;
   final int selectedIndex;
   final bool collapsed;
@@ -13,7 +15,56 @@ class AdminSidebar extends StatelessWidget {
   });
 
   @override
+  State<AdminSidebar> createState() => _AdminSidebarState();
+}
+
+class _AdminSidebarState extends State<AdminSidebar> {
+  String? displayName;
+
+  @override
+  void initState() {
+    super.initState();
+    displayName = Session.name;
+    if ((displayName == null || displayName!.isEmpty) &&
+        Session.username != null &&
+        Session.username!.isNotEmpty) {
+      _loadDisplayName();
+    }
+  }
+
+  Future<void> _loadDisplayName() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('admins')
+          .where('username', isEqualTo: Session.username)
+          .limit(1)
+          .get();
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        final name =
+            (data['name'] ??
+                    data['full_name'] ??
+                    data['display_name'] ??
+                    Session.username)
+                as String;
+        if (mounted) {
+          setState(() {
+            displayName = name;
+          });
+        }
+        Session.name = name;
+      }
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final collapsed = widget.collapsed;
+    final selectedIndex = widget.selectedIndex;
+    final onItemSelected = widget.onItemSelected;
+
     return Container(
       width: collapsed ? 60 : 220,
       color: const Color(0xFF3B4B9B),
@@ -23,11 +74,11 @@ class AdminSidebar extends StatelessWidget {
           const SizedBox(height: 24),
           // Profile Section
           if (!collapsed)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(
-                "Xasan Cali",
-                style: TextStyle(
+                displayName ?? 'User',
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -40,9 +91,11 @@ class AdminSidebar extends StatelessWidget {
           CircleAvatar(
             radius: 25,
             backgroundColor: const Color(0xFF70C2FF),
-            child: const Text(
-              "X",
-              style: TextStyle(
+            child: Text(
+              (displayName != null && displayName!.isNotEmpty)
+                  ? displayName![0].toUpperCase()
+                  : 'U',
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -145,7 +198,9 @@ class SidebarItem extends StatelessWidget {
               color: isSelected ? selectedBg : Colors.transparent,
             ),
             child: Row(
-              mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+              mainAxisAlignment: collapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
               children: [
                 Icon(
                   icon,
@@ -159,7 +214,9 @@ class SidebarItem extends StatelessWidget {
                     style: TextStyle(
                       color: isSelected ? selectedText : unselectedText,
                       fontSize: 16,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 ],

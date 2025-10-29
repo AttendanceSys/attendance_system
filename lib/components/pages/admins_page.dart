@@ -39,11 +39,36 @@ class _AdminsPageState extends State<AdminsPage> {
         _admins = snapshot.docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
 
+          // faculty_id in the DB may be stored as a DocumentReference or as a string
+          // (e.g. '/faculties/Engineering' or 'Engineering'). Normalize to the id.
+          String facultyId = 'N/A';
+          final facCandidate =
+              data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'];
+          if (facCandidate != null) {
+            if (facCandidate is DocumentReference) {
+              facultyId = facCandidate.id;
+            } else if (facCandidate is String) {
+              final s = facCandidate;
+              // try to extract last path segment if a path was stored
+              if (s.contains('/')) {
+                final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+                if (parts.isNotEmpty)
+                  facultyId = parts.last;
+                else
+                  facultyId = s;
+              } else {
+                facultyId = s;
+              }
+            } else {
+              facultyId = facCandidate.toString();
+            }
+          }
+
           return Admin(
             id: doc.id,
             username: data['username'] ?? 'N/A',
             fullName: data['full_name'] ?? 'N/A',
-            facultyId: (data['faculty_id'] as DocumentReference?)?.id ?? 'N/A',
+            facultyId: facultyId,
             password: data['password'] ?? '',
             createdAt:
                 (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),

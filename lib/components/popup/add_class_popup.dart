@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/classes.dart';
+import '../../services/session.dart';
 
 class AddClassPopup extends StatefulWidget {
   final SchoolClass? schoolClass;
-  final List<String> departments;
-  final List<String> sections;
-  const AddClassPopup({
-    super.key,
-    this.schoolClass,
-    required this.departments,
-    required this.sections,
-  });
+  const AddClassPopup({super.key, this.schoolClass});
 
   @override
   State<AddClassPopup> createState() => _AddClassPopupState();
@@ -19,12 +14,15 @@ class AddClassPopup extends StatefulWidget {
 class _AddClassPopupState extends State<AddClassPopup> {
   final _formKey = GlobalKey<FormState>();
   String? _baseName;
-  String? _department;
+  String? _department; // stores department doc id
   String? _section;
+  List<Map<String, String>> _departments = []; // {id, name}
+  final List<String> _sections = ['A', 'B', 'C', 'D', 'NONE'];
 
   String get _combinedClassName {
     if ((_baseName ?? '').isEmpty) return '';
-    if (_section != null && _section!.isNotEmpty) {
+    // Do not append the section when the user selected 'NONE'
+    if (_section != null && _section!.isNotEmpty && _section != 'NONE') {
       return "${_baseName!} ${_section!}";
     }
     return _baseName!;
@@ -35,15 +33,44 @@ class _AddClassPopupState extends State<AddClassPopup> {
     super.initState();
     // If editing, split class name into base and section if possible
     if (widget.schoolClass != null) {
-      final parts = widget.schoolClass!.name.split(' ');
-      if (parts.length > 1 && widget.sections.contains(parts.last)) {
+      final parts = widget.schoolClass!.className.split(' ');
+      if (parts.length > 1 && _sections.contains(parts.last)) {
         _baseName = parts.sublist(0, parts.length - 1).join(' ');
         _section = parts.last;
       } else {
-        _baseName = widget.schoolClass!.name;
+        _baseName = widget.schoolClass!.className;
         _section = widget.schoolClass!.section;
       }
-      _department = widget.schoolClass!.department;
+      _department = widget.schoolClass!.departmentRef;
+    }
+    _fetchDepartments();
+  }
+
+  Future<void> _fetchDepartments() async {
+    try {
+      Query q = FirebaseFirestore.instance.collection('departments');
+      if (Session.facultyRef != null) {
+        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
+      }
+      final snapshot = await q.get();
+      setState(() {
+        _departments = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>?;
+          final name =
+              (data?['department_name'] ?? data?['name'] ?? '') as String;
+          return {'id': doc.id, 'name': name};
+        }).toList();
+        // Try to resolve existing department value (if editing)
+        if (widget.schoolClass != null && _department != null) {
+          final exists = _departments.any((d) => d['id'] == _department);
+          if (!exists) {
+            // leave null so user selects a valid department
+            _department = null;
+          }
+        }
+      });
+    } catch (e) {
+      print('Error fetching departments: $e');
     }
   }
 
@@ -51,10 +78,12 @@ class _AddClassPopupState extends State<AddClassPopup> {
     if (_formKey.currentState!.validate()) {
       Navigator.of(context).pop(
         SchoolClass(
-          name: _combinedClassName,
-          department: _department!,
-          section: _section ?? '',
-          isActive: widget.schoolClass?.isActive ?? true,
+          id: widget.schoolClass?.id,
+          className: _combinedClassName,
+          departmentRef: _department!,
+          section: _section ?? 'NONE',
+          status: widget.schoolClass?.status ?? true,
+          createdAt: widget.schoolClass?.createdAt,
         ),
       );
     }
@@ -106,8 +135,9 @@ class _AddClassPopupState extends State<AddClassPopup> {
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (val) => setState(() => _baseName = val),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter base class name" : null,
+                  validator: (val) => val == null || val.isEmpty
+                      ? "Enter base class name"
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
@@ -116,12 +146,12 @@ class _AddClassPopupState extends State<AddClassPopup> {
                     hintText: "Department",
                     border: OutlineInputBorder(),
                   ),
-                  items: widget.departments
-                      .map((dep) => DropdownMenuItem(
-                            value: dep,
-                            child: Text(dep),
-                          ))
-                      .toList(),
+                  items: _departments.map((d) {
+                    return DropdownMenuItem(
+                      value: d['id'],
+                      child: Text(d['name'] ?? ''),
+                    );
+                  }).toList(),
                   onChanged: (val) => setState(() => _department = val),
                   validator: (val) =>
                       val == null || val.isEmpty ? "Select department" : null,
@@ -133,15 +163,16 @@ class _AddClassPopupState extends State<AddClassPopup> {
                     hintText: "Section",
                     border: OutlineInputBorder(),
                   ),
-                  items: widget.sections
-                      .map((sec) => DropdownMenuItem(
-                            value: sec,
-                            child: Text(sec.isNotEmpty ? sec : "(none)"),
-                          ))
+                  items: _sections
+                      .map(
+                        (sec) => DropdownMenuItem(
+                          value: sec,
+                          child: Text(sec == 'NONE' ? '(none)' : sec),
+                        ),
+                      )
                       .toList(),
                   onChanged: (val) => setState(() => _section = val),
-                  validator: (val) =>
-                      val == null ? "Select section" : null,
+                  validator: (val) => val == null ? "Select section" : null,
                 ),
                 const SizedBox(height: 12),
                 // Preview field

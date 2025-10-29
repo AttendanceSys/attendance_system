@@ -1,13 +1,39 @@
 class SchoolClass {
-  final String name;
-  final String department;
-  final String section;
-  bool isActive;
+  final String? id;
+  final String className;
+  final String departmentRef; // department document id or ref id
+  final String? facultyRef; // optional faculty id
+  final String section; // A,B,C,D or NONE
+  final bool status; // true = active
+  final DateTime? createdAt;
 
   SchoolClass({
-    required this.name,
-    required this.department,
+    this.id,
+    required this.className,
+    required this.departmentRef,
+    this.facultyRef,
     required this.section,
-    this.isActive = true,
+    this.status = true,
+    this.createdAt,
   });
+
+  SchoolClass copyWith({
+    String? id,
+    String? className,
+    String? departmentRef,
+    String? facultyRef,
+    String? section,
+    bool? status,
+    DateTime? createdAt,
+  }) {
+    return SchoolClass(
+      id: id ?? this.id,
+      className: className ?? this.className,
+      departmentRef: departmentRef ?? this.departmentRef,
+      facultyRef: facultyRef ?? this.facultyRef,
+      section: section ?? this.section,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }
