@@ -4,6 +4,7 @@ class Department {
   final String name;
   final String head;
   final String status;
+  final String facultyId;
 
   Department({
     this.id = '',
@@ -11,6 +12,7 @@ class Department {
     required this.name,
     required this.head,
     required this.status,
+    this.facultyId = '',
   });
 
   Department copyWith({
@@ -19,6 +21,7 @@ class Department {
     String? name,
     String? head,
     String? status,
+    String? facultyId,
   }) {
     return Department(
       id: id ?? this.id,
@@ -26,6 +29,7 @@ class Department {
       name: name ?? this.name,
       head: head ?? this.head,
       status: status ?? this.status,
+      facultyId: facultyId ?? this.facultyId,
     );
   }
 }

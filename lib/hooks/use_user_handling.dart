@@ -120,7 +120,7 @@ Future<bool> safeDeleteUserHandling(
             .select('id')
             .eq('username', username)
             .limit(1);
-        if (res is List && res.isNotEmpty) {
+        if (res.isNotEmpty) {
           // Found a reference, so skip deletion
           debugPrint(
             'safeDeleteUserHandling: found reference in $t, skipping delete for $username',
@@ -255,18 +255,41 @@ class UseStudentHandling {
           .from('students')
           .select('username');
 
-      final Set<String> studentUsernames = (studentRows)
-          .map(
-            (r) => (r as Map<String, dynamic>)['username']?.toString().trim(),
-          )
-          .where((s) => s != null && s.isNotEmpty)
+      // Defensive: if there are no student rows at all, return empty early.
+      if (studentRows.isEmpty) {
+        debugPrint(
+          'Fetched 0 students from students table; returning 0 student user_handling rows',
+        );
+        return <StudentHandling>[];
+      }
+
+      // Build a clean set of usernames from the students table; normalize by
+      // trimming to avoid mismatches due to whitespace.
+      final Set<String> studentUsernames = studentRows
+          .where((r) => r != null)
+          .map((r) {
+            try {
+              final u = (r as Map<String, dynamic>)['username'];
+              return (u ?? '').toString().trim();
+            } catch (_) {
+              return '';
+            }
+          })
+          .where((s) => s.isNotEmpty)
           .cast<String>()
           .toSet();
+
+      if (studentUsernames.isEmpty) {
+        debugPrint(
+          'No valid student usernames found in students table; returning empty list',
+        );
+        return <StudentHandling>[];
+      }
 
       final filtered = userRows
           .where((json) {
             final uname = (json['username'] ?? '').toString().trim();
-            return studentUsernames.contains(uname);
+            return uname.isNotEmpty && studentUsernames.contains(uname);
           })
           .map((json) => StudentHandling.fromJson(json as Map<String, dynamic>))
           .toList();
@@ -545,6 +568,63 @@ class UseUserHandling {
               u.role.toLowerCase() == 'faculty admin',
         )
         .toList();
+  }
+
+  /// Fetch admins and teachers scoped to a faculty. If [facultyId] is not
+  /// provided, resolve the current admin's faculty id. When no faculty can be
+  /// resolved, returns an empty list.
+  Future<List<UserHandling>> fetchAdminsAndTeachersForFaculty({
+    String? facultyId,
+  }) async {
+    try {
+      String? resolvedFacultyId = facultyId;
+      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+        resolvedFacultyId = await resolveCurrentAdminFacultyId(_supabase);
+      }
+      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+        return <UserHandling>[];
+      }
+
+      // Find admin usernames for the faculty
+      final adminRows = await _supabase
+          .from('admins')
+          .select('username')
+          .eq('faculty_id', resolvedFacultyId);
+      final teacherRows = await _supabase
+          .from('teachers')
+          .select('username')
+          .eq('faculty_id', resolvedFacultyId);
+
+      final adminUsernames = (adminRows as List)
+          .map((r) => (r as Map)['username']?.toString().trim())
+          .where((s) => s != null && s.isNotEmpty)
+          .cast<String>()
+          .toSet();
+
+      final teacherUsernames = (teacherRows as List)
+          .map((r) => (r as Map)['username']?.toString().trim())
+          .where((s) => s != null && s.isNotEmpty)
+          .cast<String>()
+          .toSet();
+
+      final usernames = {...adminUsernames, ...teacherUsernames};
+      if (usernames.isEmpty) return <UserHandling>[];
+
+      // Fetch matching user_handling rows
+      final rows = await _supabase
+          .from('user_handling')
+          .select('id, username, role, password, created_at, is_disabled')
+          .filter('username', 'in', usernames.toList());
+
+      final List<UserHandling> users = (rows as List)
+          .map((r) => UserHandling.fromJson(r as Map<String, dynamic>))
+          .toList();
+
+      return users;
+    } catch (e) {
+      debugPrint('fetchAdminsAndTeachersForFaculty error: $e');
+      throw Exception('Failed to fetch admins/teachers for faculty: $e');
+    }
   }
 
   /// Compatibility wrapper: some UI code calls `fetchAllUsers()`.

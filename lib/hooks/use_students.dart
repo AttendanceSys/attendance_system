@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'use_user_handling.dart';
@@ -5,6 +6,12 @@ import '../models/student.dart';
 
 class UseStudents {
   final SupabaseClient _supabase = Supabase.instance.client;
+
+  /// Public wrapper to resolve the current admin's faculty id.
+  /// Returns null if not an admin or resolution fails.
+  Future<String?> resolveAdminFacultyId() async {
+    return await _resolveAdminFacultyId();
+  }
 
   Future<String?> _resolveAdminFacultyId() async {
     try {
@@ -14,9 +21,10 @@ class UseStudents {
 
       Map<String, dynamic>? uh;
       try {
+        // use singular `username` column name (schema uses `username`)
         final res = await _supabase
             .from('user_handling')
-            .select('id, usernames, role')
+            .select('id, username, role')
             .eq('auth_uid', authUid)
             .maybeSingle();
         if (res != null) uh = res as Map<String, dynamic>?;
@@ -28,7 +36,7 @@ class UseStudents {
       if (role != 'admin') return null;
 
       final uhId = (uh['id'] ?? '').toString();
-      final username = (uh['usernames'] ?? '').toString();
+      final username = (uh['username'] ?? '').toString();
 
       Map<String, dynamic>? adminRow;
       if (uhId.isNotEmpty) {
@@ -82,23 +90,66 @@ class UseStudents {
         } catch (_) {}
       }
 
-      var query = _supabase
-          .from('students')
-          .select(
-            'id, username, fullname, gender, department, class, password, created_at, faculty_id, faculty:faculties(id,faculty_name), department:departments(id, department_name), class:classes(id, class_name)',
-          )
-          .order('created_at', ascending: false);
-      final dynamic builder = query;
-      if (resolvedFacultyId != null && resolvedFacultyId.isNotEmpty) {
-        builder.eq('faculty_id', resolvedFacultyId);
+      // If we couldn't resolve a faculty id for the current admin, return
+      // an empty list rather than performing an un-scoped query. This
+      // allows the UI to present a create flow for new students instead
+      // of showing an error or exposing other faculties' data.
+      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+        return <Student>[];
       }
+
+      // Build a select string. Some schemas may not have `gender` column.
+      String selectWithGender =
+          'id, username, fullname, gender, department, class, password, created_at, faculty_id, faculty:faculties(id,faculty_name), department:departments(id, department_name), class:classes(id, class_name)';
+      String selectWithoutGender =
+          'id, username, fullname, department, class, password, created_at, faculty_id, faculty:faculties(id,faculty_name), department:departments(id, department_name), class:classes(id, class_name)';
+
+      dynamic query = _supabase.from('students').select(selectWithGender);
+      // Apply faculty filter before ordering to avoid calling `.eq` on a
+      // transform object that doesn't expose the filter methods in some
+      // runtime builds.
+      query = (query as dynamic).eq('faculty_id', resolvedFacultyId);
+      query = query.order('created_at', ascending: false);
 
       if (limit != null) {
         final int offset = (page ?? 0) * limit;
         query = query.range(offset, offset + limit - 1);
       }
 
-      final List<dynamic> rows = await query as List<dynamic>;
+      List<dynamic> rows;
+      try {
+        rows = await query as List<dynamic>;
+      } catch (e) {
+        // If the error indicates a missing column (e.g., gender), retry without it.
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('does not exist') && msg.contains('gender')) {
+          dynamic fallbackQuery = _supabase
+              .from('students')
+              .select(selectWithoutGender);
+          try {
+            fallbackQuery = (fallbackQuery as dynamic).eq(
+              'faculty_id',
+              resolvedFacultyId,
+            );
+          } catch (_) {
+            // ignore - defensive fallback; rare case where builder doesn't expose eq
+          }
+          fallbackQuery = (fallbackQuery as dynamic).order(
+            'created_at',
+            ascending: false,
+          );
+          if (limit != null) {
+            final int offset = (page ?? 0) * limit;
+            fallbackQuery = (fallbackQuery as dynamic).range(
+              offset,
+              offset + limit - 1,
+            );
+          }
+          rows = await fallbackQuery as List<dynamic>;
+        } else {
+          rethrow;
+        }
+      }
 
       String extractName(dynamic value, String altNameKey) {
         if (value == null) return '';
@@ -159,19 +210,42 @@ class UseStudents {
         );
       }).toList();
     } catch (e) {
+      if (e is NoSuchMethodError) {
+        debugPrint(
+          'fetchStudents: NoSuchMethodError, returning empty list: $e',
+        );
+        return <Student>[];
+      }
       throw Exception('Failed to fetch students: $e');
     }
   }
 
   Future<Student?> fetchStudentById(String id) async {
     try {
-      final response = await _supabase
-          .from('students')
-          .select(
-            'id, username, fullname, gender, department, class, password, created_at, faculty_id, faculty:faculties(id,faculty_name), department:departments(id, department_name), class:classes(id, class_name)',
-          )
-          .eq('id', id)
-          .maybeSingle();
+      final selectWithGender =
+          'id, username, fullname, gender, department, class, password, created_at, faculty_id, faculty:faculties(id,faculty_name), department:departments(id, department_name), class:classes(id, class_name)';
+      final selectWithoutGender =
+          'id, username, fullname, department, class, password, created_at, faculty_id, faculty:faculties(id,faculty_name), department:departments(id, department_name), class:classes(id, class_name)';
+
+      dynamic response;
+      try {
+        response = await _supabase
+            .from('students')
+            .select(selectWithGender)
+            .eq('id', id)
+            .maybeSingle();
+      } catch (e) {
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('does not exist') && msg.contains('gender')) {
+          response = await _supabase
+              .from('students')
+              .select(selectWithoutGender)
+              .eq('id', id)
+              .maybeSingle();
+        } else {
+          rethrow;
+        }
+      }
 
       if (response == null) return null;
 
@@ -188,12 +262,13 @@ class UseStudents {
         }
         if (value is List && value.isNotEmpty) {
           final first = value.first;
-          if (first is Map)
+          if (first is Map) {
             return (first[altNameKey] ??
                     first['department_name'] ??
                     first['class_name'] ??
                     '')
                 as String;
+          }
         }
         return '';
       }
@@ -246,7 +321,41 @@ class UseStudents {
         } catch (_) {}
       }
 
-      await _supabase.from('students').insert({
+      // Enforce presence of faculty_id for new students. If we can't resolve
+      // a faculty id for the current admin, abort to avoid inserting rows
+      // with NULL faculty_id.
+      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+        throw Exception(
+          'Cannot add student: no faculty assigned to current admin',
+        );
+      }
+      // Ensure a corresponding `user_handling` row exists first. Some DB
+      // schemas have a foreign-key constraint from `students.username` ->
+      // `user_handling.username`, so we must upsert the user_handling row
+      // before inserting the student.
+      String? uhId;
+      if (student.username.trim().isNotEmpty) {
+        uhId = await upsertUserHandling(
+          _supabase,
+          student.username.trim(),
+          'student',
+          student.password.trim(),
+        );
+        if (uhId == null) {
+          throw Exception(
+            'Failed to ensure user_handling exists for username=${student.username}',
+          );
+        }
+      }
+
+      // Try inserting with `gender` first; if the column is missing in the
+      // database schema (some deployments may not have it), retry without it.
+      // Build payload for initial insert — do NOT include `user_handling_id`
+      // here because many schemas don't have that column. Including it
+      // causes the insert to fail and our fallback logic would remove
+      // `gender` as well. Instead, insert the student first (with gender)
+      // and then try to write `user_handling_id` in a separate update.
+      final payloadWithGender = {
         'fullname': student.fullName,
         'username': student.username,
         'gender': student.gender,
@@ -257,9 +366,53 @@ class UseStudents {
             ? student.departmentId
             : student.department,
         'password': student.password,
-        if (resolvedFacultyId != null && resolvedFacultyId.isNotEmpty)
-          'faculty_id': resolvedFacultyId,
-      });
+        // resolvedFacultyId is guaranteed non-null here
+        'faculty_id': resolvedFacultyId,
+      };
+
+      try {
+        await _supabase.from('students').insert(payloadWithGender);
+
+        // Now attempt to write user_handling_id into the students row if we
+        // created/ensured a user_handling above. Update by username (unique
+        // in user_handling) so this works on schemas without the column too
+        // (we'll catch missing-column errors below).
+        if (uhId != null && uhId.isNotEmpty) {
+          try {
+            await _supabase
+                .from('students')
+                .update({'user_handling_id': uhId})
+                .eq('username', student.username);
+          } catch (e) {
+            final msg = e.toString().toLowerCase();
+            if (msg.contains('does not exist') &&
+                msg.contains('user_handling_id')) {
+              // Column missing in this schema — ignore silently.
+              debugPrint(
+                'students.user_handling_id column not present; skipping write',
+              );
+            } else {
+              // Non-schema-related error — log for inspection but don't fail
+              debugPrint('Failed to write user_handling_id: $e');
+            }
+          }
+        }
+      } catch (e) {
+        final msg = e.toString().toLowerCase();
+
+        // If the failure explicitly mentions `gender` missing, retry without it.
+        if (msg.contains('gender') &&
+            (msg.contains('does not exist') ||
+                msg.contains('could not find') ||
+                msg.contains('pgrst204') ||
+                msg.contains('not exist'))) {
+          final payloadFallback = Map<String, dynamic>.from(payloadWithGender)
+            ..remove('gender');
+          await _supabase.from('students').insert(payloadFallback);
+        } else {
+          rethrow;
+        }
+      }
     } catch (e) {
       throw Exception('Failed to add student: $e');
     }
@@ -332,12 +485,31 @@ class UseStudents {
         data['faculty_id'] = resolvedFacultyId;
       }
 
-      // Fetch existing student row for old username / user_handling_id
-      final existing = await _supabase
-          .from('students')
-          .select('username, user_handling_id')
-          .eq('id', id)
-          .maybeSingle();
+      // Fetch existing student row for old username / user_handling_id.
+      // Some DB schemas don't have `students.user_handling_id`. Try selecting
+      // it first and fall back to selecting only `username` if the column is
+      // missing (Postgrest will throw an error in that case).
+      dynamic existing;
+      try {
+        existing = await _supabase
+            .from('students')
+            .select('username, user_handling_id')
+            .eq('id', id)
+            .maybeSingle();
+      } catch (e) {
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('does not exist') &&
+            msg.contains('user_handling_id')) {
+          // retry without the non-existent column
+          existing = await _supabase
+              .from('students')
+              .select('username')
+              .eq('id', id)
+              .maybeSingle();
+        } else {
+          rethrow;
+        }
+      }
 
       final oldUsername = (existing != null && existing['username'] != null)
           ? existing['username'].toString().trim()
@@ -347,7 +519,45 @@ class UseStudents {
           ? existing['user_handling_id'].toString()
           : null;
 
-      await _supabase.from('students').update(data).eq('id', id);
+      // If the username is changing (or new) ensure the user_handling row
+      // exists/upsert BEFORE updating the students row to satisfy any
+      // foreign-key constraints that reference user_handling.username.
+      final newUsername = student.username.trim();
+      final oldUsernameLookup =
+          (existing != null && existing['username'] != null)
+          ? existing['username'].toString().trim()
+          : '';
+      if (newUsername.isNotEmpty && newUsername != oldUsernameLookup) {
+        final uhId = await upsertUserHandling(
+          _supabase,
+          newUsername,
+          'student',
+          student.password.trim(),
+        );
+        if (uhId == null) {
+          throw Exception(
+            'Failed to ensure user_handling exists for username=$newUsername before updating student',
+          );
+        }
+      }
+
+      // Attempt update; if `gender` column doesn't exist, retry without it.
+      try {
+        await _supabase.from('students').update(data).eq('id', id);
+      } catch (e) {
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('gender') &&
+            (msg.contains('does not exist') ||
+                msg.contains('could not find') ||
+                msg.contains('pgrst204') ||
+                msg.contains('not exist'))) {
+          final dataNoGender = Map<String, dynamic>.from(data)
+            ..remove('gender');
+          await _supabase.from('students').update(dataNoGender).eq('id', id);
+        } else {
+          rethrow;
+        }
+      }
 
       // After updating the students table, try to update linked user_handling row first
       try {
@@ -358,9 +568,9 @@ class UseStudents {
 
         if (existingUhId != null && existingUhId.isNotEmpty) {
           final updateData = <String, dynamic>{
-            if (newUsername.isNotEmpty) 'usernames': newUsername,
+            if (newUsername.isNotEmpty) 'username': newUsername,
             'role': 'student',
-            if (newPassword.isNotEmpty) 'passwords': newPassword,
+            if (newPassword.isNotEmpty) 'password': newPassword,
           };
 
           try {
@@ -370,8 +580,9 @@ class UseStudents {
                 .eq('id', existingUhId)
                 .select()
                 .maybeSingle();
-            if (updated != null && updated['id'] != null)
+            if (updated != null && updated['id'] != null) {
               uhId = updated['id'] as String;
+            }
           } catch (e) {
             debugPrint(
               'Failed to update user_handling by id $existingUhId: $e',
@@ -384,15 +595,16 @@ class UseStudents {
             final updated = await _supabase
                 .from('user_handling')
                 .update({
-                  if (newUsername.isNotEmpty) 'usernames': newUsername,
+                  if (newUsername.isNotEmpty) 'username': newUsername,
                   'role': 'student',
-                  if (newPassword.isNotEmpty) 'passwords': newPassword,
+                  if (newPassword.isNotEmpty) 'password': newPassword,
                 })
-                .eq('usernames', oldUsername)
+                .eq('username', oldUsername)
                 .select()
                 .maybeSingle();
-            if (updated != null && updated['id'] != null)
+            if (updated != null && updated['id'] != null) {
               uhId = updated['id'] as String;
+            }
           } catch (e) {
             debugPrint(
               'Failed to update user_handling by old username $oldUsername: $e',
@@ -419,6 +631,27 @@ class UseStudents {
         if (uhId != null && uhId.isNotEmpty) {
           // If you added user_handling_id/user_id columns to students, update them here.
           // For the default schema we only ensure username/password are kept in sync.
+          try {
+            // Attempt to write the user_handling_id into the students row if the
+            // column exists. If the column doesn't exist, ignore the error.
+            await _supabase
+                .from('students')
+                .update({'user_handling_id': uhId})
+                .eq('id', id);
+          } catch (e) {
+            final msg = e.toString().toLowerCase();
+            if (msg.contains('does not exist') &&
+                msg.contains('user_handling_id')) {
+              // Column missing on this schema; that's fine — continue.
+              debugPrint(
+                'students.user_handling_id column not present; skipping write',
+              );
+            } else {
+              debugPrint(
+                'Failed to write user_handling_id into students row: $e',
+              );
+            }
+          }
         }
       } catch (e) {
         debugPrint(
@@ -433,12 +666,30 @@ class UseStudents {
   /// Delete a student by id.
   Future<void> deleteStudent(String id) async {
     try {
-      // Fetch the student row to get the username or user_handling_id
-      final student = await _supabase
-          .from('students')
-          .select('username, user_handling_id')
-          .eq('id', id)
-          .maybeSingle();
+      // Fetch the student row to get the username or user_handling_id.
+      // Some schemas don't have `students.user_handling_id` so try selecting
+      // it and fall back to selecting only `username` when the column is
+      // missing.
+      dynamic student;
+      try {
+        student = await _supabase
+            .from('students')
+            .select('username, user_handling_id')
+            .eq('id', id)
+            .maybeSingle();
+      } catch (e) {
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('does not exist') &&
+            msg.contains('user_handling_id')) {
+          student = await _supabase
+              .from('students')
+              .select('username')
+              .eq('id', id)
+              .maybeSingle();
+        } else {
+          rethrow;
+        }
+      }
 
       String? username = student?['username'] as String?;
       String? uhId = student?['user_handling_id'] as String?;
@@ -487,10 +738,187 @@ class UseStudents {
   }
 
   Stream<List<Map<String, dynamic>>> subscribeStudents() {
-    return _supabase
-        .from('students')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false);
+    // Use a StreamController so we can manage the Supabase realtime
+    // subscription lifecycle explicitly and recover from channel errors
+    // (RealtimeSubscribeException) or JS interop TypeErrors without
+    // propagating uncaught exceptions to the UI.
+
+    final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
+    StreamSubscription<dynamic>? supaSub;
+    var attempt = 0;
+
+    Future<void> startSubscription() async {
+      try {
+        // Resolve faculty id and scope the subscription where possible. This
+        // narrows the realtime channel topic and reduces rejoin/close churn
+        // (and avoids exposing other faculties' data).
+        String? resolvedFacultyId;
+        try {
+          resolvedFacultyId = await _resolveAdminFacultyId();
+        } catch (_) {}
+
+        if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+          // No faculty resolved for current user — do not create an unscoped
+          // subscription. We'll log and return (the controller remains open
+          // and callers will receive no realtime events).
+          debugPrint(
+            'subscribeStudents: no faculty id resolved; skipping realtime subscription',
+          );
+          return;
+        }
+
+        final raw =
+            (_supabase
+                    .from('students')
+                    .stream(primaryKey: ['id'])
+                    .eq('faculty_id', resolvedFacultyId)
+                    .order('created_at', ascending: false))
+                as Stream<dynamic>;
+
+        // Run subscription inside its own zone so JS interop or unexpected
+        // errors from the realtime client don't bubble as uncaught errors
+        // to the root zone. We still log them and attempt a retry.
+        runZonedGuarded(
+          () {
+            supaSub = raw.listen(
+              (event) {
+                try {
+                  List<Map<String, dynamic>> out;
+                  if (event == null) {
+                    out = <Map<String, dynamic>>[];
+                  } else if (event is List) {
+                    out = (event)
+                        .map((e) => Map<String, dynamic>.from(e))
+                        .toList();
+                  } else {
+                    try {
+                      final tmp = List.from(event);
+                      out = tmp
+                          .map((e) => Map<String, dynamic>.from(e))
+                          .toList();
+                    } catch (inner) {
+                      if (event is Map) {
+                        out = [Map<String, dynamic>.from(event)];
+                      } else {
+                        rethrow;
+                      }
+                    }
+                  }
+
+                  if (!controller.isClosed) controller.add(out);
+                } catch (e, st) {
+                  // Known occasional JS interop TypeError can surface here
+                  // (e.g. `Instance of 'JSArray<dynamic>'` casting issues).
+                  // Log minimally and continue; the outer onError/onDone will
+                  // attempt to restart the subscription.
+                  final msg = e.toString();
+                  if (msg.contains('JSArray') ||
+                      msg.contains('type') && msg.contains('Binding')) {
+                    debugPrint(
+                      'subscribeStudents: encountered JSArray interop error (ignored)',
+                    );
+                  } else {
+                    debugPrint(
+                      'subscribeStudents: failed to coerce event: $e\n$st',
+                    );
+                  }
+                }
+              },
+              onError: (err, st) async {
+                final serr = err.toString();
+                // Suppress noisy stack traces for known realtime/channel errors
+                if (serr.contains('JSArray') ||
+                    (serr.contains('type') && serr.contains('Binding'))) {
+                  debugPrint(
+                    'subscribeStudents realtime error (interop JSArray) - restarting subscription',
+                  );
+                } else if (serr.contains('RealtimeSubscribeException') ||
+                    serr.contains('channelError')) {
+                  debugPrint(
+                    'subscribeStudents realtime channel error - restarting subscription',
+                  );
+                } else {
+                  debugPrint('subscribeStudents realtime error: $err\n$st');
+                }
+                // When an error occurs, cancel the current subscription and retry
+                try {
+                  await supaSub?.cancel();
+                } catch (cancelErr, cancelSt) {
+                  debugPrint(
+                    'Error cancelling supabase subscription: $cancelErr\n$cancelSt',
+                  );
+                }
+                if (!controller.isClosed) {
+                  attempt = (attempt + 1).clamp(1, 6);
+                  final delaySec = 1 << (attempt > 5 ? 5 : attempt);
+                  await Future.delayed(Duration(seconds: delaySec));
+                  if (!controller.isClosed) startSubscription();
+                }
+              },
+              onDone: () async {
+                debugPrint('subscribeStudents: underlying stream done');
+                // attempt to restart unless controller closed
+                if (!controller.isClosed) {
+                  attempt = 0;
+                  await Future.delayed(const Duration(seconds: 1));
+                  if (!controller.isClosed) startSubscription();
+                }
+              },
+            );
+          },
+          (err, st) async {
+            // Errors thrown inside the zone (including JS interop TypeErrors)
+            // will be captured here. For known realtime/channel errors we log
+            // a short message and attempt restart to avoid noisy stacks.
+            final serr = err.toString();
+            if (serr.contains('RealtimeSubscribeException') ||
+                serr.contains('channelError')) {
+              debugPrint(
+                'subscribeStudents zone realtime/channel error - restarting (short log)',
+              );
+            } else if (serr.contains('JSArray') ||
+                (serr.contains('type') && serr.contains('Binding'))) {
+              debugPrint('subscribeStudents zone JS interop error (ignored)');
+            } else {
+              debugPrint('subscribeStudents zone error: $err\n$st');
+            }
+            try {
+              await supaSub?.cancel();
+            } catch (_) {}
+            if (!controller.isClosed) {
+              attempt = (attempt + 1).clamp(1, 6);
+              final delaySec = 1 << (attempt > 5 ? 5 : attempt);
+              await Future.delayed(Duration(seconds: delaySec));
+              if (!controller.isClosed) startSubscription();
+            }
+          },
+        );
+      } catch (e, st) {
+        debugPrint('subscribeStudents failed to start: $e\n$st');
+        if (!controller.isClosed) {
+          attempt = (attempt + 1).clamp(1, 6);
+          final delaySec = 1 << (attempt > 5 ? 5 : attempt);
+          await Future.delayed(Duration(seconds: delaySec));
+          if (!controller.isClosed) startSubscription();
+        }
+      }
+    }
+
+    controller.onListen = () {
+      attempt = 0;
+      startSubscription();
+    };
+
+    controller.onCancel = () async {
+      try {
+        await supaSub?.cancel();
+      } catch (_) {}
+      try {
+        if (!controller.isClosed) await controller.close();
+      } catch (_) {}
+    };
+
+    return controller.stream;
   }
 
   /// Fetch students for a given department and class (and optionally section).
@@ -510,8 +938,9 @@ class UseStudents {
         final matchesDept = s.department.toString().trim() == department.trim();
         final matchesClass = s.className.toString().trim() == className.trim();
 
-        if (section == null || section.trim().isEmpty)
+        if (section == null || section.trim().isEmpty) {
           return matchesDept && matchesClass;
+        }
 
         final dynamic maybeSection = (s as dynamic).section;
         if (maybeSection != null) {
@@ -566,12 +995,13 @@ class UseStudents {
         }
         if (value is List && value.isNotEmpty) {
           final first = value.first;
-          if (first is Map)
+          if (first is Map) {
             return (first[altNameKey] ??
                     first['department_name'] ??
                     first['class_name'] ??
                     '')
                 as String;
+          }
         }
         return '';
       }
@@ -617,12 +1047,28 @@ class UseStudents {
     }
   }
 
-  /// Fetch departments list
-  Future<List<Map<String, String>>> fetchDepartments() async {
+  /// Fetch departments list scoped to the current admin's faculty (or the
+  /// provided `facultyId`). If no faculty can be resolved, returns an empty
+  /// list to avoid exposing other faculties' departments.
+  Future<List<Map<String, String>>> fetchDepartments({
+    String? facultyId,
+  }) async {
     try {
+      String? resolvedFacultyId = facultyId;
+      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+        try {
+          resolvedFacultyId = await _resolveAdminFacultyId();
+        } catch (_) {}
+      }
+
+      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+        return <Map<String, String>>[];
+      }
+
       final resp = await _supabase
           .from('departments')
           .select('id, department_name, faculty_id')
+          .eq('faculty_id', resolvedFacultyId)
           .order('department_name', ascending: true);
       final List<dynamic> rows = resp as List<dynamic>;
       return rows.map((r) {

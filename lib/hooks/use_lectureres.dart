@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'use_user_handling.dart';
@@ -404,5 +405,117 @@ class UseTeachers {
     } catch (e) {
       debugPrint('Error deleting teacher: $e');
     }
+  }
+
+  /// Subscribe to realtime changes for the `teachers` table.
+  /// Returns a broadcast stream of List<Map<String,dynamic>> events.
+  Stream<List<Map<String, dynamic>>> subscribeTeachers() {
+    final controller = StreamController<List<Map<String, dynamic>>>.broadcast();
+    StreamSubscription<dynamic>? supaSub;
+    var attempt = 0;
+
+    Future<void> startSubscription() async {
+      try {
+        final raw =
+            (_supabase
+                    .from('teachers')
+                    .stream(primaryKey: ['id'])
+                    .order('created_at', ascending: false))
+                as Stream<dynamic>;
+
+        runZonedGuarded(
+          () {
+            supaSub = raw.listen(
+              (event) {
+                try {
+                  List<Map<String, dynamic>> out;
+                  if (event == null) {
+                    out = <Map<String, dynamic>>[];
+                  } else if (event is List) {
+                    out = (event)
+                        .map((e) => Map<String, dynamic>.from(e))
+                        .toList();
+                  } else {
+                    try {
+                      final tmp = List.from(event);
+                      out = tmp
+                          .map((e) => Map<String, dynamic>.from(e))
+                          .toList();
+                    } catch (inner) {
+                      if (event is Map) {
+                        out = [Map<String, dynamic>.from(event)];
+                      } else {
+                        rethrow;
+                      }
+                    }
+                  }
+                  if (!controller.isClosed) controller.add(out);
+                } catch (e, st) {
+                  debugPrint(
+                    'subscribeTeachers: failed to coerce event: $e\n$st',
+                  );
+                }
+              },
+              onError: (err, st) async {
+                debugPrint('subscribeTeachers realtime error: $err\n$st');
+                try {
+                  await supaSub?.cancel();
+                } catch (_) {}
+                if (!controller.isClosed) {
+                  attempt = (attempt + 1).clamp(1, 6);
+                  final delaySec = 1 << (attempt > 5 ? 5 : attempt);
+                  await Future.delayed(Duration(seconds: delaySec));
+                  if (!controller.isClosed) startSubscription();
+                }
+              },
+              onDone: () async {
+                debugPrint('subscribeTeachers: underlying stream done');
+                if (!controller.isClosed) {
+                  attempt = 0;
+                  await Future.delayed(const Duration(seconds: 1));
+                  if (!controller.isClosed) startSubscription();
+                }
+              },
+            );
+          },
+          (err, st) async {
+            debugPrint('subscribeTeachers zone error: $err\n$st');
+            try {
+              await supaSub?.cancel();
+            } catch (_) {}
+            if (!controller.isClosed) {
+              attempt = (attempt + 1).clamp(1, 6);
+              final delaySec = 1 << (attempt > 5 ? 5 : attempt);
+              await Future.delayed(Duration(seconds: delaySec));
+              if (!controller.isClosed) startSubscription();
+            }
+          },
+        );
+      } catch (e, st) {
+        debugPrint('subscribeTeachers failed to start: $e\n$st');
+        if (!controller.isClosed) {
+          attempt = (attempt + 1).clamp(1, 6);
+          final delaySec = 1 << (attempt > 5 ? 5 : attempt);
+          await Future.delayed(Duration(seconds: delaySec));
+          if (!controller.isClosed) startSubscription();
+        }
+      }
+    }
+
+    controller.onListen = () {
+      attempt = 0;
+      startSubscription();
+    };
+
+    controller.onCancel = () async {
+      try {
+        await supaSub?.cancel();
+      } catch (_) {}
+      try {
+        if (!controller.isClosed) await controller.close();
+      } catch (_) {}
+    };
+
+    return controller.stream;
   }
 }

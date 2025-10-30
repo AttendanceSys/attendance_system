@@ -3,6 +3,7 @@ class Course {
   final String name;
   final String teacher;
   final String className;
+  final String department;
   final int semester;
 
   final String id;
@@ -13,6 +14,7 @@ class Course {
     required this.name,
     required this.teacher,
     required this.className,
+    this.department = '',
     required this.semester,
   });
 
@@ -36,7 +38,7 @@ class Course {
             '';
       } else if (t is List && t.isNotEmpty) {
         final first = t.first;
-        if (first is Map)
+        if (first is Map) {
           teacherDisplay =
               (first['teacher_name'] ??
                       first['username'] ??
@@ -44,7 +46,7 @@ class Course {
                       '')
                   ?.toString() ??
               '';
-        else if (first != null)
+        } else if (first != null)
           teacherDisplay = first.toString();
       } else if (t != null) {
         teacherDisplay = t.toString();
@@ -60,10 +62,10 @@ class Course {
         classDisplay = (c['class_name'] ?? c['name'] ?? '')?.toString() ?? '';
       } else if (c is List && c.isNotEmpty) {
         final first = c.first;
-        if (first is Map)
+        if (first is Map) {
           classDisplay =
               (first['class_name'] ?? first['name'] ?? '')?.toString() ?? '';
-        else if (first != null)
+        } else if (first != null)
           classDisplay = first.toString();
       } else if (c != null) {
         classDisplay = c.toString();
@@ -72,12 +74,37 @@ class Course {
       classDisplay = '';
     }
 
+    // Determine department display name. The API may return a nested
+    // department object under 'department', or a plain 'department_name'
+    // field, or a uuid string in 'department'/'department_id'. Handle all
+    // shapes defensively and prefer the human-readable department_name.
+    String departmentDisplay = '';
+    try {
+      final depObj = map['department'] ?? map['department_name'] ?? map['dept'];
+      if (depObj == null) {
+        departmentDisplay = '';
+      } else if (depObj is Map) {
+        departmentDisplay =
+            (depObj['department_name'] ??
+                    depObj['department_code'] ??
+                    depObj['name'] ??
+                    '')
+                ?.toString() ??
+            '';
+      } else {
+        departmentDisplay = depObj.toString();
+      }
+    } catch (_) {
+      departmentDisplay = '';
+    }
+
     return Course(
       id: (map['id'] ?? '')?.toString() ?? '',
       code: (map['course_code'] ?? map['code'] ?? '')?.toString() ?? '',
       name: (map['course_name'] ?? map['name'] ?? '')?.toString() ?? '',
       teacher: teacherDisplay,
       className: classDisplay,
+      department: departmentDisplay,
       semester: sem,
     );
   }
@@ -88,6 +115,7 @@ class Course {
       if (name.isNotEmpty) 'course_name': name,
       if (teacher.isNotEmpty) 'teacher_assigned': teacher,
       if (className.isNotEmpty) 'class': className,
+      if (department.isNotEmpty) 'department': department,
       'semester': semester.toString(),
     };
   }

@@ -78,6 +78,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final role = user['role'];
     final fullName = (user['full_name'] ?? user['usernames'] ?? username)
         .toString();
+    final String? userFacultyId = (user['faculty_id'] != null)
+        ? user['faculty_id'].toString()
+        : null;
 
     // Show a brief welcome message with full name in the login screen
     if (mounted) {
@@ -97,7 +100,10 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => FacultyAdminPage(displayName: fullName),
+            builder: (_) => FacultyAdminPage(
+              displayName: fullName,
+              facultyId: userFacultyId,
+            ),
           ),
         );
         break;

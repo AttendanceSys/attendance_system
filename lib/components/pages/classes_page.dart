@@ -19,7 +19,10 @@ class _ClassesPageState extends State<ClassesPage> {
   final UseDepartments _departmentsService = UseDepartments();
   List<Department> _departments = [];
 
-  final List<String> departments = ['CS', 'MATH', 'GEO', 'BIO', 'CHEM'];
+  // Departments are loaded from the backend into `_departments`.
+  // Don't fall back to a hard-coded list when the DB returns no rows —
+  // passing an empty list will make the UI show an empty dropdown instead
+  // of phantom default departments.
   final List<String> sections = ['A', 'B', 'C', 'D', ''];
 
   String _searchText = '';
@@ -30,34 +33,56 @@ class _ClassesPageState extends State<ClassesPage> {
   String? _loadError;
 
   List<SchoolClass> get _filteredClasses => _classes.where((cls) {
-        final deptName = _getDepartmentName(cls.department).toLowerCase();
-        return cls.name.toLowerCase().contains(_searchText.toLowerCase()) ||
-            deptName.contains(_searchText.toLowerCase());
-      }).toList();
+    final deptName = _getDepartmentName(cls.department).toLowerCase();
+    return cls.name.toLowerCase().contains(_searchText.toLowerCase()) ||
+        deptName.contains(_searchText.toLowerCase());
+  }).toList();
 
   Future<void> _showAddClassPopup() async {
+    debugPrint(
+      '[showAddClassPopup] current _departments length=${_departments.length}',
+    );
+    if (_departments.isEmpty) {
+      // Attempt an on-demand reload in case auth or backend wasn't ready
+      // when the page first loaded. This avoids a poor UX where the Add
+      // dialog is blocked even though data will soon be available.
+      await _loadDepartments();
+      if (_departments.isEmpty) {
+        // Friendly UX: prevent opening Add Class when no departments exist for this faculty
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No departments available for your faculty. Please add a department first.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    }
+    try {
+      debugPrint(
+        '[showAddClassPopup] sample departments: ${_departments.take(5).map((d) => d.name).toList()}',
+      );
+    } catch (_) {}
+
     final result = await showDialog<SchoolClass>(
       context: context,
-      builder: (context) => AddClassPopup(
-        departments: _departments.isNotEmpty
-            ? _departments.map((d) => d).toList()
-            : departments
-                .map(
-                  (c) => Department(
-                    id: '',
-                    code: c,
-                    name: c,
-                    head: '',
-                    status: '',
-                  ),
-                )
-                .toList(),
-        sections: sections,
-      ),
+      builder: (context) =>
+          AddClassPopup(departments: _departments, sections: sections),
     );
     if (result != null) {
       try {
-        await _classesService.addClass(result);
+        // Prefer resolving faculty id from the departments service (which
+        // already resolved/cached it during department fetch) and pass it to
+        // addClass to avoid timing issues where UseClasses' resolver may
+        // return null if auth state changed between calls.
+        String? facultyId;
+        try {
+          facultyId = await _departmentsService.resolveAdminFacultyId();
+        } catch (_) {}
+        await _classesService.addClass(result, facultyId: facultyId);
         await _loadClasses();
         setState(() => _selectedIndex = null);
       } catch (e) {
@@ -73,11 +98,63 @@ class _ClassesPageState extends State<ClassesPage> {
   String _getDepartmentName(String dept) {
     if (_departments.isEmpty) return dept;
     try {
+      // First try a direct match by id, name or code
       final found = _departments.firstWhere(
         (d) => d.id == dept || d.name == dept || d.code == dept,
       );
       return found.name;
     } catch (_) {
+      // If the stored value is a Map-like string (e.g. "{id: ...}") or
+      // a JSON-like blob, attempt to extract a UUID or department_name
+      // and resolve from the cached departments list.
+      try {
+        // Try to extract a UUID (Postgres UUID format)
+        final uuidRegex = RegExp(
+          r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',
+        );
+        final uuidMatch = uuidRegex.firstMatch(dept);
+        if (uuidMatch != null) {
+          final id = uuidMatch.group(0) ?? '';
+          try {
+            final byId = _departments.firstWhere((d) => d.id == id);
+            return byId.name;
+          } catch (_) {}
+        }
+
+        // Try to extract a department_name like pattern: department_name: Foo
+        if (dept.toLowerCase().contains('department_name')) {
+          try {
+            final key = 'department_name';
+            final lower = dept.toLowerCase();
+            final idx = lower.indexOf(key);
+            if (idx != -1) {
+              var after = dept.substring(idx + key.length);
+              // find separator ':' or '='
+              final sepIdx = after.indexOf(':');
+              final altIdx = after.indexOf('=');
+              int sep = sepIdx >= 0 ? sepIdx : (altIdx >= 0 ? altIdx : -1);
+              if (sep >= 0 && sep + 1 < after.length) {
+                var rest = after.substring(sep + 1).trim();
+                if (rest.startsWith('"') || rest.startsWith('\'')) {
+                  rest = rest.substring(1);
+                }
+                var endIdx = rest.indexOf(',');
+                if (endIdx == -1) endIdx = rest.indexOf('}');
+                if (endIdx == -1) endIdx = rest.length;
+                final name = rest.substring(0, endIdx).trim();
+                if (name.isNotEmpty) {
+                  try {
+                    final byName = _departments.firstWhere(
+                      (d) => d.name == name,
+                    );
+                    return byName.name;
+                  } catch (_) {}
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
       return dept;
     }
   }
@@ -89,19 +166,7 @@ class _ClassesPageState extends State<ClassesPage> {
       context: context,
       builder: (context) => AddClassPopup(
         schoolClass: schoolClass,
-        departments: _departments.isNotEmpty
-            ? _departments
-            : departments
-                .map(
-                  (c) => Department(
-                    id: '',
-                    code: c,
-                    name: c,
-                    head: '',
-                    status: '',
-                  ),
-                )
-                .toList(),
+        departments: _departments,
         sections: sections,
       ),
     );
@@ -190,8 +255,9 @@ class _ClassesPageState extends State<ClassesPage> {
         (_classes[mainIndex] as dynamic).isActive = value;
       } catch (_) {
         try {
-          (_classes[mainIndex] as dynamic).status =
-              value ? 'Active' : 'in active';
+          (_classes[mainIndex] as dynamic).status = value
+              ? 'Active'
+              : 'in active';
         } catch (_) {}
       }
     });
@@ -200,7 +266,9 @@ class _ClassesPageState extends State<ClassesPage> {
       // Build an updated instance to send to backend if possible
       SchoolClass updated;
       try {
-        updated = ( _classes[mainIndex] as dynamic ).copyWith(isActive: value) as SchoolClass;
+        updated =
+            (_classes[mainIndex] as dynamic).copyWith(isActive: value)
+                as SchoolClass;
       } catch (_) {
         // fallback construct
         updated = SchoolClass(
@@ -224,8 +292,9 @@ class _ClassesPageState extends State<ClassesPage> {
             (_classes[mainIndex] as dynamic).isActive = previous;
           } catch (_) {
             try {
-              (_classes[mainIndex] as dynamic).status =
-                  previous ? 'Active' : 'in active';
+              (_classes[mainIndex] as dynamic).status = previous
+                  ? 'Active'
+                  : 'in active';
             } catch (_) {}
           }
         });
@@ -244,16 +313,75 @@ class _ClassesPageState extends State<ClassesPage> {
   }
 
   Future<void> _loadDepartments() async {
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-        _loadError = null;
-      });
-    }
     try {
-      final list = await _departmentsService.fetchDepartments();
+      // First attempt: try to fetch normally (prefers resolving faculty via auth)
+      List<Department> list = await _departmentsService.fetchDepartments();
+      debugPrint(
+        '[ClassesPage._loadDepartments] fetched ${list.length} departments',
+      );
+      try {
+        debugPrint(
+          '[ClassesPage._loadDepartments] sample: ${list.take(5).map((d) => d.name).toList()}',
+        );
+      } catch (_) {}
+
+      // If empty, retry a few times with short delays in case auth/backend
+      // become available shortly after page init (common on web hot-reload).
+      if (list.isEmpty) {
+        const int retryAttempts = 4;
+        const Duration retryDelay = Duration(milliseconds: 350);
+        for (int attempt = 1; attempt <= retryAttempts; attempt++) {
+          if (!mounted) break;
+          await Future.delayed(retryDelay);
+          try {
+            final tryList = await _departmentsService.fetchDepartments();
+            debugPrint(
+              '[ClassesPage._loadDepartments] retry $attempt fetched ${tryList.length} depts',
+            );
+            list = tryList;
+            try {
+              debugPrint(
+                '[ClassesPage._loadDepartments] retry $attempt sample: ${tryList.take(5).map((d) => d.name).toList()}',
+              );
+            } catch (_) {}
+            if (list.isNotEmpty) break;
+          } catch (e) {
+            debugPrint(
+              '[ClassesPage._loadDepartments] retry $attempt failed: $e',
+            );
+          }
+        }
+      }
+
+      // If still empty, attempt the explicit resolve+fetch path as a last resort.
+      List<Department> finalList = list;
+      if (finalList.isEmpty) {
+        try {
+          final resolved = await _departmentsService.resolveAdminFacultyId();
+          debugPrint(
+            '[ClassesPage._loadDepartments] resolved facultyId=$resolved',
+          );
+          if (resolved != null && resolved.isNotEmpty) {
+            final retry = await _departmentsService.fetchDepartments(
+              facultyId: resolved,
+            );
+            debugPrint(
+              '[ClassesPage._loadDepartments] retry fetched ${retry.length} depts',
+            );
+            finalList = retry;
+            try {
+              debugPrint(
+                '[ClassesPage._loadDepartments] retry sample: ${retry.take(5).map((d) => d.name).toList()}',
+              );
+            } catch (_) {}
+          }
+        } catch (e) {
+          debugPrint('[ClassesPage._loadDepartments] resolve/retry failed: $e');
+        }
+      }
+
       if (mounted) {
-        setState(() => _departments = list);
+        setState(() => _departments = finalList);
       }
     } catch (e, st) {
       debugPrint('Failed to load departments: $e\n$st');
@@ -334,7 +462,10 @@ class _ClassesPageState extends State<ClassesPage> {
                     SearchAddBar(
                       hintText: "Search Class...",
                       buttonText: "Add Class",
-                      onAddPressed: _showAddClassPopup,
+                      // Disable Add while loading or when no departments are available
+                      onAddPressed: (!_isLoading && _departments.isNotEmpty)
+                          ? () => _showAddClassPopup()
+                          : null,
                       onChanged: (value) {
                         setState(() {
                           _searchText = value;
@@ -360,8 +491,9 @@ class _ClassesPageState extends State<ClassesPage> {
                                 horizontal: 0,
                               ),
                             ),
-                            onPressed:
-                                _selectedIndex == null ? null : _showEditClassPopup,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _showEditClassPopup,
                             child: const Text(
                               "Edit",
                               style: TextStyle(
@@ -386,8 +518,9 @@ class _ClassesPageState extends State<ClassesPage> {
                                 horizontal: 0,
                               ),
                             ),
-                            onPressed:
-                                _selectedIndex == null ? null : _confirmDeleteClass,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _confirmDeleteClass,
                             child: const Text(
                               "Delete",
                               style: TextStyle(
@@ -441,13 +574,39 @@ class _ClassesPageState extends State<ClassesPage> {
       });
     }
     try {
-      final list = await _classesService.fetchClasses();
-      if (mounted)
+      // Try a normal fetch first (UseClasses will try to resolve faculty id).
+      List<SchoolClass> list = await _classesService.fetchClasses();
+
+      // If no classes returned, it's likely a race where auth wasn't ready
+      // when UseClasses tried to resolve the admin's faculty id. Try a
+      // fallback: resolve faculty id from the departments service (which
+      // we've already used successfully) and retry the classes fetch with
+      // an explicit facultyId.
+      if (list.isEmpty) {
+        try {
+          final resolved = await _departmentsService.resolveAdminFacultyId();
+          debugPrint('[ClassesPage._loadClasses] resolved facultyId=$resolved');
+          if (resolved != null && resolved.isNotEmpty) {
+            final retry = await _classesService.fetchClasses(
+              facultyId: resolved,
+            );
+            debugPrint(
+              '[ClassesPage._loadClasses] retry fetched ${retry.length} classes',
+            );
+            list = retry;
+          }
+        } catch (e) {
+          debugPrint('[ClassesPage._loadClasses] resolve/retry failed: $e');
+        }
+      }
+
+      if (mounted) {
         setState(() {
           _classes
             ..clear()
             ..addAll(list);
         });
+      }
     } catch (e, st) {
       debugPrint('Failed to load classes: $e\n$st');
       if (mounted) {
@@ -506,7 +665,10 @@ class _ClassesPageState extends State<ClassesPage> {
               ),
               _tableBodyWidget(
                 _statusIndicator(index),
-                onTap: () => _toggleActive(index, !_getIsActive(_filteredClasses[index])),
+                onTap: () => _toggleActive(
+                  index,
+                  !_getIsActive(_filteredClasses[index]),
+                ),
               ),
             ],
           ),
@@ -548,7 +710,10 @@ class _ClassesPageState extends State<ClassesPage> {
               ),
               _tableBodyWidget(
                 _statusIndicator(index),
-                onTap: () => _toggleActive(index, !_getIsActive(_filteredClasses[index])),
+                onTap: () => _toggleActive(
+                  index,
+                  !_getIsActive(_filteredClasses[index]),
+                ),
               ),
             ],
           ),

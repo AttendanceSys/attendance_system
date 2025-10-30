@@ -3,6 +3,7 @@ import '../../models/course.dart';
 import '../../hooks/use_courses.dart';
 import '../../hooks/use_lectureres.dart';
 import '../../hooks/use_classes.dart';
+import '../../hooks/use_departments.dart';
 import '../popup/add_course_popup.dart';
 import '../cards/searchBar.dart';
 
@@ -19,9 +20,18 @@ class _CoursesPageState extends State<CoursesPage> {
 
   final UseTeachers _teacherHook = UseTeachers();
   final UseClasses _classesHook = UseClasses();
+  final UseDepartments _departmentsHook = UseDepartments();
 
   final List<String> teachers = [];
   final List<String> classes = [];
+  final List<String> departments = [];
+
+  // helper maps to translate ids -> display names when API returns ids
+  final Map<String, String> _deptNameById = {};
+  final Map<String, String> _teacherNameById = {};
+  final Map<String, String> _classNameById = {};
+
+  String? _facultyId;
 
   String _searchText = '';
   int? _selectedIndex;
@@ -32,8 +42,9 @@ class _CoursesPageState extends State<CoursesPage> {
   @override
   void initState() {
     super.initState();
-    _loadMasters();
-    _loadCourses();
+    // Load masters (teachers/classes/departments) first so we can resolve
+    // the admin's faculty id and then fetch faculty-scoped courses.
+    _loadMasters().then((_) => _loadCourses());
   }
 
   Future<void> _loadMasters() async {
@@ -42,17 +53,88 @@ class _CoursesPageState extends State<CoursesPage> {
       _loadError = null;
     });
     try {
-      // fetch teachers and classes in parallel
+      // Resolve faculty id first so classes/departments are fetched
+      // scoped to the current admin's faculty (avoids empty lists on web
+      // startup when auth state hasn't stabilised yet).
+      final facultyId = await _departmentsHook.resolveAdminFacultyId();
+
+      // Persist resolved faculty id so other methods (add/update/fetch)
+      // can pass it explicitly to hooks. Keep it in state so UI can
+      // react if needed.
+      if (facultyId != null && facultyId.isNotEmpty) {
+        _facultyId = facultyId;
+      }
+
+      // fetch teachers, classes and departments in parallel (scope by faculty)
       final results = await Future.wait([
         _teacherHook.fetchTeachers(),
-        _classesHook.fetchClasses(),
+        _classesHook.fetchClasses(facultyId: facultyId),
+        _departmentsHook.fetchDepartments(facultyId: facultyId),
       ]);
 
       final teacherRows = results[0] as List<Teacher>;
       final classRows = (results[1] as List).cast();
+      final deptRows = (results[2] as List).cast();
 
       if (!mounted) return;
+
+      // Build id->display maps for robust edit-time selection
+      final Map<String, String> deptMap = {};
+      for (final d in deptRows) {
+        try {
+          if (d == null) continue;
+          if (d is Map) {
+            final id = (d['id'] ?? '').toString();
+            final name =
+                (d['department_name'] ??
+                        d['name'] ??
+                        d['department_code'] ??
+                        id)
+                    .toString();
+            if (id.isNotEmpty) deptMap[id] = name;
+          } else {
+            final id = (d as dynamic).id?.toString() ?? '';
+            final name = (d as dynamic).name?.toString() ?? '';
+            if (id.isNotEmpty) deptMap[id] = name;
+          }
+        } catch (_) {}
+      }
+
+      final Map<String, String> classMap = {};
+      for (final c in classRows) {
+        try {
+          if (c == null) continue;
+          if (c is Map) {
+            final id = (c['id'] ?? '').toString();
+            final name = (c['class_name'] ?? c['name'] ?? id).toString();
+            if (id.isNotEmpty) classMap[id] = name;
+          } else {
+            final id = (c as dynamic).id?.toString() ?? '';
+            final name = (c as dynamic).name?.toString() ?? '';
+            if (id.isNotEmpty) classMap[id] = name;
+          }
+        } catch (_) {}
+      }
+
+      final Map<String, String> teacherMap = {};
+      for (final t in teacherRows) {
+        try {
+          final id = (t.id ?? '').toString();
+          final name = ((t.teacherName ?? t.username) ?? '').toString();
+          if (id.isNotEmpty && name.isNotEmpty) teacherMap[id] = name;
+        } catch (_) {}
+      }
+
       setState(() {
+        // ensure faculty id makes it into state updates
+        if (facultyId != null && facultyId.isNotEmpty) _facultyId = facultyId;
+        _deptNameById.clear();
+        _deptNameById.addAll(deptMap);
+        _classNameById.clear();
+        _classNameById.addAll(classMap);
+        _teacherNameById.clear();
+        _teacherNameById.addAll(teacherMap);
+
         teachers.clear();
         teachers.addAll(
           teacherRows
@@ -63,7 +145,40 @@ class _CoursesPageState extends State<CoursesPage> {
         classes.clear();
         classes.addAll(
           classRows
-              .map((c) => (c as dynamic).name?.toString() ?? '')
+              .map((c) {
+                try {
+                  if (c == null) return '';
+                  if (c is Map) {
+                    return (c['class_name'] ?? c['name'] ?? c['id'])
+                            ?.toString() ??
+                        '';
+                  }
+                  return (c as dynamic).name?.toString() ?? '';
+                } catch (_) {
+                  return '';
+                }
+              })
+              .where((s) => s.isNotEmpty),
+        );
+        departments.clear();
+        departments.addAll(
+          deptRows
+              .map((d) {
+                try {
+                  if (d == null) return '';
+                  if (d is Map) {
+                    return (d['department_name'] ??
+                                d['name'] ??
+                                d['department_code'] ??
+                                d['id'])
+                            ?.toString() ??
+                        '';
+                  }
+                  return (d as dynamic).name?.toString() ?? '';
+                } catch (_) {
+                  return '';
+                }
+              })
               .where((s) => s.isNotEmpty),
         );
       });
@@ -79,7 +194,7 @@ class _CoursesPageState extends State<CoursesPage> {
 
   Future<void> _loadCourses() async {
     try {
-      final data = await _courseHook.fetchCourses();
+      final data = await _courseHook.fetchCourses(facultyId: _facultyId);
       if (!mounted) return;
       setState(() {
         _courses.clear();
@@ -105,6 +220,9 @@ class _CoursesPageState extends State<CoursesPage> {
             course.className.toLowerCase().contains(
               _searchText.toLowerCase(),
             ) ||
+            course.department.toLowerCase().contains(
+              _searchText.toLowerCase(),
+            ) ||
             course.semester.toString().contains(_searchText),
       )
       .toList();
@@ -112,12 +230,17 @@ class _CoursesPageState extends State<CoursesPage> {
   Future<void> _showAddCoursePopup() async {
     final result = await showDialog<Course>(
       context: context,
-      builder: (context) =>
-          AddCoursePopup(teachers: teachers, classes: classes),
+      builder: (context) => AddCoursePopup(
+        teachers: teachers,
+        classes: classes,
+        departments: _deptNameById.entries
+            .map((e) => {'id': e.key, 'name': e.value})
+            .toList(),
+      ),
     );
     if (result != null) {
       try {
-        await _courseHook.addCourse(result);
+        await _courseHook.addCourse(result, facultyId: _facultyId);
         await _loadCourses();
         setState(() => _selectedIndex = null);
       } catch (e) {
@@ -129,15 +252,56 @@ class _CoursesPageState extends State<CoursesPage> {
   Future<void> _showEditCoursePopup() async {
     if (_selectedIndex == null) return;
     final course = _filteredCourses[_selectedIndex!];
+    // Ensure the course passed to the popup has department set to the
+    // department id (if we can resolve it). `course.department` may be a
+    // display name or an id depending on what the API returned.
+    String initialDeptId = '';
+    if (course.department.isNotEmpty) {
+      // if it's already an id present in map, use it
+      if (_deptNameById.containsKey(course.department)) {
+        initialDeptId = course.department;
+      } else {
+        // try to find an id by matching the display name
+        try {
+          final entry = _deptNameById.entries.firstWhere(
+            (e) => e.value == course.department,
+          );
+          initialDeptId = entry.key;
+        } catch (_) {
+          initialDeptId = '';
+        }
+      }
+    }
+
+    final popupCourse = Course(
+      id: course.id,
+      code: course.code,
+      name: course.name,
+      teacher: course.teacher,
+      className: course.className,
+      department: initialDeptId,
+      semester: course.semester,
+    );
+
     final result = await showDialog<Course>(
       context: context,
-      builder: (context) =>
-          AddCoursePopup(course: course, teachers: teachers, classes: classes),
+      builder: (context) => AddCoursePopup(
+        course: popupCourse,
+        teachers: teachers,
+        classes: classes,
+        departments: _deptNameById.entries
+            .map((e) => {'id': e.key, 'name': e.value})
+            .toList(),
+      ),
     );
     if (result != null) {
       try {
         // course should have an id when loaded from DB
-        await _courseHook.updateCourse(course.id, result);
+        await _courseHook.updateCourse(
+          course.id,
+          result,
+          facultyId: _facultyId,
+        );
         await _loadCourses();
       } catch (e) {
         debugPrint('Failed to update course: $e');
@@ -353,7 +517,8 @@ class _CoursesPageState extends State<CoursesPage> {
         2: FixedColumnWidth(140), // sub name
         3: FixedColumnWidth(140), // Teach Assi
         4: FixedColumnWidth(120), // Class
-        5: FixedColumnWidth(90), // Semester
+        5: FixedColumnWidth(120), // Department
+        6: FixedColumnWidth(90), // Semester
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -366,6 +531,7 @@ class _CoursesPageState extends State<CoursesPage> {
             _tableHeaderCell("Course Name"),
             _tableHeaderCell("Teacher"),
             _tableHeaderCell("Class"),
+            _tableHeaderCell("Department"),
             _tableHeaderCell("Semester"),
           ],
         ),
@@ -392,6 +558,10 @@ class _CoursesPageState extends State<CoursesPage> {
               ),
               _tableBodyCell(
                 _filteredCourses[index].className,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _filteredCourses[index].department,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
@@ -418,6 +588,7 @@ class _CoursesPageState extends State<CoursesPage> {
             _tableHeaderCell("Course Name"),
             _tableHeaderCell("Teacher"),
             _tableHeaderCell("Class"),
+            _tableHeaderCell("Department"),
             _tableHeaderCell("Semester"),
           ],
         ),
@@ -444,6 +615,10 @@ class _CoursesPageState extends State<CoursesPage> {
               ),
               _tableBodyCell(
                 _filteredCourses[index].className,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _filteredCourses[index].department,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(

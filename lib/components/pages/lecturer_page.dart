@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../cards/searchBar.dart';
 import '../../models/lecturer.dart';
@@ -15,6 +16,7 @@ class LecturersPage extends StatefulWidget {
 class _LecturersPageState extends State<LecturersPage> {
   final UseTeachers _useTeachers = UseTeachers();
   List<Teacher> _teachers = [];
+  StreamSubscription<List<Map<String, dynamic>>>? _teachersSub;
   bool _isLoading = false;
   String _searchText = '';
   int? _selectedIndex;
@@ -33,6 +35,29 @@ class _LecturersPageState extends State<LecturersPage> {
   void initState() {
     super.initState();
     _fetchTeachers();
+    // subscribe to realtime teacher updates so the list auto-refreshes
+    try {
+      _teachersSub = _useTeachers.subscribeTeachers().listen(
+        (event) async {
+          try {
+            // When a realtime event comes, refetch the current teachers list
+            // to keep the local model conversion consistent with server.
+            final list = await _useTeachers.fetchTeachers();
+            if (!mounted) return;
+            setState(() {
+              _teachers = list;
+            });
+          } catch (e, st) {
+            debugPrint('Realtime teachers handler failed to refetch: $e\n$st');
+          }
+        },
+        onError: (e, st) {
+          debugPrint('teachers subscription error: $e\n$st');
+        },
+      );
+    } catch (e, st) {
+      debugPrint('Failed to start teachers subscription: $e\n$st');
+    }
   }
 
   Future<void> _fetchTeachers() async {
@@ -311,6 +336,12 @@ class _LecturersPageState extends State<LecturersPage> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _teachersSub?.cancel();
+    super.dispose();
   }
 
   Widget _buildDesktopTable() {

@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 class SearchAddBar extends StatelessWidget {
   final String hintText;
   final String buttonText;
-  final VoidCallback onAddPressed;
+  final VoidCallback? onAddPressed;
   final ValueChanged<String>? onChanged;
 
   const SearchAddBar({
     super.key,
     required this.hintText,
     required this.buttonText,
-    required this.onAddPressed,
+    this.onAddPressed,
     this.onChanged,
   });
 

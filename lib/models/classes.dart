@@ -3,6 +3,7 @@ class SchoolClass {
   final String name;
   final String department; // department id (uuid) or code depending on schema
   final String section;
+  final String facultyId;
   bool isActive;
 
   SchoolClass({
@@ -10,6 +11,7 @@ class SchoolClass {
     required this.name,
     required this.department,
     this.section = '',
+    this.facultyId = '',
     this.isActive = true,
   });
 }

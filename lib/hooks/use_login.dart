@@ -50,6 +50,7 @@ Future<Map<String, dynamic>?> loginUser(
     try {
       final roleRaw = (response['role'] ?? '').toString().trim().toLowerCase();
       String? fullName;
+      String? discoveredFacultyId;
 
       if (roleRaw == 'teacher') {
         final t = await supabase
@@ -68,6 +69,9 @@ Future<Map<String, dynamic>?> loginUser(
             .maybeSingle();
         if (a != null) {
           fullName = (a['full_name'] ?? '').toString().trim();
+          if (a['faculty_id'] != null) {
+            discoveredFacultyId = a['faculty_id'].toString();
+          }
         }
       } else if (roleRaw == 'student') {
         final s = await supabase
@@ -86,6 +90,15 @@ Future<Map<String, dynamic>?> loginUser(
           ? fullName
           : (response['username'] ?? username);
       out['auth_source'] = 'direct';
+      // Propagate a discovered faculty id (from admins lookup) or the
+      // value stored on the user_handling row if present.
+      final respFaculty = (response as Map)['faculty_id'];
+      if (respFaculty != null && respFaculty.toString().isNotEmpty) {
+        out['faculty_id'] = respFaculty.toString();
+      } else if (discoveredFacultyId != null &&
+          discoveredFacultyId.isNotEmpty) {
+        out['faculty_id'] = discoveredFacultyId;
+      }
       return out;
     } catch (e) {
       // If any lookup fails, return the base row with username as fallback

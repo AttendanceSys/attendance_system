@@ -35,6 +35,11 @@ class _AddClassPopupState extends State<AddClassPopup> {
   @override
   void initState() {
     super.initState();
+    try {
+      debugPrint(
+        '[AddClassPopup.initState] departments.length=${widget.departments.length} sample: ${widget.departments.take(5).map((d) => d.name).toList()}',
+      );
+    } catch (_) {}
     // If editing, split class name into base and section if possible
     if (widget.schoolClass != null) {
       final parts = widget.schoolClass!.name.split(' ');
@@ -63,9 +68,35 @@ class _AddClassPopupState extends State<AddClassPopup> {
         _department = found.name;
         _departmentId = found.id;
       } else {
-        // Fallback: show whatever is stored so the user can see/edit it.
-        _department = stored;
-        _departmentId = stored;
+        // Fallback: the stored value may be a Map encoded as a Dart map
+        // `toString()` (e.g. "{id: ..., department_code: ..., department_name: ...}").
+        // Try to extract a human-readable department_name and id from that
+        // representation so the dropdown can show the friendly name.
+        String fallbackName = '';
+        String fallbackId = '';
+        try {
+          if (stored.contains('department_name')) {
+            final nameMatch = RegExp(
+              r"department_name\s*[:=]\s*([^,}]+)",
+            ).firstMatch(stored);
+            if (nameMatch != null) fallbackName = nameMatch.group(1)!.trim();
+          }
+          if (stored.contains('id')) {
+            final idMatch = RegExp(
+              r"id\s*[:=]\s*([0-9a-fA-F\-]+)",
+            ).firstMatch(stored);
+            if (idMatch != null) fallbackId = idMatch.group(1)!.trim();
+          }
+        } catch (_) {}
+
+        if (fallbackName.isNotEmpty) {
+          _department = fallbackName;
+          _departmentId = fallbackId.isNotEmpty ? fallbackId : fallbackName;
+        } else {
+          // Last resort: show whatever is stored so the user can see/edit it.
+          _department = stored;
+          _departmentId = stored;
+        }
       }
     }
   }
@@ -135,28 +166,55 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _department,
+                  // Use the department id as the dropdown value so selection
+                  // is stable even if department.name contains duplicates or
+                  // the upstream list has name/id mixed up. The label still
+                  // shows the human-friendly name.
+                  value: _departmentId,
                   decoration: const InputDecoration(
                     hintText: "Department",
                     border: OutlineInputBorder(),
                   ),
-                  items: widget.departments
-                      .map(
-                        (dep) => DropdownMenuItem(
-                          value: dep.name,
-                          child: Text(dep.name),
+                  items: () {
+                    // Build the normal items
+                    final items = widget.departments
+                        .map(
+                          (dep) => DropdownMenuItem(
+                            value: dep.id,
+                            child: Text(dep.name),
+                          ),
+                        )
+                        .toList();
+
+                    // Defensive: if the initial/current selection (_departmentId)
+                    // isn't present in the provided departments list (for
+                    // example when stored rows contain Map-like values or the
+                    // backend returned an id before the human name), include a
+                    // one-off item so DropdownButton can render the selection
+                    // immediately instead of showing the raw id string.
+                    if (_departmentId != null &&
+                        _departmentId!.isNotEmpty &&
+                        !widget.departments.any((d) => d.id == _departmentId)) {
+                      items.insert(
+                        0,
+                        DropdownMenuItem(
+                          value: _departmentId,
+                          child: Text(_department ?? _departmentId!),
                         ),
-                      )
-                      .toList(),
+                      );
+                    }
+
+                    return items;
+                  }(),
                   onChanged: (val) {
                     if (val == null) return;
                     final selected = widget.departments.firstWhere(
-                      (d) => d.name == val,
+                      (d) => d.id == val,
                       orElse: () => widget.departments.first,
                     );
                     setState(() {
-                      _department = selected.name;
                       _departmentId = selected.id;
+                      _department = selected.name;
                     });
                   },
                   validator: (val) =>

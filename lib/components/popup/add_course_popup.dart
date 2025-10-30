@@ -5,12 +5,15 @@ class AddCoursePopup extends StatefulWidget {
   final Course? course;
   final List<String> teachers;
   final List<String> classes;
+  // departments: list of maps with keys 'id' and 'name'
+  final List<Map<String, String>> departments;
 
   const AddCoursePopup({
     super.key,
     this.course,
     required this.teachers,
     required this.classes,
+    required this.departments,
   });
 
   @override
@@ -19,10 +22,12 @@ class AddCoursePopup extends StatefulWidget {
 
 class _AddCoursePopupState extends State<AddCoursePopup> {
   final _formKey = GlobalKey<FormState>();
+
   String? _code;
   String? _name;
   String? _teacher;
   String? _className;
+  String? _department;
   int? _semester;
 
   @override
@@ -32,7 +37,15 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
     _name = widget.course?.name;
     _teacher = widget.course?.teacher;
     _className = widget.course?.className;
-  _semester = widget.course?.semester;
+    // Normalize empty department to null so DropdownButtonFormField doesn't
+    // assert when the initial value isn't present in the items list.
+    // The popup now expects department to be the department id (uuid) when
+    // editing; the dropdown items are id->name pairs.
+    final initialDept = widget.course?.department;
+    _department = (initialDept != null && initialDept.trim().isNotEmpty)
+        ? initialDept
+        : null;
+    _semester = widget.course?.semester;
   }
 
   @override
@@ -54,13 +67,13 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
             width: dialogWidth,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.blue[100]!, width: 2),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.08),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
@@ -76,9 +89,12 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 24),
+
+                  // --- Subject Code ---
                   TextFormField(
                     initialValue: _code,
                     decoration: const InputDecoration(
@@ -91,6 +107,8 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                         : null,
                   ),
                   const SizedBox(height: 16),
+
+                  // --- Subject Name ---
                   TextFormField(
                     initialValue: _name,
                     decoration: const InputDecoration(
@@ -103,133 +121,171 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                         : null,
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: _teacher,
-                    decoration: const InputDecoration(
-                      hintText: "Teacher Assigned (optional)",
-                      border: OutlineInputBorder(),
-                    ),
-                    items: () {
-                      final List<String> unique = widget.teachers
+
+                  // --- Department ---
+                  Builder(
+                    builder: (context) {
+                      final deptItems = widget.departments
+                          .where((d) => (d['id'] ?? '').trim().isNotEmpty)
+                          .toList();
+                      final currentValue =
+                          deptItems.any((d) => d['id'] == _department)
+                          ? _department
+                          : null;
+                      return DropdownButtonFormField<String>(
+                        value: currentValue,
+                        decoration: const InputDecoration(
+                          hintText: "Select Department",
+                          border: OutlineInputBorder(),
+                        ),
+                        items: deptItems
+                            .map(
+                              (dept) => DropdownMenuItem(
+                                value: dept['id'],
+                                child: Text(dept['name'] ?? dept['id'] ?? ''),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (val) => setState(() => _department = val),
+                        validator: (val) => val == null || val.isEmpty
+                            ? "Select department"
+                            : null,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- Teacher ---
+                  Builder(
+                    builder: (context) {
+                      final teacherItems = widget.teachers
                           .where((t) => t.trim().isNotEmpty)
                           .toSet()
                           .toList();
-                      // If editing and current teacher missing from list, include it
-                      if (_teacher != null &&
-                          _teacher!.trim().isNotEmpty &&
-                          !unique.contains(_teacher)) {
-                        unique.insert(0, _teacher!);
-                      }
-                      return unique
-                          .map(
-                            (teacher) => DropdownMenuItem(
-                              value: teacher,
-                              child: Text(teacher),
-                            ),
-                          )
-                          .toList();
-                    }(),
-                    onChanged: (val) => setState(() => _teacher = val),
+                      final currentTeacher = teacherItems.contains(_teacher)
+                          ? _teacher
+                          : null;
+                      return DropdownButtonFormField<String>(
+                        value: currentTeacher,
+                        decoration: const InputDecoration(
+                          hintText: "Teacher Assigned (optional)",
+                          border: OutlineInputBorder(),
+                        ),
+                        items: teacherItems
+                            .map(
+                              (teacher) => DropdownMenuItem(
+                                value: teacher,
+                                child: Text(teacher),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (val) => setState(() => _teacher = val),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: _className,
-                    decoration: const InputDecoration(
-                      hintText: "Select Class",
-                      border: OutlineInputBorder(),
-                    ),
-                    items: () {
-                      final List<String> unique = widget.classes
+
+                  // --- Class ---
+                  Builder(
+                    builder: (context) {
+                      final classItems = widget.classes
                           .where((c) => c.trim().isNotEmpty)
                           .toSet()
                           .toList();
-                      if (_className != null &&
-                          _className!.trim().isNotEmpty &&
-                          !unique.contains(_className)) {
-                        unique.insert(0, _className!);
-                      }
-                      return unique
-                          .map(
-                            (className) => DropdownMenuItem(
-                              value: className,
-                              child: Text(className),
-                            ),
-                          )
-                          .toList();
-                    }(),
-                    onChanged: (val) => setState(() => _className = val),
-                    validator: (val) =>
-                        val == null || val.isEmpty ? "Select class" : null,
+                      final currentClass = classItems.contains(_className)
+                          ? _className
+                          : null;
+                      return DropdownButtonFormField<String>(
+                        value: currentClass,
+                        decoration: const InputDecoration(
+                          hintText: "Select Class",
+                          border: OutlineInputBorder(),
+                        ),
+                        items: classItems
+                            .map(
+                              (className) => DropdownMenuItem(
+                                value: className,
+                                child: Text(className),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (val) => setState(() => _className = val),
+                        validator: (val) =>
+                            val == null || val.isEmpty ? "Select class" : null,
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
+
+                  // --- Semester ---
                   DropdownButtonFormField<int>(
                     value: _semester,
                     decoration: const InputDecoration(
                       hintText: "Select Semester",
                       border: OutlineInputBorder(),
                     ),
-                    items: List.generate(10, (i) => DropdownMenuItem(
-                      value: i + 1,
-                      child: Text('Semester ${i + 1}'),
-                    )),
+                    items: List.generate(
+                      10,
+                      (i) => DropdownMenuItem(
+                        value: i + 1,
+                        child: Text('Semester ${i + 1}'),
+                      ),
+                    ),
                     onChanged: (val) => setState(() => _semester = val),
                     validator: (val) => val == null ? "Select semester" : null,
                   ),
                   const SizedBox(height: 24),
+
+                  // --- Buttons ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      SizedBox(
-                        height: 40,
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.black54),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            minimumSize: const Size(90, 40),
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.black54),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            "Cancel",
-                            style: TextStyle(
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          minimumSize: const Size(90, 40),
+                        ),
+                        child: const Text(
+                          "Cancel",
+                          style: TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
-                      SizedBox(
-                        height: 40,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            if (_formKey.currentState!.validate()) {
-                              Navigator.of(context).pop(
-                                Course(
-                                  code: _code ?? '',
-                                  name: _name ?? '',
-                                  teacher: _teacher ?? '',
-                                  className: _className ?? '',
-                                  semester: _semester ?? 1,
-                                ),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue[900],
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            minimumSize: const Size(90, 40),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (_formKey.currentState!.validate()) {
+                            Navigator.of(context).pop(
+                              Course(
+                                code: _code ?? '',
+                                name: _name ?? '',
+                                teacher: _teacher ?? '',
+                                className: _className ?? '',
+                                department: _department ?? '',
+                                semester: _semester ?? 1,
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[900],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            "Save",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            ),
+                          minimumSize: const Size(90, 40),
+                        ),
+                        child: const Text(
+                          "Save",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
                           ),
                         ),
                       ),

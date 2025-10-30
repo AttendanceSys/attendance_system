@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/user.dart';
 import '../../hooks/use_user_handling.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../hooks/use_students.dart';
+import '../../hooks/use_departments.dart';
 import '../popup/edit_user_popup.dart';
 import '../cards/searchBar.dart';
 
@@ -15,8 +18,11 @@ class FacultyUserHandlingPage extends StatefulWidget {
 class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
   final UseUserHandling _userService = UseUserHandling();
 
-  // If we want to show students on this page, use the student handler
-  final UseStudentHandling _studentService = UseStudentHandling();
+  // UseStudents provides faculty-scoped student fetching
+  final UseStudents _studentsService = UseStudents();
+
+  // UseDepartments offers a cached, retried resolver for the admin faculty id
+  final UseDepartments _departmentsHook = UseDepartments();
 
   // Hold user_handling rows fetched from Supabase
   List<UserHandling> _users = [];
@@ -86,15 +92,20 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
     }
   }
 
-  Future<void> _confirmDeleteUser() async {
+  Future<void> _confirmDisableUser() async {
     if (_selectedIndex == null) return;
     final user = _filteredUsers[_selectedIndex!];
+
+    final willDisable = !(user.isDisabled);
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete User"),
+        title: Text(willDisable ? "Disable User" : "Enable User"),
         content: Text(
-          "Are you sure you want to delete '${user.username ?? ''}'?",
+          willDisable
+              ? "Are you sure you want to disable '${user.username ?? ''}'?"
+              : "Are you sure you want to enable '${user.username ?? ''}'?",
         ),
         actions: [
           TextButton(
@@ -103,17 +114,65 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text("Delete"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: willDisable ? Colors.orange : Colors.green,
+            ),
+            child: Text(willDisable ? "Disable" : "Enable"),
           ),
         ],
       ),
     );
-    if (confirm == true) {
-      setState(() {
-        _users.removeWhere((u) => u.id == user.id);
-        _selectedIndex = null;
-      });
+
+    if (confirm != true) return;
+
+    try {
+      // If this mapped user doesn't have a linked user_handling id, we
+      // cannot toggle account status. Inform the user instead of attempting
+      // an update which would silently affect 0 rows and produce an error.
+      if (user.id.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No user account found for this username'),
+            ),
+          );
+        }
+        return;
+      }
+      await _userService.setUserDisabled(user.id, willDisable);
+
+      final mainIndex = _users.indexWhere((u) => u.id == user.id);
+      if (mainIndex != -1) {
+        final existing = _users[mainIndex];
+        final updated = UserHandling(
+          id: existing.id,
+          authUid: existing.authUid,
+          username: existing.username,
+          role: existing.role,
+          password: existing.password,
+          createdAt: existing.createdAt,
+          isDisabled: willDisable,
+        );
+        setState(() {
+          _users[mainIndex] = updated;
+          _selectedIndex = null;
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(willDisable ? 'User disabled' : 'User enabled'),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Disable/Enable user failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to change user status: $e')),
+        );
+      }
     }
   }
 
@@ -135,20 +194,78 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
       _loadError = null;
     });
     try {
-      // Fetch students (role = 'student') and map to UserHandling so UI stays the same
-      final studentList = await _studentService.fetchStudentsWithSync();
-      final mapped = studentList
-          .map(
-            (s) => UserHandling(
-              id: s.id,
-              authUid: s.authUid,
-              username: s.username,
-              role: s.role,
-              password: s.password,
-              createdAt: s.createdAt,
-            ),
-          )
+      // Resolve current admin's faculty id and fetch students scoped to it.
+      String? facultyId;
+      // Use the departments resolver which caches and retries; it's more
+      // reliable during web app startup/races.
+      facultyId = await _departmentsHook.resolveAdminFacultyId();
+
+      if (facultyId == null || facultyId.isEmpty) {
+        // No faculty resolved — return empty list instead of showing other faculties' students.
+        debugPrint(
+          'FacultyUserHandlingPage: no faculty id resolved after retries; returning 0 students',
+        );
+        if (!mounted) return;
+        setState(() {
+          _users = <UserHandling>[];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final studentList = await _studentsService.fetchStudents(
+        facultyId: facultyId,
+      );
+      // Resolve matching user_handling rows for the fetched students by username
+      final usernames = studentList
+          .map((s) => s.username.trim())
+          .where((u) => u.isNotEmpty)
+          .toSet()
           .toList();
+
+      Map<String, Map<String, dynamic>> uhByUsername = {};
+      if (usernames.isNotEmpty) {
+        try {
+          final raw = await Supabase.instance.client
+              .from('user_handling')
+              .select('id, username, password, is_disabled')
+              .filter('username', 'in', usernames);
+          for (final r in (raw as List)) {
+            try {
+              final uname = (r['username'] ?? '').toString();
+              if (uname.isNotEmpty) {
+                uhByUsername[uname] = (r as Map<String, dynamic>);
+              }
+            } catch (_) {}
+          }
+        } catch (e) {
+          debugPrint(
+            'Warning: failed to resolve user_handling rows for students: $e',
+          );
+        }
+      }
+
+      final mapped = studentList.map((s) {
+        final uname = s.username;
+        final uh = (uhByUsername.containsKey(uname)
+            ? uhByUsername[uname]
+            : null);
+        return UserHandling(
+          id: uh != null && uh['id'] != null ? uh['id'].toString() : '',
+          authUid: null,
+          username: s.username,
+          role: 'student',
+          password: uh != null ? (uh['password'] as String?) : s.password,
+          createdAt: null,
+          isDisabled: uh != null
+              ? ((uh['is_disabled'] == null)
+                    ? false
+                    : (uh['is_disabled'] is bool)
+                    ? uh['is_disabled'] as bool
+                    : (uh['is_disabled'].toString().toLowerCase() == 'true'))
+              : false,
+        );
+      }).toList();
       if (!mounted) return;
       setState(() {
         _users = mapped;
@@ -277,10 +394,15 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
                             ),
                             onPressed: _selectedIndex == null
                                 ? null
-                                : _confirmDeleteUser,
-                            child: const Text(
-                              "Delete",
-                              style: TextStyle(
+                                : _confirmDisableUser,
+                            child: Text(
+                              (_selectedIndex != null &&
+                                      _filteredUsers.length > _selectedIndex! &&
+                                      _filteredUsers[_selectedIndex!]
+                                          .isDisabled)
+                                  ? "Enable"
+                                  : "Disable",
+                              style: const TextStyle(
                                 fontSize: 15,
                                 color: Colors.white,
                               ),
@@ -361,7 +483,10 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
                 _filteredUsers[index].role,
                 onTap: () => _handleRowTap(index),
               ),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _filteredUsers[index].isDisabled ? 'Disabled' : '••••••••',
+                onTap: () => _handleRowTap(index),
+              ),
             ],
           ),
       ],
@@ -405,7 +530,10 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
                 _filteredUsers[index].role,
                 onTap: () => _handleRowTap(index),
               ),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
+              _tableBodyCell(
+                _filteredUsers[index].isDisabled ? 'Disabled' : '••••••••',
+                onTap: () => _handleRowTap(index),
+              ),
             ],
           ),
       ],

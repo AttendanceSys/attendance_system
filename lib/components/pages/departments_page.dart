@@ -6,7 +6,9 @@ import '../popup/add_department_popup.dart';
 import '../cards/searchBar.dart';
 
 class DepartmentsPage extends StatefulWidget {
-  const DepartmentsPage({super.key});
+  final String? facultyId;
+
+  const DepartmentsPage({super.key, this.facultyId});
 
   @override
   State<DepartmentsPage> createState() => _DepartmentsPageState();
@@ -61,8 +63,9 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
       try {
         // UI-side validation: ensure selected teacher isn't already head elsewhere
         if (result.head.isNotEmpty) {
-          final existing =
-              await _departmentsService.findDepartmentByHead(result.head);
+          final existing = await _departmentsService.findDepartmentByHead(
+            result.head,
+          );
           if (existing != null) {
             // inform the user and abort the add
             if (mounted) {
@@ -71,7 +74,8 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
                 builder: (context) => AlertDialog(
                   title: const Text('Teacher already assigned'),
                   content: Text(
-                      'Selected teacher is already head of department "${existing.name}" (code: ${existing.code}). Please choose another teacher.'),
+                    'Selected teacher is already head of department "${existing.name}" (code: ${existing.code}). Please choose another teacher.',
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
@@ -85,7 +89,10 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
           }
         }
 
-        await _departmentsService.addDepartment(result);
+        await _departmentsService.addDepartment(
+          result,
+          facultyId: widget.facultyId,
+        );
         await _loadDepartments();
         setState(() => _selectedIndex = null);
       } catch (e) {
@@ -110,8 +117,9 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
       try {
         // UI-side validation: if head changed, ensure not assigned to another department
         if (result.head.isNotEmpty) {
-          final existing =
-              await _departmentsService.findDepartmentByHead(result.head);
+          final existing = await _departmentsService.findDepartmentByHead(
+            result.head,
+          );
           if (existing != null && existing.code != dept.code) {
             if (mounted) {
               await showDialog<void>(
@@ -119,7 +127,8 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
                 builder: (context) => AlertDialog(
                   title: const Text('Teacher already assigned'),
                   content: Text(
-                      'Selected teacher is already head of department "${existing.name}" (code: ${existing.code}). Please choose another teacher.'),
+                    'Selected teacher is already head of department "${existing.name}" (code: ${existing.code}). Please choose another teacher.',
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
@@ -133,7 +142,11 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
           }
         }
 
-        await _departmentsService.updateDepartment(dept.code, result);
+        await _departmentsService.updateDepartment(
+          dept.code,
+          result,
+          facultyId: widget.facultyId,
+        );
         await _loadDepartments();
       } catch (e) {
         if (mounted) {
@@ -168,7 +181,10 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
     );
     if (confirm == true) {
       try {
-        await _departmentsService.deleteDepartment(dept.code);
+        await _departmentsService.deleteDepartment(
+          dept.code,
+          facultyId: widget.facultyId,
+        );
         await _loadDepartments();
         setState(() => _selectedIndex = null);
       } catch (e) {
@@ -269,7 +285,9 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
       });
     }
     try {
-      final list = await _departmentsService.fetchDepartments();
+      final list = await _departmentsService.fetchDepartments(
+        facultyId: widget.facultyId,
+      );
       if (mounted) {
         setState(() {
           _departments

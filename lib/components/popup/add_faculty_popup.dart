@@ -188,8 +188,9 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                             }
 
                             // Only close the dialog after the DB operation succeeds
-                            if (mounted)
+                            if (mounted) {
                               Navigator.of(context).pop(facultyToSave);
+                            }
 
                             messenger.showSnackBar(
                               const SnackBar(

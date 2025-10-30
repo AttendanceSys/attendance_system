@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
 import 'create_timetable_dialog.dart';
+import '../../hooks/use_time_table.dart';
+import '../../hooks/use_departments.dart';
+import '../../hooks/use_classes.dart';
+import '../../hooks/use_lectureres.dart';
+import '../../hooks/use_courses.dart';
+import '../cards/searchBar.dart';
 
 class TimetableSlot {
   final String day;
@@ -52,102 +58,32 @@ class _TimetablePageState extends State<TimetablePage> {
 
   _UndoState? _lastUndo;
 
-  final List<String> departments = ["CS", "GEO", "Math"];
-  final Map<String, List<String>> departmentClasses = {
-    "CS": ["B2CS", "B3SC", "B4CS"],
-    "GEO": ["B2GEO", "B3GEO"],
-    "Math": ["B1MATH", "B2MATH"],
-  };
-  final List<String> lecturers = [
-    "Dr. Mohamed Isaaq",
-    "Prof. Abdullahi Sharif",
-    "Prof. Fuad Mire",
-    "Dr. Adam",
-    "Eng M. A. Khalifa",
-    "NONE",
-  ];
-  final List<String> coursesMock = const [
-    'Math',
-    'E-Commerce',
-    'Data Science and Analytics',
-    'Network Security',
-    'Computer Ethics',
-    'Selected Topics in Comp Scien.',
-  ];
-  final List<String> sections = ["A", "B", "C", "None"];
+  // New state to show a small reload/progress indicator in the header
+  bool _isReloading = false;
+  final UseTimeTable _timeTableService = UseTimeTable();
+  // Services to fetch reference data from DB
+  final _departmentsSvc = UseDepartments();
+  final _classesSvc = UseClasses();
+  final _teachersSvc = UseTeachers();
+  final _coursesSvc = UseCourses();
 
-  final List<String> seedPeriods = const [
-    "7:30 - 9:20",
-    "9:20 - 11:10",
-    "11:10 - 11:40 (Break)",
-    "11:40 - 1:30",
-  ];
+  // Runtime-loaded reference data (replace previous manual seeds)
+  List<String> departments = [];
+  Map<String, List<String>> departmentClasses = {};
+  List<String> lecturers = [];
+  List<String> courses = [];
+  List<String> sections = [];
+  // Map from department display name -> department id (for robust matching)
+  final Map<String, String> _departmentIdByName = {};
 
+  // Note: no seed period fallback — empty means no configured periods
+
+  // Start with no manual timetable seed data. Timetable content will be
+  // populated from the database via _loadTimetableFromDb when a department
+  // and class are selected. Keeping this empty prevents the UI from showing
+  // manual/sample entries.
   final Map<String, Map<String, Map<String, List<List<String>>>>>
-  timetableData = {
-    "CS": {
-      "B3SC": {
-        "A": [
-          ["", "", "Break", ""],
-          [
-            "E-Commerce\nDr. Mohamed Isaaq",
-            "Selected Topics in Comp Scien.\nProf. Abdullahi Sharif",
-            "Break",
-            "Data Science and Analytics\nProf. Fuad Mire",
-          ],
-          [
-            "Network Security\nDr. Adam",
-            "Computer Ethics\nEng M. A. Khalifa",
-            "Break",
-            "E-Commerce\nDr. Mohamed Isaaq",
-          ],
-          [
-            "Network Security\nDr. Adam",
-            "Computer Ethics\nEng M. A. Khalifa",
-            "Break",
-            "Data Science and Analytics\nProf. Fuad Mire",
-          ],
-          [
-            "Data Science and Analytics\nProf. Fuad Mire",
-            "Selected Topics in Comp Scien.\nProf. Abdullahi Sharif",
-            "Break",
-            "",
-          ],
-          ["", "Network Security\nDr. Adam", "Break", ""],
-        ],
-      },
-      "B3CS": {
-        "A": [
-          ["", "", "Break", ""],
-          [
-            "E-Commerce\nDr. Mohamed Isaaq",
-            "Selected Topics in Comp Scien.\nProf. Abdullahi Sharif",
-            "Break",
-            "Data Science and Analytics\nProf. Fuad Mire",
-          ],
-          [
-            "Network Security\nDr. Adam",
-            "Computer Ethics\nEng M. A. Khalifa",
-            "Break",
-            "E-Commerce\nDr. Mohamed Isaaq",
-          ],
-          [
-            "Network Security\nDr. Adam",
-            "Computer Ethics\nEng M. A. Khalifa",
-            "Break",
-            "Data Science and Analytics\nProf. Fuad Mire",
-          ],
-          [
-            "Data Science and Analytics\nProf. Fuad Mire",
-            "Selected Topics in Comp Scien.\nProf. Abdullahi Sharif",
-            "Break",
-            "",
-          ],
-          ["", "Network Security\nDr. Adam", "Break", ""],
-        ],
-      },
-    },
-  };
+  timetableData = {};
 
   final Map<String, Map<String, List<String>>> classPeriods = {};
 
@@ -156,7 +92,363 @@ class _TimetablePageState extends State<TimetablePage> {
   @override
   void initState() {
     super.initState();
-    _seedClassPeriodsFromExistingData();
+    // Load reference lists from DB (departments, classes, teachers, courses)
+    _loadReferenceData();
+  }
+
+  Future<void> _loadReferenceData() async {
+    try {
+      debugPrint('[TimetablePage] _loadReferenceData: starting');
+      try {
+        final resolvedFaculty = await _departmentsSvc.resolveAdminFacultyId();
+        debugPrint('[TimetablePage] resolvedFacultyId: $resolvedFaculty');
+      } catch (e) {
+        debugPrint('[TimetablePage] resolveAdminFacultyId error: $e');
+      }
+      // Temporary debug: inspect auth user, user_handling and admins rows
+      try {
+        final supabase = Supabase.instance.client;
+        var current = supabase.auth.currentUser;
+        if (current == null) {
+          try {
+            final ur = await supabase.auth.getUser();
+            current = ur.user;
+          } catch (_) {}
+        }
+        debugPrint(
+          '[TimetablePage][DEBUG] supabase.currentUser: ${current?.id ?? 'null'}',
+        );
+        if (current != null) {
+          try {
+            final uh = await supabase
+                .from('user_handling')
+                .select()
+                .eq('auth_uid', current.id)
+                .maybeSingle();
+            debugPrint('[TimetablePage][DEBUG] user_handling row: $uh');
+            if (uh != null) {
+              try {
+                final admin = await supabase
+                    .from('admins')
+                    .select()
+                    .eq('user_handling_id', uh['id'])
+                    .maybeSingle();
+                debugPrint(
+                  '[TimetablePage][DEBUG] admins row (by user_handling_id): $admin',
+                );
+              } catch (e) {
+                debugPrint('[TimetablePage][DEBUG] admins query error: $e');
+              }
+            }
+          } catch (e) {
+            debugPrint('[TimetablePage][DEBUG] user_handling query error: $e');
+          }
+        }
+      } catch (e) {
+        debugPrint('[TimetablePage][DEBUG] supabase debug helper failed: $e');
+      }
+      // Fetch departments and classes, then build a mapping
+      // Resolve faculty for current admin and fetch departments scoped to it.
+      final resolvedFaculty = await _departmentsSvc.resolveAdminFacultyId();
+      debugPrint(
+        '[TimetablePage] resolvedFacultyId for deps fetch: $resolvedFaculty',
+      );
+      final deps = await _departmentsSvc.fetchDepartments(
+        facultyId: resolvedFaculty,
+      );
+      final classes = await _classesSvc.fetchClasses(
+        facultyId: resolvedFaculty,
+      );
+      debugPrint('[TimetablePage] raw deps count: ${deps.length}');
+      try {
+        final sampleDeps = deps
+            .map((d) => {'id': d.id.toString(), 'name': d.name.toString()})
+            .take(5)
+            .toList();
+        debugPrint('[TimetablePage] deps sample (id/name): $sampleDeps');
+      } catch (_) {}
+      debugPrint('[TimetablePage] raw classes count: ${classes.length}');
+      try {
+        final sampleCls = classes
+            .map(
+              (c) => {
+                'id': c.id.toString(),
+                'name': c.name.toString(),
+                'department': c.department.toString(),
+              },
+            )
+            .take(5)
+            .toList();
+        debugPrint(
+          '[TimetablePage] classes sample (id/name/department): $sampleCls',
+        );
+      } catch (_) {}
+
+      final Map<String, List<String>> map = {};
+      // Build mapping using department.id (UUID) -> department.name when possible
+      for (final c in classes) {
+        final depId = c.department.toString();
+        final clsName = c.name;
+        if (depId.isEmpty) continue;
+
+        // Try to find a matching department name from the fetched departments
+        String depName = '';
+        for (final d in deps) {
+          if (d.id.toString() == depId) {
+            depName = d.name.toString();
+            break;
+          }
+        }
+        // Fallback: if we didn't find a department by id, perhaps the classes
+        // table stores a department name/string. Use that value instead.
+        if (depName.isEmpty) depName = depId;
+        if (depName.isEmpty) continue;
+
+        map.putIfAbsent(depName, () => []);
+        if (!map[depName]!.contains(clsName)) map[depName]!.add(clsName);
+      }
+
+      // Include departments that exist in departments table even if they have no classes
+      for (final d in deps) {
+        final dname = d.name.toString();
+        final dcode = d.code.toString();
+        final displayName = dname.isNotEmpty ? dname : dcode;
+        if (displayName.isNotEmpty && !map.containsKey(displayName))
+          map[displayName] = [];
+        // store id mapping for the displayed department name only. Using
+        // both name and code previously caused collisions when different
+        // departments shared the same code or name. The UI displays
+        // `displayName`, so map that exact string to the canonical id.
+        if (d.id.isNotEmpty && displayName.isNotEmpty) {
+          _departmentIdByName[displayName.toLowerCase()] = d.id.toString();
+        }
+      }
+
+      // Departments list: prefer department_name, fall back to department_code
+      final deptNames = deps
+          .map(
+            (d) => d.name.toString().isNotEmpty
+                ? d.name.toString()
+                : d.code.toString(),
+          )
+          .where((s) => s.isNotEmpty)
+          .toList();
+
+      // Teachers
+      final tlist = <String>[];
+      try {
+        final teachers = await _teachersSvc.fetchTeachers();
+        for (final t in teachers) {
+          final name = (t.teacherName ?? t.username ?? '').toString();
+          if (name.isNotEmpty && !tlist.contains(name)) tlist.add(name);
+        }
+      } catch (_) {
+        // ignore
+      }
+
+      // Courses
+      final clist = <String>[];
+      try {
+        final cs = await _coursesSvc.fetchCourses();
+        for (final c in cs) {
+          final name = c.name.toString();
+          if (name.isNotEmpty && !clist.contains(name)) clist.add(name);
+        }
+      } catch (_) {}
+
+      setState(() {
+        departments = deptNames;
+        departmentClasses = map;
+        lecturers = tlist;
+        courses = clist;
+        sections = []; // will be derived when a class is selected
+      });
+      debugPrint(
+        '[TimetablePage] _loadReferenceData: departments=${departments.length}, total classes=${classes.length}, lecturers=${lecturers.length}, courses=${courses.length}',
+      );
+      debugPrint(
+        '[TimetablePage] department sample: ${departments.take(5).toList()}',
+      );
+    } catch (e) {
+      debugPrint('Failed to load reference data: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load reference data: $e')),
+      );
+    }
+  }
+
+  void _maybeLoad() {
+    if (selectedDepartment != null &&
+        selectedDepartment!.isNotEmpty &&
+        selectedClass != null &&
+        selectedClass!.isNotEmpty) {
+      _loadTimetableFromDb(selectedDepartment!, selectedClass!);
+    }
+  }
+
+  Future<void> _loadClassesForDepartment(String department) async {
+    // Fetch classes and filter by department display name or id (server-side when possible)
+    try {
+      debugPrint(
+        '[TimetablePage] loading classes for department: "$department"',
+      );
+      final List<String> cls = [];
+      final deptKey = department.trim().toLowerCase();
+      final possibleDeptId = _departmentIdByName[deptKey];
+      // Diagnostic: show mapping state if we couldn't resolve a dept id
+      if (possibleDeptId == null) {
+        try {
+          debugPrint(
+            '[TimetablePage] deptKey "$deptKey" not found in _departmentIdByName; keys sample: ${_departmentIdByName.keys.take(20).toList()}',
+          );
+        } catch (_) {}
+      } else {
+        debugPrint(
+          '[TimetablePage] deptKey resolved locally to id: $possibleDeptId',
+        );
+      }
+
+      // If we have a resolved department id, prefer a server-side query for accuracy
+      if (possibleDeptId != null && possibleDeptId.isNotEmpty) {
+        debugPrint(
+          '[TimetablePage] resolved deptId for "$department": $possibleDeptId',
+        );
+        try {
+          // Resolve faculty id explicitly and pass it to the classes fetch so
+          // the server query is properly scoped even if auth hydration is
+          // delayed (common on web/hot-reload). This avoids an empty result
+          // caused by `fetchClassesByDepartmentId` being unable to resolve
+          // faculty id itself.
+          String? facultyId;
+          try {
+            facultyId = await _departmentsSvc.resolveAdminFacultyId();
+          } catch (_) {
+            facultyId = null;
+          }
+          debugPrint(
+            '[TimetablePage] using facultyId=$facultyId for dept fetch',
+          );
+          final byDept = await _classesSvc.fetchClassesByDepartmentId(
+            possibleDeptId,
+            facultyId: facultyId,
+          );
+          debugPrint(
+            '[TimetablePage] fetchClassesByDepartmentId returned ${byDept.length} rows',
+          );
+          try {
+            final sampleDeps = byDept
+                .map(
+                  (c) => {
+                    'id': c.id,
+                    'name': c.name,
+                    'department': c.department,
+                  },
+                )
+                .take(10)
+                .toList();
+            debugPrint(
+              '[TimetablePage] fetchClassesByDepartmentId sample: $sampleDeps',
+            );
+          } catch (_) {}
+          // Ensure server results actually belong to the requested department
+          final filtered = byDept.where((c) {
+            final depVal = c.department.toString();
+            if (depVal.isEmpty) return false;
+            if (depVal == possibleDeptId) return true;
+            final depNorm = depVal.toLowerCase();
+            if (depNorm == deptKey) return true;
+            if (depNorm.contains(deptKey)) return true;
+            return false;
+          }).toList();
+          for (final c in filtered) {
+            final className = c.name.toString();
+            if (className.isNotEmpty && !cls.contains(className))
+              cls.add(className);
+          }
+        } catch (e) {
+          debugPrint(
+            '[TimetablePage] server-side fetchClassesByDepartmentId failed: $e',
+          );
+          // fall through to client-side filtering below
+        }
+      }
+
+      if (cls.isEmpty) {
+        // If we resolved a department id but the server returned no rows,
+        // do NOT fall back to returning all faculty classes — that would
+        // surface unrelated classes. Instead leave the class list empty so
+        // the UI accurately reflects that no classes are linked to this
+        // department id.
+        if (possibleDeptId == null || possibleDeptId.isEmpty) {
+          // No department id could be resolved; fall back to faculty-scoped
+          // classes to keep the UI usable in schemas that don't link classes
+          // to departments.
+          debugPrint(
+            '[TimetablePage] no dept id resolved; falling back to faculty-scoped classes',
+          );
+          String? facultyId;
+          try {
+            facultyId = await _departmentsSvc.resolveAdminFacultyId();
+          } catch (_) {}
+          final all = await _classesSvc.fetchClasses(facultyId: facultyId);
+          for (final c in all) {
+            final className = c.name.toString();
+            if (className.isNotEmpty && !cls.contains(className))
+              cls.add(className);
+          }
+        } else {
+          debugPrint(
+            '[TimetablePage] dept id resolved ($possibleDeptId) but server returned 0 classes — not falling back to faculty classes',
+          );
+        }
+      }
+
+      debugPrint(
+        '[TimetablePage] classes matched for "$department": ${cls.length}',
+      );
+      setState(() {
+        departmentClasses[department] = cls;
+        // reset selected class/section when department changes
+        selectedClass = null;
+        selectedSection = null;
+      });
+    } catch (e) {
+      debugPrint('Failed to load classes for $department: $e');
+      setState(() {
+        departmentClasses[department] = [];
+        selectedClass = null;
+        selectedSection = null;
+      });
+    }
+  }
+
+  /// Fetch courses for a selected class (the UI sends a class display name
+  /// which may be a plain name or a UUID). This resolves the class to an id
+  /// and queries the `courses` table for entries where `class` = classId.
+  Future<void> _loadCoursesForClass(String classDisplay) async {
+    try {
+      debugPrint('[TimetablePage] loading courses for class: "$classDisplay"');
+      final clist = <String>[];
+      try {
+        final fetched = await _coursesSvc.fetchCoursesByClass(classDisplay);
+        debugPrint(
+          '[TimetablePage] fetchCoursesByClass returned ${fetched.length} rows',
+        );
+        for (final c in fetched) {
+          final name = c.name.toString();
+          if (name.isNotEmpty && !clist.contains(name)) clist.add(name);
+        }
+      } catch (e) {
+        debugPrint('[TimetablePage] fetchCoursesByClass failed: $e');
+      }
+
+      setState(() => courses = clist);
+    } catch (e) {
+      debugPrint(
+        '[TimetablePage] Failed to load courses for $classDisplay: $e',
+      );
+      setState(() => courses = []);
+    }
   }
 
   void _seedClassPeriodsFromExistingData() {
@@ -164,10 +456,7 @@ class _TimetablePageState extends State<TimetablePage> {
       classPeriods.putIfAbsent(dep, () => {});
       final classesMap = timetableData[dep]!;
       for (final cls in classesMap.keys) {
-        classPeriods[dep]!.putIfAbsent(
-          cls,
-          () => List<String>.from(seedPeriods, growable: true),
-        );
+        classPeriods[dep]!.putIfAbsent(cls, () => <String>[]);
         for (final sect in classesMap[cls]!.keys) {
           final grid = classesMap[cls]![sect]!;
           for (int r = 0; r < grid.length; r++) {
@@ -187,6 +476,279 @@ class _TimetablePageState extends State<TimetablePage> {
           }
         }
       }
+    }
+  }
+
+  /// Manual reload action: re-seed internal structures and refresh UI.
+  /// This is non-destructive (it doesn't clear edited cells) but makes sure
+  /// data structures and column labels are re-synchronized.
+  Future<void> _manualReload() async {
+    setState(() => _isReloading = true);
+    // simulate a short reload (if you fetch from server, do it here)
+    await Future.delayed(const Duration(milliseconds: 600));
+    _seedClassPeriodsFromExistingData();
+    setState(() => _isReloading = false);
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Refreshed')));
+  }
+
+  // Extracted helper to open the Create Timetable dialog (moved from inline button)
+  Future<void> _onCreateTimetablePressed() async {
+    final existingLabels =
+        (selectedDepartment != null &&
+            selectedClass != null &&
+            classPeriods[selectedDepartment!] != null &&
+            classPeriods[selectedDepartment!]![selectedClass!] != null)
+        ? classPeriods[selectedDepartment!]![selectedClass!]
+        : null;
+
+    // Try to fetch existing sessions from DB so the dialog can prefill
+    List<CreateTimetableTimeResult>? existingSessions;
+    if (selectedDepartment != null && selectedClass != null) {
+      try {
+        final sessMaps = await _timeTableService.fetchSessions(
+          department: selectedDepartment!,
+          classKey: selectedClass!,
+        );
+        existingSessions = sessMaps.map((m) {
+          final day = (m['day_index'] ?? m['dayIndex'] ?? 0);
+          final start = (m['start_minutes'] ?? m['startMinutes'] ?? 0);
+          final end = (m['end_minutes'] ?? m['endMinutes'] ?? 0);
+          final course = (m['course_name'] ?? m['courseName'] ?? '').toString();
+          final lecturer = (m['lecturer_name'] ?? m['lecturerName'] ?? '')
+              .toString();
+          final cell = lecturer.isNotEmpty ? '$course\n$lecturer' : course;
+          return CreateTimetableTimeResult(
+            department: selectedDepartment!,
+            classKey: selectedClass!,
+            section: (m['section'] ?? '').toString(),
+            dayIndex: day is int ? day : int.tryParse(day.toString()) ?? 0,
+            startMinutes: start is int
+                ? start
+                : int.tryParse(start.toString()) ?? 0,
+            endMinutes: end is int ? end : int.tryParse(end.toString()) ?? 0,
+            cellText: cell,
+          );
+        }).toList();
+      } catch (e) {
+        debugPrint('Failed to fetch existing sessions for dialog: $e');
+      }
+    }
+
+    // Ensure courses are loaded for the selected class so the dialog shows
+    // relevant course options. This is defensive in case the user opened the
+    // dialog without changing the class after navigation.
+    if (selectedClass != null &&
+        selectedClass!.isNotEmpty &&
+        (courses.isEmpty)) {
+      try {
+        await _loadCoursesForClass(selectedClass!);
+      } catch (_) {}
+    }
+
+    final payload = await showDialog<CreateTimetableTimePayload>(
+      context: context,
+      builder: (_) => CreateTimetableDialog(
+        departments: departments,
+        departmentClasses: departmentClasses,
+        lecturers: lecturers,
+        sections: sections,
+        days: days,
+        courses: courses,
+        initialDepartment: selectedDepartment,
+        initialClass: selectedClass,
+        initialSection: selectedSection,
+        preconfiguredLabels: existingLabels,
+        initialSessions: existingSessions,
+      ),
+    );
+
+    if (payload == null) return;
+
+    if (payload.periodsOverride != null &&
+        payload.periodsOverride!.isNotEmpty) {
+      final depClass = _ensureDepClass(
+        payload.results.first.department,
+        payload.results.first.classKey,
+      );
+      final depKey = depClass.key;
+      final classKey = depClass.value;
+      _replaceClassPeriods(depKey, classKey, payload.periodsOverride!);
+      _ensureSectionGrid(depKey, classKey, payload.results.first.section);
+    }
+
+    setState(() {
+      for (final r in payload.results) {
+        final depClass = _ensureDepClass(r.department, r.classKey);
+        final depKey = depClass.key;
+        final classKey = depClass.value;
+        _ensureSectionGrid(depKey, classKey, r.section);
+
+        final label = _makeLabel(r.startMinutes, r.endMinutes);
+        final colIndex = _findOrInsertPeriodIndexForClass(
+          depKey: depKey,
+          classKey: classKey,
+          newLabel: label,
+        );
+
+        _ensureSectionGrid(depKey, classKey, r.section);
+        final sectionsMap = timetableData[depKey]![classKey]!;
+        final sectionKey =
+            _findKeyIgnoreCase(sectionsMap, r.section) ?? r.section;
+        final tgtGrid = sectionsMap[sectionKey]!;
+        if (r.dayIndex >= 0 &&
+            r.dayIndex < tgtGrid.length &&
+            colIndex >= 0 &&
+            colIndex < tgtGrid[r.dayIndex].length) {
+          tgtGrid[r.dayIndex][colIndex] = r.cellText;
+        }
+      }
+    });
+
+    // Persist to backend (Supabase) scoped to this admin's faculty and reload
+    try {
+      final List<Map<String, dynamic>> rows = payload.results.map((r) {
+        return {
+          'department': r.department,
+          'classKey': r.classKey,
+          'section': r.section,
+          'dayIndex': r.dayIndex,
+          'startMinutes': r.startMinutes,
+          'endMinutes': r.endMinutes,
+          'cellText': r.cellText,
+        };
+      }).toList();
+
+      await _timeTableService.saveSessions(rows);
+
+      // Reload authoritative data from DB for this department/class
+      final first = payload.results.first;
+      await _loadTimetableFromDb(first.department, first.classKey);
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Time table entries saved')));
+    } catch (e) {
+      debugPrint('Failed to persist timetable entries: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save timetable: $e')));
+    }
+  }
+
+  /// Load timetable sessions from DB for the given department/class and
+  /// convert them into `classPeriods` and `timetableData` structures expected
+  /// by the UI grid.
+  Future<void> _loadTimetableFromDb(String department, String classKey) async {
+    setState(() => _isReloading = true);
+    try {
+      final sessions = await _timeTableService.fetchSessions(
+        department: department,
+        classKey: classKey,
+      );
+
+      // Ensure data containers exist
+      final depClass = _ensureDepClass(department, classKey);
+      final depKey = depClass.key;
+      final clsKey = depClass.value;
+
+      // Build unique sorted labels from sessions
+      final uniqueSpans =
+          <int, int>{}; // map start -> end (assumes unique start times)
+      final sections = <String>{};
+      for (final s in sessions) {
+        final start = (s['start_minutes'] ?? s['startMinutes'] ?? 0) as int;
+        final end = (s['end_minutes'] ?? s['endMinutes'] ?? 0) as int;
+        uniqueSpans[start] = end;
+        final sect = (s['section'] ?? '')?.toString() ?? '';
+        if (sect.isNotEmpty) sections.add(sect);
+      }
+
+      List<int> starts = uniqueSpans.keys.toList()..sort();
+      List<String> labels;
+      if (starts.isEmpty) {
+        labels = <String>[];
+      } else {
+        labels = starts
+            .map((st) => _makeLabel(st, uniqueSpans[st] ?? (st + 60)))
+            .toList();
+      }
+
+      // populate classPeriods
+      classPeriods.putIfAbsent(depKey, () => {});
+      classPeriods[depKey]![clsKey] = List<String>.from(labels, growable: true);
+
+      // Build empty grids for sections and fill from sessions
+      timetableData.putIfAbsent(depKey, () => {});
+      timetableData[depKey]!.putIfAbsent(clsKey, () => {});
+
+      // For each section, create an empty grid rows x labels
+      for (final sect in sections) {
+        final sectionKey =
+            _findKeyIgnoreCase(timetableData[depKey]![clsKey]!, sect) ?? sect;
+        timetableData[depKey]![clsKey]!.putIfAbsent(
+          sectionKey,
+          () => List<List<String>>.generate(
+            days.length,
+            (_) => List<String>.filled(labels.length, '', growable: true),
+            growable: true,
+          ),
+        );
+      }
+
+      // Place sessions into grids
+      for (final s in sessions) {
+        final sect = (s['section'] ?? '')?.toString() ?? '';
+        final sectionKey = sect.isEmpty
+            ? 'None'
+            : (_findKeyIgnoreCase(timetableData[depKey]![clsKey]!, sect) ??
+                  sect);
+        timetableData[depKey]![clsKey]!.putIfAbsent(
+          sectionKey,
+          () => List<List<String>>.generate(
+            days.length,
+            (_) => List<String>.filled(labels.length, '', growable: true),
+            growable: true,
+          ),
+        );
+        final grid = timetableData[depKey]![clsKey]![sectionKey]!;
+        final day = (s['day_index'] ?? s['dayIndex'] ?? 0) as int;
+        final start = (s['start_minutes'] ?? s['startMinutes'] ?? 0) as int;
+        final end = (s['end_minutes'] ?? s['endMinutes'] ?? 0) as int;
+        final colIndex = labels.indexWhere((l) {
+          final st = _parseStartFromLabel(l) ?? -1;
+          final m = RegExp(
+            r'^(\d{1,2}):([0-5]\d) - (\d{1,2}):([0-5]\d)',
+          ).firstMatch(l);
+          if (m == null) return false;
+          final eh = int.parse(m.group(3)!);
+          final em = int.parse(m.group(4)!);
+          final lblStart = st;
+          final lblEnd = eh * 60 + em;
+          return lblStart == start && lblEnd == end;
+        });
+
+        final course =
+            (s['course_name'] ?? s['courseName'] ?? '')?.toString() ?? '';
+        final lecturer =
+            (s['lecturer_name'] ?? s['lecturerName'] ?? '')?.toString() ?? '';
+        final cellText = lecturer.isNotEmpty ? '$course\n$lecturer' : course;
+
+        if (day >= 0 && day < days.length && colIndex >= 0) {
+          grid[day][colIndex] = cellText;
+        }
+      }
+
+      setState(() {});
+    } catch (e) {
+      debugPrint('Failed to load timetable from DB: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load timetable: $e')));
+    } finally {
+      setState(() => _isReloading = false);
     }
   }
 
@@ -211,12 +773,12 @@ class _TimetablePageState extends State<TimetablePage> {
         _findKeyIgnoreCase(timetableData, selectedDepartment) ??
         selectedDepartment;
     final clsKey = selectedClass;
-    if (depKey == null || clsKey == null) return seedPeriods;
+    // If no department/class selected or no loaded class periods, return
+    // an empty list. We avoid falling back to seedPeriods so the grid
+    // doesn't show manual data when the DB has nothing.
+    if (depKey == null || clsKey == null) return <String>[];
     classPeriods.putIfAbsent(depKey, () => {});
-    classPeriods[depKey]!.putIfAbsent(
-      clsKey,
-      () => List<String>.from(seedPeriods, growable: true),
-    );
+    classPeriods[depKey]!.putIfAbsent(clsKey, () => <String>[]);
     classPeriods[depKey]![clsKey] = List<String>.from(
       classPeriods[depKey]![clsKey]!,
       growable: true,
@@ -336,10 +898,7 @@ class _TimetablePageState extends State<TimetablePage> {
     final classesMap = timetableData[depKey]!;
     final classKey = _findKeyIgnoreCase(classesMap, cls) ?? cls;
     classesMap.putIfAbsent(classKey, () => {});
-    classPeriods[depKey]!.putIfAbsent(
-      classKey,
-      () => List<String>.from(seedPeriods, growable: true),
-    );
+    classPeriods[depKey]!.putIfAbsent(classKey, () => <String>[]);
     classPeriods[depKey]![classKey] = List<String>.from(
       classPeriods[depKey]![classKey]!,
       growable: true,
@@ -513,7 +1072,7 @@ class _TimetablePageState extends State<TimetablePage> {
           builder: (_) => TimetableCellEditDialog(
             initialCourse: initialCourse,
             initialLecturer: initialLecturer,
-            courses: coursesMock,
+            courses: courses,
             lecturers: lecturers.where((l) => l != 'NONE').toList(),
           ),
         );
@@ -636,7 +1195,7 @@ class _TimetablePageState extends State<TimetablePage> {
     // Backup for UNDO
     final backup = _UndoState(
       depKey: depKey,
-      classKey: classKey!,
+      classKey: classKey,
       sectionKey: selectedSection,
       classPeriodsCopy: Map<String, List<String>>.from(classPeriods[depKey]!),
       timetableCopy: _deepCopyTimetableClass(timetableData[depKey]![classKey]!),
@@ -648,7 +1207,7 @@ class _TimetablePageState extends State<TimetablePage> {
         case _DeleteAction.section:
           final sectKey =
               _findKeyIgnoreCase(sectionsMap, selectedSection) ??
-              selectedSection!;
+              selectedSection;
           final grid = sectionsMap[sectKey]!;
           for (int r = 0; r < grid.length; r++) {
             for (int c = 0; c < grid[r].length; c++) {
@@ -681,6 +1240,40 @@ class _TimetablePageState extends State<TimetablePage> {
     });
 
     _showUndoBar();
+    // Persist deletion to backend
+    try {
+      final ut = UseTimeTable();
+      switch (action) {
+        case _DeleteAction.section:
+          await ut.deleteTimetable(
+            department: depKey,
+            classKey: classKey,
+            section: selectedSection,
+            deleteStructure: false,
+          );
+          break;
+        case _DeleteAction.classAll:
+          await ut.deleteTimetable(
+            department: depKey,
+            classKey: classKey,
+            section: null,
+            deleteStructure: false,
+          );
+          break;
+        case _DeleteAction.classStructure:
+          await ut.deleteTimetable(
+            department: depKey,
+            classKey: classKey,
+            deleteStructure: true,
+          );
+          break;
+      }
+    } catch (e) {
+      debugPrint('Failed to persist deletion: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete timetable: $e')));
+    }
   }
 
   Map<String, List<List<String>>> _deepCopyTimetableClass(
@@ -814,7 +1407,7 @@ class _TimetablePageState extends State<TimetablePage> {
             ),
           ),
           build: (ctx) => [
-            _pdfHeader(depKey!, classKey!, dateStr, section: sectKey),
+            _pdfHeader(depKey, classKey, dateStr, section: sectKey),
             pw.SizedBox(height: 8),
             if (periods.isEmpty)
               pw.Text(
@@ -846,7 +1439,7 @@ class _TimetablePageState extends State<TimetablePage> {
               ),
             ),
             build: (ctx) => [
-              _pdfHeader(depKey!, classKey!, dateStr),
+              _pdfHeader(depKey, classKey, dateStr),
               pw.SizedBox(height: 8),
               pw.Text('No sections found for this class.'),
             ],
@@ -865,7 +1458,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 ),
               ),
               build: (ctx) => [
-                _pdfHeader(depKey!, classKey!, dateStr, section: sectKey),
+                _pdfHeader(depKey, classKey, dateStr, section: sectKey),
                 pw.SizedBox(height: 8),
                 if (periods.isEmpty)
                   pw.Text(
@@ -884,7 +1477,7 @@ class _TimetablePageState extends State<TimetablePage> {
     await Printing.layoutPdf(
       onLayout: (format) async => pdf.save(),
       name:
-          'timetable_${depKey}_${classKey}${choice == _ExportChoice.currentSection ? '_${selectedSection ?? 'Section'}' : '_ALL'}_${dateStr.replaceAll(':', '-')}.pdf',
+          'timetable_${depKey}_$classKey${choice == _ExportChoice.currentSection ? '_${selectedSection ?? 'Section'}' : '_ALL'}_${dateStr.replaceAll(':', '-')}.pdf',
     );
   }
 
@@ -1023,149 +1616,90 @@ class _TimetablePageState extends State<TimetablePage> {
     final canDelete = selectedDepartment != null && selectedClass != null;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Time Table'),
-        foregroundColor: Colors.black,
+      // Updated AppBar: customized title font, spacing and manual reload button + small progress indicator
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(72),
+        child: AppBar(
+          automaticallyImplyLeading: true,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          foregroundColor: Colors.black,
+          flexibleSpace: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top row: custom title + small refresh icon aligned to the right
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      // If you want a menu icon on the left, keep the default leading or add here.
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'Timetable',
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: 'Reload',
+                              onPressed: _isReloading ? null : _manualReload,
+                              icon: Icon(
+                                Icons.refresh,
+                                size: 20,
+                                color: _isReloading
+                                    ? Colors.grey
+                                    : Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // optional action on the right of the appbar (kept empty here)
+                      const SizedBox(width: 8),
+                      // you can add user/profile/logout widgets here if needed
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 3),
+              ],
+            ),
+          ),
+        ),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(12.0), // mobile-friendly padding
+          padding: const EdgeInsets.all(32.0), // match other pages
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search
-              TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search Time Table...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
+              // show a thin progress indicator when manual reload or fetch is ongoing
+              if (_isReloading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: LinearProgressIndicator(minHeight: 3),
                 ),
-                onChanged: (v) => setState(() => searchText = v),
-              ),
-              const SizedBox(height: 10),
-
-              // Create button (left) and Edit/Delete/Export (right) — like your other pages
+              const SizedBox(height: 8),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Left: Create Time Table
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Create Time Table'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B4B9B),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      minimumSize: const Size(0, 40),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                  Expanded(
+                    child: SearchAddBar(
+                      hintText: 'Search Time Table...',
+                      buttonText: 'Create Time Table',
+                      onAddPressed: _onCreateTimetablePressed,
+                      onChanged: (v) => setState(() => searchText = v),
                     ),
-                    onPressed: () async {
-                      final existingLabels =
-                          (selectedDepartment != null &&
-                              selectedClass != null &&
-                              classPeriods[selectedDepartment!] != null &&
-                              classPeriods[selectedDepartment!]![selectedClass!] !=
-                                  null)
-                          ? classPeriods[selectedDepartment!]![selectedClass!]
-                          : null;
-
-                      final payload =
-                          await showDialog<CreateTimetableTimePayload>(
-                            context: context,
-                            builder: (_) => CreateTimetableDialog(
-                              departments: departments,
-                              departmentClasses: departmentClasses,
-                              lecturers: lecturers,
-                              sections: sections,
-                              days: days,
-                              courses: const [],
-                              initialDepartment: selectedDepartment,
-                              initialClass: selectedClass,
-                              initialSection: selectedSection,
-                              preconfiguredLabels: existingLabels,
-                            ),
-                          );
-
-                      if (payload == null) return;
-
-                      if (payload.periodsOverride != null &&
-                          payload.periodsOverride!.isNotEmpty) {
-                        final depClass = _ensureDepClass(
-                          payload.results.first.department,
-                          payload.results.first.classKey,
-                        );
-                        final depKey = depClass.key;
-                        final classKey = depClass.value;
-                        _replaceClassPeriods(
-                          depKey,
-                          classKey,
-                          payload.periodsOverride!,
-                        );
-                        _ensureSectionGrid(
-                          depKey,
-                          classKey,
-                          payload.results.first.section,
-                        );
-                      }
-
-                      setState(() {
-                        for (final r in payload.results) {
-                          final depClass = _ensureDepClass(
-                            r.department,
-                            r.classKey,
-                          );
-                          final depKey = depClass.key;
-                          final classKey = depClass.value;
-                          _ensureSectionGrid(depKey, classKey, r.section);
-
-                          final label = _makeLabel(
-                            r.startMinutes,
-                            r.endMinutes,
-                          );
-                          final colIndex = _findOrInsertPeriodIndexForClass(
-                            depKey: depKey,
-                            classKey: classKey,
-                            newLabel: label,
-                          );
-
-                          _ensureSectionGrid(depKey, classKey, r.section);
-                          final sectionsMap = timetableData[depKey]![classKey]!;
-                          final sectionKey =
-                              _findKeyIgnoreCase(sectionsMap, r.section) ??
-                              r.section;
-                          final tgtGrid = sectionsMap[sectionKey]!;
-                          if (r.dayIndex >= 0 &&
-                              r.dayIndex < tgtGrid.length &&
-                              colIndex >= 0 &&
-                              colIndex < tgtGrid[r.dayIndex].length) {
-                            tgtGrid[r.dayIndex][colIndex] = r.cellText;
-                          }
-                        }
-                      });
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Time table entries saved'),
-                        ),
-                      );
-                    },
                   ),
-
-                  // Right: Edit / Delete (disabled until needed) + Export icon
+                  const SizedBox(width: 12),
                   Row(
                     children: [
                       SizedBox(
@@ -1242,11 +1776,39 @@ class _TimetablePageState extends State<TimetablePage> {
                       hint: 'Department',
                       value: selectedDepartment,
                       items: departments,
-                      onChanged: (v) => setState(() {
-                        selectedDepartment = v?.trim();
-                        selectedClass = null;
-                        selectedSection = null;
-                      }),
+                      onTap: () {
+                        debugPrint(
+                          '[TimetablePage] Department dropdown opened. Departments loaded: ${departments.length}',
+                        );
+                      },
+                      onChanged: (v) async {
+                        final dep = v?.trim();
+                        debugPrint('[TimetablePage] Department selected: $dep');
+                        setState(() {
+                          selectedDepartment = dep;
+                          selectedClass = null;
+                          selectedSection = null;
+                        });
+                        if (dep != null && dep.isNotEmpty) {
+                          try {
+                            await _loadClassesForDepartment(dep);
+                            debugPrint(
+                              '[TimetablePage] _loadClassesForDepartment succeeded for $dep (classes: ${departmentClasses[dep]?.length ?? 0})',
+                            );
+                          } catch (e, st) {
+                            debugPrint(
+                              '[TimetablePage] _loadClassesForDepartment error for $dep: $e\n$st',
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Failed to load classes for $dep: $e',
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
                     ),
                     const SizedBox(width: 8),
                     _FilterBox(
@@ -1255,25 +1817,63 @@ class _TimetablePageState extends State<TimetablePage> {
                       items: selectedDepartment == null
                           ? departmentClasses.values.expand((e) => e).toList()
                           : (departmentClasses[selectedDepartment] ?? []),
-                      onChanged: (v) =>
-                          setState(() => selectedClass = v?.trim()),
+                      onTap: () {
+                        final available = selectedDepartment == null
+                            ? departmentClasses.values
+                                  .expand((e) => e)
+                                  .toList()
+                                  .length
+                            : (departmentClasses[selectedDepartment]?.length ??
+                                  0);
+                        debugPrint(
+                          '[TimetablePage] Class dropdown opened for department: ${selectedDepartment ?? 'ALL'}; available classes: $available',
+                        );
+                      },
+                      onChanged: (v) async {
+                        final sel = v?.trim();
+                        debugPrint('[TimetablePage] Class selected: $sel');
+                        setState(() => selectedClass = sel);
+                        // Load courses for this class (fetch by class id) so the
+                        // CreateTimetableDialog receives up-to-date course list.
+                        try {
+                          if (sel != null && sel.isNotEmpty) {
+                            await _loadCoursesForClass(sel);
+                          } else {
+                            setState(() => courses = []);
+                          }
+                          // then attempt to load timetable if both dept & class set
+                          _maybeLoad();
+                        } catch (e, st) {
+                          debugPrint(
+                            '[TimetablePage] Error while loading timetable after class select: $e\n$st',
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error loading timetable: $e'),
+                            ),
+                          );
+                        }
+                      },
                     ),
                     const SizedBox(width: 8),
                     _FilterBox(
                       hint: 'Lecturer',
                       value: selectedLecturer,
                       items: lecturers,
-                      onChanged: (v) =>
-                          setState(() => selectedLecturer = v?.trim()),
+                      onTap: () {
+                        debugPrint(
+                          '[TimetablePage] Lecturer dropdown opened. Lecturers loaded: ${lecturers.length}',
+                        );
+                      },
+                      onChanged: (v) {
+                        debugPrint(
+                          '[TimetablePage] Lecturer selected: ${v?.trim()}',
+                        );
+                        setState(() => selectedLecturer = v?.trim());
+                      },
                     ),
                     const SizedBox(width: 8),
-                    _FilterBox(
-                      hint: 'Section',
-                      value: selectedSection,
-                      items: sections,
-                      onChanged: (v) =>
-                          setState(() => selectedSection = v?.trim()),
-                    ),
+                    // Section filter removed per request — sections are not needed in UI
                   ],
                 ),
               ),
@@ -1282,36 +1882,42 @@ class _TimetablePageState extends State<TimetablePage> {
 
               // Content
               Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: (grid == null)
-                      ? Center(
-                          child: Text(
-                            'Please select Department, Class, and Section to view the timetable.',
-                            style: TextStyle(color: Colors.grey.shade600),
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                      : _TimetableGrid(
-                          days: days,
-                          periods: periodsForClass,
-                          timetable: grid,
-                          editing: editingEnabled,
-                          onCellTap: (d, p) =>
-                              _openEditCellDialog(dayIndex: d, periodIndex: p),
+                // Added RefreshIndicator so the user can pull-to-refresh (manual reload)
+                child: RefreshIndicator(
+                  onRefresh: _manualReload,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 6,
+                          offset: const Offset(0, 3),
                         ),
+                      ],
+                    ),
+                    child: (grid == null)
+                        ? Center(
+                            child: Text(
+                              'Please select Department and Class to view the timetable.',
+                              style: TextStyle(color: Colors.grey.shade600),
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        : _TimetableGrid(
+                            days: days,
+                            periods: periodsForClass,
+                            timetable: grid,
+                            editing: editingEnabled,
+                            onCellTap: (d, p) => _openEditCellDialog(
+                              dayIndex: d,
+                              periodIndex: p,
+                            ),
+                          ),
+                  ),
                 ),
               ),
             ],
@@ -1329,13 +1935,14 @@ class _FilterBox extends StatelessWidget {
   final String? value;
   final List<String> items;
   final ValueChanged<String?> onChanged;
+  final VoidCallback? onTap;
 
   const _FilterBox({
-    super.key,
     required this.hint,
     required this.value,
     required this.items,
     required this.onChanged,
+    this.onTap,
   });
 
   @override
@@ -1358,6 +1965,7 @@ class _FilterBox extends StatelessWidget {
             hint: Text(hint),
             isExpanded: true,
             value: value,
+            onTap: onTap,
             items: items
                 .map((i) => DropdownMenuItem(value: i, child: Text(i)))
                 .toList(),
@@ -1377,7 +1985,7 @@ class _TimetableGrid extends StatelessWidget {
   final void Function(int dayIndex, int periodIndex)? onCellTap;
 
   const _TimetableGrid({
-    super.key,
+    // no key parameter needed for internal private widget
     required this.days,
     required this.periods,
     required this.timetable,
@@ -1613,7 +2221,7 @@ class _DeleteOptionTile extends StatelessWidget {
   final _DeleteAction action;
 
   const _DeleteOptionTile({
-    super.key,
+    // no key parameter needed for internal private widget
     required this.title,
     required this.subtitle,
     required this.action,
@@ -1686,6 +2294,7 @@ class TimetableCellEditDialog extends StatefulWidget {
 
   const TimetableCellEditDialog({
     super.key,
+    // no key parameter needed for internal private widget
     this.initialCourse,
     this.initialLecturer,
     required this.courses,
@@ -1704,10 +2313,10 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   @override
   void initState() {
     super.initState();
-    _courseController =
-        TextEditingController(text: widget.initialCourse ?? '');
-    _lecturerController =
-        TextEditingController(text: widget.initialLecturer ?? '');
+    _courseController = TextEditingController(text: widget.initialCourse ?? '');
+    _lecturerController = TextEditingController(
+      text: widget.initialLecturer ?? '',
+    );
   }
 
   @override
@@ -1722,7 +2331,9 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
     final lecturer = _lecturerController.text.trim();
     final combined = course.isEmpty && lecturer.isEmpty
         ? ''
-        : (course.isEmpty ? lecturer : (lecturer.isEmpty ? course : '$course\n$lecturer'));
+        : (course.isEmpty
+              ? lecturer
+              : (lecturer.isEmpty ? course : '$course\n$lecturer'));
     Navigator.of(context).pop(TimetableCellEditResult(cellText: combined));
   }
 
@@ -1762,10 +2373,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                 runSpacing: 6,
                 children: widget.courses.take(6).map((c) {
                   return ActionChip(
-                    label: Text(
-                      c,
-                      style: const TextStyle(fontSize: 12),
-                    ),
+                    label: Text(c, style: const TextStyle(fontSize: 12)),
                     onPressed: () {
                       _courseController.text = c;
                     },
@@ -1779,10 +2387,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                 runSpacing: 6,
                 children: widget.lecturers.take(6).map((l) {
                   return ActionChip(
-                    label: Text(
-                      l,
-                      style: const TextStyle(fontSize: 12),
-                    ),
+                    label: Text(l, style: const TextStyle(fontSize: 12)),
                     onPressed: () {
                       _lecturerController.text = l;
                     },
@@ -1799,15 +2404,9 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
         ),
         TextButton(
           onPressed: _clearCell,
-          child: const Text(
-            'Clear',
-            style: TextStyle(color: Colors.red),
-          ),
+          child: const Text('Clear', style: TextStyle(color: Colors.red)),
         ),
-        ElevatedButton(
-          onPressed: _submit,
-          child: const Text('Save'),
-        ),
+        ElevatedButton(onPressed: _submit, child: const Text('Save')),
       ],
     );
   }

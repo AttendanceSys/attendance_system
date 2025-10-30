@@ -71,8 +71,11 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
       }
 
       // keep only teachers and faculty admins (exclude students)
+      // Also exclude the special username 'sxb' if present per request.
       final filtered = allRows.where((r) {
-        final role = (r.role ?? '').toString().toLowerCase().trim();
+        final role = r.role.toLowerCase().trim();
+        final uname = (r.username ?? '').toString().toLowerCase().trim();
+        if (uname == 'sxb') return false;
         return role == 'teacher' ||
             role == 'admin' || // DB 'admin' maps to faculty admin display
             role == 'faculty admin' ||

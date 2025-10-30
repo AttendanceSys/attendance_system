@@ -5,6 +5,7 @@ class Student {
   final String gender;
   final String department; // display name
   final String className; // display name
+  final String facultyId; // FK id (uuid) for faculty
   final String departmentId; // FK id (uuid) for DB
   final String classId; // FK id (uuid) for DB
   final String password;
@@ -16,6 +17,7 @@ class Student {
     required this.gender,
     required this.department,
     required this.className,
+    this.facultyId = '',
     this.departmentId = '',
     this.classId = '',
     required this.password,
@@ -28,6 +30,7 @@ class Student {
     String? gender,
     String? department,
     String? className,
+    String? facultyId,
     String? departmentId,
     String? classId,
     String? password,
@@ -39,6 +42,7 @@ class Student {
       gender: gender ?? this.gender,
       department: department ?? this.department,
       className: className ?? this.className,
+      facultyId: facultyId ?? this.facultyId,
       departmentId: departmentId ?? this.departmentId,
       classId: classId ?? this.classId,
       password: password ?? this.password,

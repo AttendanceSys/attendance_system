@@ -5,7 +5,9 @@ import '../hooks/use_classes.dart';
 import '../hooks/use_students.dart';
 
 class DashboardStatsGrid extends StatefulWidget {
-  const DashboardStatsGrid({super.key});
+  final String? facultyId;
+
+  const DashboardStatsGrid({super.key, this.facultyId});
 
   @override
   State<DashboardStatsGrid> createState() => _DashboardStatsGridState();
@@ -30,13 +32,18 @@ class _DashboardStatsGridState extends State<DashboardStatsGrid> {
   }
 
   Future<void> _loadCounts() async {
+    if (!mounted) return;
     setState(() => loading = true);
     try {
-      final deps = await _departments.fetchDepartments();
-      final courses = await _courses.fetchCourses();
-      final classes = await _classes.fetchClasses();
-      final students = await _students.fetchStudents();
-
+      final deps = await _departments.fetchDepartments(
+        facultyId: widget.facultyId,
+      );
+      final courses = await _courses.fetchCourses(facultyId: widget.facultyId);
+      final classes = await _classes.fetchClasses(facultyId: widget.facultyId);
+      final students = await _students.fetchStudents(
+        facultyId: widget.facultyId,
+      );
+      if (!mounted) return;
       setState(() {
         departmentCount = deps.length;
         courseCount = courses.length;
@@ -45,6 +52,7 @@ class _DashboardStatsGridState extends State<DashboardStatsGrid> {
         loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         departmentCount = 0;
         courseCount = 0;
@@ -112,7 +120,6 @@ class _StatsCard extends StatelessWidget {
   final Color color;
 
   const _StatsCard({
-    super.key,
     required this.icon,
     required this.label,
     required this.value,

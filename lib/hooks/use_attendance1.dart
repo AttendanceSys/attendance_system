@@ -22,18 +22,18 @@ class UseAttendance {
 
       var builder = _supabase.from('attendance').select(selectQuery);
 
-      final dynamic b = builder;
-      if (facultyId != null && facultyId.isNotEmpty)
-        b.eq('faculty_id', facultyId);
+      if (facultyId != null && facultyId.isNotEmpty) {
+        builder = (builder as dynamic).eq('faculty_id', facultyId);
+      }
 
       if (departmentId != null && departmentId.trim().isNotEmpty) {
-        builder = builder.eq('department', departmentId);
+        builder = (builder as dynamic).eq('department', departmentId);
       }
       if (classId != null && classId.trim().isNotEmpty) {
-        builder = builder.eq('class', classId);
+        builder = (builder as dynamic).eq('class', classId);
       }
       if (date != null && date.trim().isNotEmpty) {
-        builder = builder.eq('date', date);
+        builder = (builder as dynamic).eq('date', date);
       }
 
       dynamic executor = builder;

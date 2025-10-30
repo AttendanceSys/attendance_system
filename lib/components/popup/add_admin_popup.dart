@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/admin.dart';
-import 'success_snacbar.dart'; // <-- import your snackbar component
+// <-- import your snackbar component
 
 class AddAdminPopup extends StatefulWidget {
   final Admin? admin;
@@ -109,7 +109,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                         .map((s) => s.trim())
                         .toSet();
                     if (widget.admin?.facultyName != null &&
-                        widget.admin!.facultyName!.trim().isNotEmpty) {
+                        widget.admin!.facultyName.trim().isNotEmpty) {
                       names.add(widget.admin!.facultyName.trim());
                     }
                     final sorted = names.toList()..sort();
@@ -125,7 +125,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                               child: Text(name),
                             ),
                           )
-                          .toList(),
+                          ,
                     ];
                   }(),
                   onChanged: (val) => setState(() => _facultyName = val),

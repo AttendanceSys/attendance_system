@@ -8,6 +8,7 @@ class AddStudentPopup extends StatefulWidget {
   final List<String> genders;
   final List<Department> departments;
   final List<SchoolClass> classes;
+  final String? facultyId;
 
   const AddStudentPopup({
     super.key,
@@ -15,6 +16,7 @@ class AddStudentPopup extends StatefulWidget {
     required this.genders,
     required this.departments,
     required this.classes,
+    this.facultyId,
   });
 
   @override
@@ -78,7 +80,8 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
   void _saveStudent() {
     if (_formKey.currentState!.validate()) {
       final idToUse =
-          _originalId ?? _usernameController.text.trim(); // preserve DB id when editing
+          _originalId ??
+          _usernameController.text.trim(); // preserve DB id when editing
       Navigator.of(context).pop(
         Student(
           id: idToUse,
@@ -87,6 +90,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
           gender: _gender ?? '',
           department: _department ?? '',
           className: _className ?? '',
+          facultyId: widget.facultyId ?? '',
           departmentId: _departmentId ?? '',
           classId: _classId ?? '',
           password: _passwordController.text,
@@ -181,7 +185,12 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                         flex: 1,
                         child: DropdownButtonFormField<String>(
                           focusNode: _genderFocus,
-                          value: _gender,
+                          // normalize empty string -> null so DropdownButton doesn't
+                          // fail when the current value is an empty string not
+                          // present in the items list.
+                          value: (_gender == null || _gender!.isEmpty)
+                              ? null
+                              : _gender,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             hintText: "Gender",
@@ -207,7 +216,9 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                         flex: 1,
                         child: DropdownButtonFormField<String>(
                           focusNode: _deptFocus,
-                          value: _department,
+                          value: (_department == null || _department!.isEmpty)
+                              ? null
+                              : _department,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             hintText: "Department",
@@ -251,7 +262,9 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                   // Class
                   DropdownButtonFormField<String>(
                     focusNode: _classFocus,
-                    value: _className,
+                    value: (_className == null || _className!.isEmpty)
+                        ? null
+                        : _className,
                     isExpanded: true,
                     decoration: const InputDecoration(
                       hintText: "Class",

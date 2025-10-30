@@ -128,7 +128,6 @@ class _SidebarItem extends StatelessWidget {
   final bool collapsed;
 
   const _SidebarItem({
-    super.key,
     required this.icon,
     required this.title,
     required this.isSelected,

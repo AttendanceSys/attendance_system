@@ -11,7 +11,9 @@ import '../popup/add_student_popup.dart';
 import '../cards/searchBar.dart';
 
 class StudentsPage extends StatefulWidget {
-  const StudentsPage({super.key});
+  final String? facultyId;
+
+  const StudentsPage({super.key, this.facultyId});
 
   @override
   State<StudentsPage> createState() => _StudentsPageState();
@@ -52,17 +54,27 @@ class _StudentsPageState extends State<StudentsPage> {
       .toList();
 
   Future<void> _showAddStudentPopup() async {
+    String? resolvedFacultyId = widget.facultyId;
+    if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+      try {
+        resolvedFacultyId = await _studentsService.resolveAdminFacultyId();
+      } catch (_) {
+        resolvedFacultyId = null;
+      }
+    }
+
     final result = await showDialog<Student>(
       context: context,
       builder: (context) => AddStudentPopup(
         genders: _genders,
         departments: _departments,
         classes: _classes,
+        facultyId: resolvedFacultyId,
       ),
     );
     if (result != null) {
       try {
-        await _studentsService.addStudent(result);
+        await _studentsService.addStudent(result, facultyId: widget.facultyId);
         // refresh list
         await _loadStudents();
         setState(() => _selectedIndex = null);
@@ -80,6 +92,15 @@ class _StudentsPageState extends State<StudentsPage> {
   Future<void> _showEditStudentPopup() async {
     if (_selectedIndex == null) return;
     final student = _filteredStudents[_selectedIndex!];
+    String? resolvedFacultyId = widget.facultyId;
+    if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+      try {
+        resolvedFacultyId = await _studentsService.resolveAdminFacultyId();
+      } catch (_) {
+        resolvedFacultyId = null;
+      }
+    }
+
     final result = await showDialog<Student>(
       context: context,
       builder: (context) => AddStudentPopup(
@@ -87,11 +108,16 @@ class _StudentsPageState extends State<StudentsPage> {
         genders: _genders,
         departments: _departments,
         classes: _classes,
+        facultyId: resolvedFacultyId,
       ),
     );
     if (result != null) {
       try {
-        await _studentsService.updateStudent(student.id, result);
+        await _studentsService.updateStudent(
+          student.id,
+          result,
+          facultyId: widget.facultyId,
+        );
         await _loadStudents();
       } catch (e) {
         if (mounted) {
@@ -144,18 +170,63 @@ class _StudentsPageState extends State<StudentsPage> {
     super.initState();
     _loadStudents();
     _loadDepartmentsAndClasses();
-    // subscribe to realtime changes
+    // subscribe to realtime changes (with robust onError/onDone handling)
     // when a realtime change occurs, re-fetch students so we get related
     // department/class display names (fetchStudents requests related rows)
-    _studentsSub = _studentsService.subscribeStudents().listen((_) async {
-      await _loadStudents();
-    });
+    _startStudentsSub();
   }
 
   @override
   void dispose() {
-    _studentsSub?.cancel();
+    _stopStudentsSub();
     super.dispose();
+  }
+
+  void _startStudentsSub() {
+    // Cancel any existing subscription first
+    _studentsSub?.cancel();
+
+    _studentsSub = _studentsService.subscribeStudents().listen(
+      (_) async {
+        try {
+          await _loadStudents();
+        } catch (e, st) {
+          debugPrint(
+            'Error while reloading students from realtime event: $e\n$st',
+          );
+        }
+      },
+      onError: (error, stack) async {
+        debugPrint('students realtime subscription error: $error\n$stack');
+        if (mounted) {
+          setState(() {
+            _loadError = 'Realtime subscription error: $error';
+          });
+        }
+
+        // Cancel the failing subscription and retry after a short delay.
+        try {
+          await _studentsSub?.cancel();
+        } catch (_) {}
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) _startStudentsSub();
+        });
+      },
+      onDone: () {
+        debugPrint('students realtime subscription closed (done) — restarting');
+        if (mounted) {
+          Future.delayed(const Duration(seconds: 2), _startStudentsSub);
+        }
+      },
+      cancelOnError: true,
+    );
+  }
+
+  void _stopStudentsSub() {
+    try {
+      _studentsSub?.cancel();
+    } catch (_) {}
+    _studentsSub = null;
   }
 
   Future<void> _loadStudents() async {
@@ -166,7 +237,9 @@ class _StudentsPageState extends State<StudentsPage> {
       });
     }
     try {
-      final list = await _studentsService.fetchStudents();
+      final list = await _studentsService.fetchStudents(
+        facultyId: widget.facultyId,
+      );
       if (mounted) {
         setState(() {
           _students
@@ -201,8 +274,12 @@ class _StudentsPageState extends State<StudentsPage> {
       });
     }
     try {
-      final deps = await _departmentsService.fetchDepartments();
-      final cls = await _classesService.fetchClasses();
+      final deps = await _departmentsService.fetchDepartments(
+        facultyId: widget.facultyId,
+      );
+      final cls = await _classesService.fetchClasses(
+        facultyId: widget.facultyId,
+      );
       if (mounted) {
         setState(() {
           _departments = deps;

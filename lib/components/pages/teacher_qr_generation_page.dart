@@ -151,7 +151,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         ),
         ...items
             .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-            .toList(),
+            ,
       ],
       onChanged: onChanged,
       style: const TextStyle(fontSize: 18, color: Colors.black87),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'student_details_panel.dart';
+import '../cards/searchBar.dart';
 import 'dart:async';
 
 import '../../hooks/use_attendance_fetch.dart';
@@ -205,12 +206,16 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   StreamSubscription? _attendanceSubscription;
   bool _attendanceLoading = false;
 
+  // For header small progress indicator and manual reload
+  bool _isReloading = false;
+
   @override
   void initState() {
     super.initState();
     // initial load (if some defaults are set later this will be a no-op)
-    // do not await here
-    WidgetsBinding.instance.addPostFrameCallback((_) => _reloadAttendance());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _reloadAttendance();
+    });
   }
 
   @override
@@ -219,12 +224,27 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     super.dispose();
   }
 
-  void _reloadAttendance() async {
+  Future<void> _manualReload() async {
+    setState(() => _isReloading = true);
+    // Call existing reload (it sets _attendanceLoading)
+    await _reloadAttendance();
+    // small delay to allow header animation to be visible even for very quick ops
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (mounted) {
+      setState(() => _isReloading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Refreshed')));
+    }
+  }
+
+  Future<void> _reloadAttendance() async {
     // Only fetch when department, class, course and section are selected
     if (selectedDepartment == null ||
         selectedClass == null ||
-        selectedCourse == null)
+        selectedCourse == null) {
       return;
+    }
 
     setState(() {
       _attendanceLoading = true;
@@ -269,8 +289,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
               (e['class_name'] ?? extractName(rawClass, 'class_name'))
                   as String;
           final studentName = (() {
-            if (e['student'] is Map)
+            if (e['student'] is Map) {
               return (e['student']['fullname'] ?? '') as String;
+            }
             if (e['student'] is String) return e['student'] as String;
             return '';
           })();
@@ -291,9 +312,11 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     } catch (e) {
       // keep previous data but stop loading
     } finally {
-      setState(() {
-        _attendanceLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _attendanceLoading = false;
+        });
+      }
     }
   }
 
@@ -314,8 +337,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   List<Map<String, dynamic>> get filteredRecordsForStudent {
     if (selectedStudentId == null ||
         selectedClass == null ||
-        selectedSection == null)
+        selectedSection == null) {
       return [];
+    }
     final students =
         classSectionStudents[selectedClass]?[selectedSection] ?? [];
     final student = students.firstWhere(
@@ -333,8 +357,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   void _updateAttendanceForStudent(List<Map<String, dynamic>> updatedRecords) {
     if (selectedStudentId == null ||
         selectedClass == null ||
-        selectedSection == null)
+        selectedSection == null) {
       return;
+    }
     final students = classSectionStudents[selectedClass]?[selectedSection];
     if (students != null) {
       final student = students.firstWhere(
@@ -359,25 +384,84 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     final showStudentDetails = selectedStudentId != null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Attendance")),
+      // Updated AppBar: larger title font, inline refresh icon and thin progress line
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(72),
+        child: AppBar(
+          automaticallyImplyLeading: true,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          foregroundColor: Colors.black,
+          flexibleSpace: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Attendance',
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: _manualReload,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.refresh,
+                                    size: 18,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ),
+                ),
+                // show a thin progress indicator when manual reload or fetch is ongoing
+                if (_isReloading || _attendanceLoading)
+                  const LinearProgressIndicator(
+                    minHeight: 3,
+                    backgroundColor: Color(0xFFF3E8FF),
+                    valueColor: AlwaysStoppedAnimation(Color(0xFF7B4BFF)),
+                  )
+                else
+                  const SizedBox(height: 3),
+              ],
+            ),
+          ),
+        ),
+      ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(32.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              decoration: InputDecoration(
-                hintText: "Search Attendance...",
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 0,
-                  horizontal: 16,
-                ),
-              ),
-              onChanged: (value) => setState(() => searchText = value),
+            SearchAddBar(
+              hintText: 'Search Attendance...',
+              buttonText: '',
+              onChanged: (value) => setState(() {
+                searchText = value;
+                selectedStudentId = null;
+              }),
             ),
             const SizedBox(height: 12),
             _FiltersRow(
@@ -423,56 +507,74 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
             const SizedBox(height: 16),
             const SizedBox(height: 16),
             Expanded(
-              child: showTable
-                  ? (_attendanceLoading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _AttendanceTable(
-                            department: selectedDepartment!,
-                            className: selectedClass!,
-                            course: selectedCourse!,
-                            section: selectedSection!,
-                            date: selectedDate,
-                            searchText: searchText,
-                            classSectionStudents: classSectionStudents,
-                            attendanceList: _attendanceList,
-                            onStudentSelected: (studentId) {
-                              setState(() {
-                                selectedStudentId = studentId;
-                              });
-                            },
-                            onStatusChanged: (studentId, newStatus) {
-                              setState(() {
-                                final students =
-                                    classSectionStudents[selectedClass]?[selectedSection];
-                                if (students != null) {
-                                  final student = students.firstWhere(
-                                    (s) => s['id'] == studentId,
-                                    orElse: () => <String, dynamic>{},
-                                  );
-                                  if (student.isNotEmpty) {
-                                    student['status'] = newStatus;
-                                  }
-                                }
-                              });
-                            },
-                          ))
-                  : showStudentDetails
-                  ? StudentDetailsPanel(
-                      studentId: selectedStudentId!,
-                      selectedDate: selectedDate,
-                      attendanceRecords: filteredRecordsForStudent,
-                      searchText:
-                          searchText, // Pass main search to details panel!
-                      onBack: () {
-                        setState(() {
-                          selectedStudentId = null;
-                        });
-                      },
-                      onEdit: _updateAttendanceForStudent,
-                    )
-                  : Center(
-                      child: Text("Select all filters to view attendance"),
+              // Pull-to-refresh (manual reload) added. Using a ListView with AlwaysScrollableScrollPhysics
+              // so users can pull even when content isn't scrollable vertically.
+              child: RefreshIndicator(
+                onRefresh: _manualReload,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  children: [
+                    SizedBox(
+                      // Fill remaining height so inner widgets render correctly
+                      height: MediaQuery.of(context).size.height - 260,
+                      child: showTable
+                          ? (_attendanceLoading
+                                ? const Center(
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : _AttendanceTable(
+                                    department: selectedDepartment ?? '',
+                                    className: selectedClass ?? '',
+                                    course: selectedCourse ?? '',
+                                    section: selectedSection ?? '',
+                                    date: selectedDate,
+                                    searchText: searchText,
+                                    classSectionStudents: classSectionStudents,
+                                    attendanceList: _attendanceList,
+                                    onStudentSelected: (studentId) {
+                                      setState(() {
+                                        selectedStudentId = studentId;
+                                      });
+                                    },
+                                    onStatusChanged: (studentId, newStatus) {
+                                      setState(() {
+                                        final students =
+                                            classSectionStudents[selectedClass]?[selectedSection];
+                                        if (students != null) {
+                                          final student = students.firstWhere(
+                                            (s) => s['id'] == studentId,
+                                            orElse: () => <String, dynamic>{},
+                                          );
+                                          if (student.isNotEmpty) {
+                                            student['status'] = newStatus;
+                                          }
+                                        }
+                                      });
+                                    },
+                                  ))
+                          : showStudentDetails
+                          ? StudentDetailsPanel(
+                              studentId: selectedStudentId!,
+                              selectedDate: selectedDate,
+                              attendanceRecords: filteredRecordsForStudent,
+                              searchText: searchText,
+                              onBack: () {
+                                setState(() {
+                                  selectedStudentId = null;
+                                });
+                              },
+                              onEdit: _updateAttendanceForStudent,
+                            )
+                          : Center(
+                              child: Text(
+                                "Select all filters to view attendance",
+                              ),
+                            ),
                     ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -597,7 +699,7 @@ class _DropdownFilter extends StatelessWidget {
                       child: Text(item, overflow: TextOverflow.ellipsis),
                     ),
                   )
-                  .toList(),
+                  ,
             ],
             onChanged: onChanged,
             decoration: const InputDecoration(

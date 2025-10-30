@@ -37,7 +37,7 @@ class FacultyScope {
       try {
         uh = await _supabase
             .from('user_handling')
-            .select('faculty_id, role, usernames')
+            .select('faculty_id, role, username')
             .eq('auth_uid', current.id)
             .maybeSingle();
       } catch (e) {
@@ -64,7 +64,7 @@ class FacultyScope {
           uh ??
           await _supabase
               .from('user_handling')
-              .select('id, usernames')
+              .select('id, username')
               .eq('auth_uid', current.id)
               .maybeSingle();
 
@@ -72,7 +72,7 @@ class FacultyScope {
       dynamic usernamesRaw;
       if (uhByAuth != null) {
         uhId = (uhByAuth['id'] ?? '').toString();
-        usernamesRaw = uhByAuth['usernames'];
+        usernamesRaw = uhByAuth['username'];
       }
 
       Map? adminRow;
@@ -144,8 +144,9 @@ class FacultyScope {
   String _normalizeRole(dynamic roleVal) {
     if (roleVal == null) return '';
     if (roleVal is String) return roleVal.trim().toLowerCase();
-    if (roleVal is List && roleVal.isNotEmpty)
+    if (roleVal is List && roleVal.isNotEmpty) {
       return roleVal.first.toString().trim().toLowerCase();
+    }
     return roleVal.toString().trim().toLowerCase();
   }
 
@@ -178,14 +179,42 @@ class FacultyScope {
   }
 
   /// Apply scope to a PostgREST builder if resolvedFacultyId is non-null.
-  void applyScope(dynamic builder, String? resolvedFacultyId) {
+  /// Returns the (possibly transformed) builder so callers can reassign it.
+  dynamic applyScope(dynamic builder, String? resolvedFacultyId) {
     if (resolvedFacultyId != null && resolvedFacultyId.isNotEmpty) {
       try {
-        builder.eq('faculty_id', resolvedFacultyId);
+        return (builder as dynamic).eq('faculty_id', resolvedFacultyId);
       } catch (_) {
         // ignore if builder doesn't accept eq dynamically
         if (kDebugMode) debugPrint('applyScope: builder does not support eq');
       }
+    }
+    return builder;
+  }
+
+  /// Returns true if the current user is a super_admin according to user_handling.role
+  Future<bool> isSuperAdmin() async {
+    try {
+      final current = _supabase.auth.currentUser;
+      if (current == null) return false;
+
+      // Try user_handling by auth_uid
+      try {
+        final uh = await _supabase
+            .from('user_handling')
+            .select('role')
+            .eq('auth_uid', current.id)
+            .maybeSingle();
+        if (uh != null && uh['role'] != null) {
+          final role = _normalizeRole(uh['role']);
+          return role == 'super_admin';
+        }
+      } catch (_) {}
+
+      // Fallback: try to find role by usernames/email mapping
+      return false;
+    } catch (_) {
+      return false;
     }
   }
 

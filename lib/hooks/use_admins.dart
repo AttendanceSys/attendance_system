@@ -28,8 +28,9 @@ class Admin {
       username: json['username'] as String?,
       fullName: json['full_name'] as String?,
       facultyName: (() {
-        if (json['faculty_name'] != null)
+        if (json['faculty_name'] != null) {
           return json['faculty_name'] as String?;
+        }
         if (json['faculty'] != null && json['faculty'] is Map) {
           return (json['faculty'] as Map)['faculty_name'] as String?;
         }
@@ -172,6 +173,19 @@ class UseAdmins {
             .maybeSingle();
         if (uh != null) {
           final role = (uh['role'] ?? '').toString().trim().toLowerCase();
+          // If user is super_admin, return all admins (no faculty scoping)
+          if (role == 'super_admin') {
+            final rowsAll = await _supabase
+                .from('admins')
+                .select(
+                  'id, username, full_name, faculty_id, faculty:faculties(id,faculty_name), password, created_at',
+                )
+                .order('created_at', ascending: false);
+            return (rowsAll as List)
+                .map((e) => Admin.fromJson(e as Map<String, dynamic>))
+                .toList();
+          }
+
           if (role == 'admin' ||
               role == 'faculty admin' ||
               role == 'faculty_admin') {
@@ -190,9 +204,9 @@ class UseAdmins {
                     .maybeSingle();
                 if (ar != null) {
                   final aFid = (ar['faculty_id'] ?? '').toString();
-                  if (aFid.isNotEmpty)
+                  if (aFid.isNotEmpty) {
                     facultyId = aFid;
-                  else {
+                  } else {
                     final fname = (ar['faculty_name'] ?? '').toString();
                     if (fname.isNotEmpty) {
                       final f = await _supabase
@@ -200,8 +214,9 @@ class UseAdmins {
                           .select('id')
                           .eq('faculty_name', fname)
                           .maybeSingle();
-                      if (f != null && f['id'] != null)
+                      if (f != null && f['id'] != null) {
                         facultyId = f['id'].toString();
+                      }
                     }
                   }
                 }
@@ -392,8 +407,9 @@ class UseAdmins {
               'admin',
               newPassword,
             );
-            if (uhId == null)
+            if (uhId == null) {
               debugPrint('upsertUserHandling returned null for $newUsername');
+            }
           } catch (e) {
             debugPrint(
               'upsertUserHandling failed for new admin username $newUsername: $e',

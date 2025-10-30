@@ -11,7 +11,9 @@ import '../components/pages/timetable_page.dart';
 
 class FacultyAdminPage extends StatelessWidget {
   final String displayName;
-  const FacultyAdminPage({super.key, this.displayName = ''});
+  final String? facultyId;
+
+  const FacultyAdminPage({super.key, this.displayName = '', this.facultyId});
 
   @override
   Widget build(BuildContext context) {
@@ -33,14 +35,14 @@ class FacultyAdminPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
-              Expanded(child: DashboardStatsGrid()),
+              Expanded(child: DashboardStatsGrid(facultyId: facultyId)),
             ],
           ),
         ),
         // 1: Departments
-        DepartmentsPage(),
+        DepartmentsPage(facultyId: facultyId),
         // 2: Students
-        StudentsPage(),
+        StudentsPage(facultyId: facultyId),
         // 3: Subjects
         // 4: Classes
         CoursesPage(),

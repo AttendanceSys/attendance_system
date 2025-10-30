@@ -4,7 +4,7 @@ import '../../hooks/use_students.dart';
 import '../../models/student.dart';
 
 class TeacherAttendancePage extends StatefulWidget {
-  const TeacherAttendancePage({Key? key}) : super(key: key);
+  const TeacherAttendancePage({super.key});
 
   @override
   State<TeacherAttendancePage> createState() => _TeacherAttendancePageState();
@@ -165,8 +165,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       for (final r in attRows) {
         final student = r['student'];
         String? sid;
-        if (student is Map)
+        if (student is Map) {
           sid = (student['id'] ?? student['username'])?.toString();
+        }
         if (sid == null) continue;
         if (!wantedIds.contains(sid)) continue;
         if (!byStudent.containsKey(sid)) {
@@ -256,10 +257,11 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
 
   Future<void> _submitAll() async {
     if (students.isEmpty) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('No students to submit')));
+      }
       return;
     }
 
@@ -285,17 +287,19 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
         updates: updates,
       );
 
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Attendance submitted')));
+      }
       await _loadForSelection();
     } catch (e) {
       debugPrint('Batch submit failed: $e');
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Submit failed: $e')));
+      }
     } finally {
       if (mounted) {
         setState(() {

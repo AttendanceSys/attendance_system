@@ -5,7 +5,7 @@ import '../hooks/use_lectureres.dart';
 import '../hooks/use_faculties.dart';
 
 class AdminDashboardStatsGrid extends StatefulWidget {
-  const AdminDashboardStatsGrid({Key? key}) : super(key: key);
+  const AdminDashboardStatsGrid({super.key});
 
   @override
   State<AdminDashboardStatsGrid> createState() => _AdminDashboardStatsGridState();
@@ -98,7 +98,6 @@ class _StatsCard extends StatelessWidget {
   final Color color;
 
   const _StatsCard({
-    super.key,
     required this.icon,
     required this.label,
     required this.value,

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class TimetableCellEditResult {
   final String? cellText; // null means no change, '' means clear
@@ -151,7 +150,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
 
     // Confirm applying non-empty edits (show before -> after summary)
     if (_hasChanges) {
-      final display = (String s) => s.isEmpty ? '(empty)' : s;
+      display(String s) => s.isEmpty ? '(empty)' : s;
       final before = [
         if (_initialCourse.isNotEmpty || _initialLecturer.isNotEmpty) display(_initialCourse),
         if (_initialLecturer.isNotEmpty) display(_initialLecturer),

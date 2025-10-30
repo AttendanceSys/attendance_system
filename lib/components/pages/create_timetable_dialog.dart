@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:collection';
 
 /// A single session result (one timetable cell)
 class CreateTimetableTimeResult {
@@ -25,7 +26,8 @@ class CreateTimetableTimeResult {
 /// Dialog payload returned to parent
 class CreateTimetableTimePayload {
   final List<CreateTimetableTimeResult> results;
-  final List<String>? periodsOverride; // full (periods + breaks) list if changed
+  final List<String>?
+  periodsOverride; // full (periods + breaks) list if changed
 
   CreateTimetableTimePayload({required this.results, this.periodsOverride});
 }
@@ -46,6 +48,9 @@ class CreateTimetableDialog extends StatefulWidget {
   /// add sessions or append new periods without re-configuring from scratch.
   final List<String>? preconfiguredLabels;
 
+  /// Optional existing sessions to pre-fill the dialog for editing.
+  final List<CreateTimetableTimeResult>? initialSessions;
+
   const CreateTimetableDialog({
     super.key,
     required this.departments,
@@ -58,6 +63,7 @@ class CreateTimetableDialog extends StatefulWidget {
     this.initialClass,
     this.initialSection,
     this.preconfiguredLabels,
+    this.initialSessions,
   });
 
   @override
@@ -68,7 +74,6 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   // Selections
   String? _department;
   String? _classKey;
-  String? _section;
   String? _lecturer;
   bool _useCustomLecturer = false;
   final TextEditingController _lecturerCustomCtrl = TextEditingController();
@@ -83,19 +88,11 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   List<int> _teachingIndices = [];
   int? _inferredPeriodMinutes; // teaching period length (if consistent)
 
-  // Mock courses
-  static const List<String> _mockCourses = [
-    'Math',
-    'E-Commerce',
-    'Data Science and Analytics',
-    'Network Security',
-    'Computer Ethics',
-    'Selected Topics in Comp Scien.',
-  ];
   List<String> get _courseList =>
-      (widget.courses != null && widget.courses!.isNotEmpty)
-          ? widget.courses!
-          : _mockCourses;
+      // Prefer real courses provided by the parent. Do not fall back to the
+      // hard-coded mock list — we want the UI to reflect actual DB state and
+      // avoid manual seed data appearing in the dialog.
+      widget.courses ?? <String>[];
 
   bool get _configured =>
       _labels.isNotEmpty &&
@@ -107,12 +104,50 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     super.initState();
     _department = widget.initialDepartment;
     _classKey = widget.initialClass;
-    _section = widget.initialSection;
 
     // If preconfigured labels passed, load them
     if (widget.preconfiguredLabels != null &&
         widget.preconfiguredLabels!.isNotEmpty) {
       _loadPreconfigured(widget.preconfiguredLabels!);
+    }
+
+    // If no preconfigured labels but we have initial sessions from DB,
+    // derive a period structure from unique start/end spans and load it.
+    if ((_labels.isEmpty) &&
+        widget.initialSessions != null &&
+        widget.initialSessions!.isNotEmpty) {
+      final Map<int, int> spansMap = {};
+      for (final s in widget.initialSessions!) {
+        spansMap[s.startMinutes] = s.endMinutes;
+      }
+      final starts = spansMap.keys.toList()..sort();
+      final derivedLabels = starts.map((st) {
+        final en = spansMap[st] ?? (st + 60);
+        final sh = st ~/ 60;
+        final sm = st % 60;
+        final eh = en ~/ 60;
+        final em = en % 60;
+        return '$sh:${sm.toString().padLeft(2, '0')} - $eh:${em.toString().padLeft(2, '0')}';
+      }).toList();
+      if (derivedLabels.isNotEmpty) _loadPreconfigured(derivedLabels);
+    }
+
+    // If initial sessions are provided (from DB), pre-fill session rows
+    if (widget.initialSessions != null && widget.initialSessions!.isNotEmpty) {
+      // Only possible to map if we have a configured labels/spans mapping
+      if (_spans.isNotEmpty) {
+        _sessions.clear();
+        for (final s in widget.initialSessions!) {
+          final row = _SessionRow();
+          row.dayIndex = s.dayIndex;
+          // find matching span index
+          final idx = _spans.indexWhere(
+            (t) => t.$1 == s.startMinutes && t.$2 == s.endMinutes,
+          );
+          row.periodDropdownIndex = idx >= 0 ? idx : null;
+          _sessions.add(row);
+        }
+      }
     }
   }
 
@@ -137,11 +172,16 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         title: Text(title),
         content: Text(content),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(cancelText)),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(cancelText),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: destructive ? Colors.red : Theme.of(context).colorScheme.primary,
+              backgroundColor: destructive
+                  ? Colors.red
+                  : Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
             ),
             child: Text(confirmText),
@@ -288,7 +328,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
     final start = res.start;
     final end = res.end;
-    final label = '${_fmt(start)} - ${_fmt(end)}${res.isBreak ? ' (Break)' : ''}';
+    final label =
+        '${_fmt(start)} - ${_fmt(end)}${res.isBreak ? ' (Break)' : ''}';
 
     final ok = await _confirm(
       title: 'Add ${res.isBreak ? 'Break' : 'Period'}?',
@@ -314,7 +355,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
     // If period length becomes inconsistent after insertion, warn user
     if (_inferredPeriodMinutes == null && !res.isBreak) {
-      _snack('Note: Teaching period length is now inconsistent. Consider reconfiguring.');
+      _snack(
+        'Note: Teaching period length is now inconsistent. Consider reconfiguring.',
+      );
     }
   }
 
@@ -362,8 +405,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   // --------------------- Save ---------------------
 
   Future<void> _save() async {
-    if (_department == null || _classKey == null || _section == null) {
-      _snack('Please select Department, Class, and Section');
+    if (_department == null || _classKey == null) {
+      _snack('Please select Department and Class');
       return;
     }
     if ((_course ?? '').trim().isEmpty) {
@@ -388,7 +431,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         : '${_course!.trim()}\n$lecturerName';
 
     final results = <CreateTimetableTimeResult>[];
-    final seenPairs = <String>{}; // to detect duplicates in sessions within this dialog
+    final seenPairs =
+        <String>{}; // to detect duplicates in sessions within this dialog
 
     for (int i = 0; i < _sessions.length; i++) {
       final s = _sessions[i];
@@ -412,7 +456,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       }
 
       // Build a unique key to detect duplicate sessions within the dialog
-      final key = '${s.dayIndex}-${labelIdx}';
+      final key = '${s.dayIndex}-$labelIdx';
       if (seenPairs.contains(key)) {
         final proceed = await _confirm(
           title: 'Duplicate session?',
@@ -430,7 +474,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         CreateTimetableTimeResult(
           department: _department!.trim(),
           classKey: _classKey!.trim(),
-          section: _section!.trim(),
+          // Sections removed from the UI; store empty string for legacy shape
+          section: '',
           dayIndex: s.dayIndex!,
           startMinutes: span.$1,
           endMinutes: span.$2,
@@ -445,16 +490,18 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     }
 
     // Confirmation summary before returning payload
-    final summary = results.map((r) {
-      final d = widget.days[r.dayIndex];
-      final t = '${_fmt(r.startMinutes)} - ${_fmt(r.endMinutes)}';
-      return '- $d  $t  • ${_course!.trim()}${lecturerName.isNotEmpty ? ' • $lecturerName' : ''}';
-    }).join('\n');
+    final summary = results
+        .map((r) {
+          final d = widget.days[r.dayIndex];
+          final t = '${_fmt(r.startMinutes)} - ${_fmt(r.endMinutes)}';
+          return '- $d  $t  • ${_course!.trim()}${lecturerName.isNotEmpty ? ' • $lecturerName' : ''}';
+        })
+        .join('\n');
 
     final ok = await _confirm(
       title: 'Save timetable entries?',
       content:
-          'Department: ${_department!}\nClass: ${_classKey!}  • Section: ${_section!}\n\nEntries:\n$summary',
+          'Department: ${_department!}\nClass: ${_classKey!}\n\nEntries:\n$summary',
       confirmText: 'Save',
     );
     if (!ok) return;
@@ -472,7 +519,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   String _fmt(int minutes) {
     final h = minutes ~/ 60;
     final m = minutes % 60;
-    return '${h}:${m.toString().padLeft(2, '0')}';
+    return '$h:${m.toString().padLeft(2, '0')}';
   }
 
   void _snack(String msg) {
@@ -512,7 +559,10 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
           isExpanded: true,
           value: value,
           hint: Text(hint),
-          items: items
+          // Ensure items are de-duplicated (preserve insertion order) to avoid
+          // DropdownButton assertion when multiple items share the same value.
+          items: LinkedHashSet<T>.from(items)
+              .toList()
               .map(
                 (e) => DropdownMenuItem<T>(
                   value: e,
@@ -539,13 +589,12 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
           spacing: 12,
           runSpacing: 12,
           children: children
-              .map((c) => ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: 180,
-                      maxWidth: itemMax,
-                    ),
-                    child: c,
-                  ))
+              .map(
+                (c) => ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: 180, maxWidth: itemMax),
+                  child: c,
+                ),
+              )
               .toList(),
         );
       },
@@ -606,16 +655,11 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                       items: _classesForDepartment.isNotEmpty
                           ? _classesForDepartment
                           : widget.departmentClasses.values
-                              .expand((e) => e)
-                              .toList(),
+                                .expand((e) => e)
+                                .toList(),
                       onChanged: (v) => setState(() => _classKey = v),
                     ),
-                    _dropdownBox<String>(
-                      hint: 'Section',
-                      value: _section,
-                      items: widget.sections,
-                      onChanged: (v) => setState(() => _section = v),
-                    ),
+                    // Section removed per request — sections are not needed in UI
                   ]),
 
                   const SizedBox(height: 12),
@@ -705,13 +749,12 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                         final l = _labels[i];
                         final isBreak = l.toLowerCase().contains('break');
                         return Chip(
-                          label: Text(
-                            l,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          backgroundColor:
-                              isBreak ? Colors.grey.shade200 : Colors.blue.shade50,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          label: Text(l, style: const TextStyle(fontSize: 12)),
+                          backgroundColor: isBreak
+                              ? Colors.grey.shade200
+                              : Colors.blue.shade50,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                           visualDensity: VisualDensity.compact,
                         );
                       }),
@@ -792,7 +835,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                                 teachingLabels.length,
                                 (p) => p,
                               ),
-                              onChanged: (v) => setState(() => s.periodDropdownIndex = v),
+                              onChanged: (v) =>
+                                  setState(() => s.periodDropdownIndex = v),
                               builder: (p) => Text(teachingLabels[p]),
                             ),
                             // Remove button as its own row item so it wraps
@@ -935,7 +979,9 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
       _breaks.clear();
       int teachingSeen = 0;
       for (int i = 0; i < widget.existingLabels.length; i++) {
-        final isBreak = widget.existingLabels[i].toLowerCase().contains('break');
+        final isBreak = widget.existingLabels[i].toLowerCase().contains(
+          'break',
+        );
         if (isBreak) {
           final sp = widget.existingSpans[i];
           final mins = sp.$2 - sp.$1;
@@ -950,8 +996,9 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
     }
   }
 
-  List<int> get _afterPeriodOptions =>
-      (_periodCount <= 1) ? const [] : List<int>.generate(_periodCount - 1, (i) => i + 1);
+  List<int> get _afterPeriodOptions => (_periodCount <= 1)
+      ? const []
+      : List<int>.generate(_periodCount - 1, (i) => i + 1);
 
   TimeOfDay _toTimeOfDay(int minutes) {
     final h = (minutes ~/ 60) % 24;
@@ -962,7 +1009,7 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
   String _fmt(int minutes) {
     final h = minutes ~/ 60;
     final m = minutes % 60;
-    return '${h}:${m.toString().padLeft(2, '0')}';
+    return '$h:${m.toString().padLeft(2, '0')}';
   }
 
   void _generate() {
@@ -1046,7 +1093,9 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                     initialTime: _toTimeOfDay(_dayStart),
                   );
                   if (picked != null) {
-                    setState(() => _dayStart = picked.hour * 60 + picked.minute);
+                    setState(
+                      () => _dayStart = picked.hour * 60 + picked.minute,
+                    );
                   }
                 },
                 child: InputDecorator(
@@ -1054,7 +1103,10 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                     labelText: 'Day start',
                     border: OutlineInputBorder(),
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1075,7 +1127,10 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         labelText: 'Period duration',
                         border: OutlineInputBorder(),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
@@ -1083,13 +1138,28 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                           value: _useCustom
                               ? null
                               : (_presetDurations.contains(_periodMinutes)
-                                  ? _periodMinutes
-                                  : null),
-                          hint: Text(_useCustom ? 'Custom (${_periodMinutes}m)' : '${_periodMinutes}m'),
-                          items: _presetDurations
-                              .map((m) => DropdownMenuItem<int>(value: m, child: Text('$m min')))
-                              .toList()
-                            ..add(const DropdownMenuItem<int>(value: -1, child: Text('Custom…'))),
+                                    ? _periodMinutes
+                                    : null),
+                          hint: Text(
+                            _useCustom
+                                ? 'Custom (${_periodMinutes}m)'
+                                : '${_periodMinutes}m',
+                          ),
+                          items:
+                              _presetDurations
+                                  .map(
+                                    (m) => DropdownMenuItem<int>(
+                                      value: m,
+                                      child: Text('$m min'),
+                                    ),
+                                  )
+                                  .toList()
+                                ..add(
+                                  const DropdownMenuItem<int>(
+                                    value: -1,
+                                    child: Text('Custom…'),
+                                  ),
+                                ),
                           onChanged: (v) {
                             if (v == null) return;
                             if (v == -1) {
@@ -1114,10 +1184,15 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                           labelText: 'Custom minutes',
                           border: OutlineInputBorder(),
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                         ),
                         keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         onChanged: (v) {
                           final n = int.tryParse(v.trim());
                           if (n != null && n > 0) {
@@ -1137,13 +1212,18 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         labelText: 'Number of periods',
                         border: OutlineInputBorder(),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                       ),
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       onChanged: (v) {
                         final n = int.tryParse(v.trim());
-                        if (n != null && n >= 1 && n <= 40) setState(() => _periodCount = n);
+                        if (n != null && n >= 1 && n <= 40) {
+                          setState(() => _periodCount = n);
+                        }
                       },
                     ),
                   ),
@@ -1153,7 +1233,10 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
               const SizedBox(height: 18),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Breaks (optional)', style: TextStyle(fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Breaks (optional)',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
               const SizedBox(height: 6),
               Column(
@@ -1169,7 +1252,10 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                               labelText: 'After period #',
                               border: OutlineInputBorder(),
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<int>(
@@ -1177,7 +1263,12 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                                 value: b.after,
                                 hint: const Text('Choose'),
                                 items: _afterPeriodOptions
-                                    .map((n) => DropdownMenuItem<int>(value: n, child: Text('$n')))
+                                    .map(
+                                      (n) => DropdownMenuItem<int>(
+                                        value: n,
+                                        child: Text('$n'),
+                                      ),
+                                    )
                                     .toList(),
                                 onChanged: (v) => setState(() => b.after = v),
                               ),
@@ -1192,13 +1283,21 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                               labelText: 'Break minutes',
                               border: OutlineInputBorder(),
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                             ),
                             keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
                             onChanged: (v) {
                               final n = int.tryParse(v.trim());
-                              setState(() => b.minutes = (n != null && n > 0) ? n : null);
+                              setState(
+                                () =>
+                                    b.minutes = (n != null && n > 0) ? n : null,
+                              );
                             },
                           ),
                         ),
@@ -1206,9 +1305,14 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         if (i > 0)
                           IconButton(
                             onPressed: () {
-                              if (_breaks.length > 1) setState(() => _breaks.removeAt(i));
+                              if (_breaks.length > 1) {
+                                setState(() => _breaks.removeAt(i));
+                              }
                             },
-                            icon: const Icon(Icons.close, color: Colors.redAccent),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.redAccent,
+                            ),
                           )
                         else
                           const SizedBox(width: 40),
@@ -1232,7 +1336,10 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         ElevatedButton(onPressed: _generate, child: const Text('Generate')),
       ],
     );
@@ -1277,7 +1384,7 @@ class _AddPeriodDialog extends StatefulWidget {
   final int? periodMinutes;
 
   const _AddPeriodDialog({
-    super.key,
+    // no key required for internal dialog
     required this.existingSpans,
     required this.existingLabels,
     required this.periodMinutes,
@@ -1471,8 +1578,9 @@ class _AddPeriodDialogState extends State<_AddPeriodDialog> {
       return TimeOfDay(hour: now.hour, minute: 0);
     }
     // Suggest end of last span
-    final lastEnd =
-        widget.existingSpans.map((e) => e.$2).reduce((a, b) => a > b ? a : b);
+    final lastEnd = widget.existingSpans
+        .map((e) => e.$2)
+        .reduce((a, b) => a > b ? a : b);
     return TimeOfDay(hour: lastEnd ~/ 60, minute: lastEnd % 60);
   }
 
@@ -1489,8 +1597,8 @@ class _AddPeriodDialogState extends State<_AddPeriodDialog> {
         isBreak
             ? 'Break can be any positive minutes. It must not overlap existing spans.'
             : (periodLen != null
-                ? 'New teaching period will be exactly $periodLen minutes; choose a start time that does not overlap.'
-                : 'Period length unknown (inconsistent). Please reconfigure.'),
+                  ? 'New teaching period will be exactly $periodLen minutes; choose a start time that does not overlap.'
+                  : 'Period length unknown (inconsistent). Please reconfigure.'),
         style: const TextStyle(fontSize: 12),
       ),
     );

@@ -18,6 +18,7 @@ class _AdminsPageState extends State<AdminsPage> {
   List<api.Admin> _admins = [];
   List<String> _facultyNames = [];
   Map<String, String> _facultyNameToId = {};
+  String _selectedFacultyFilter = 'All';
 
   bool _isLoading = false;
   String? _loadError;
@@ -25,20 +26,21 @@ class _AdminsPageState extends State<AdminsPage> {
   String _searchText = '';
   int? _selectedIndex;
 
-  List<api.Admin> get _filteredAdmins => _admins
-      .where(
-        (admin) =>
-            (admin.username ?? '').toLowerCase().contains(
-              _searchText.toLowerCase(),
-            ) ||
-            (admin.fullName ?? '').toLowerCase().contains(
-              _searchText.toLowerCase(),
-            ) ||
-            (admin.facultyName ?? '').toLowerCase().contains(
-              _searchText.toLowerCase(),
-            ),
-      )
-      .toList();
+  List<api.Admin> get _filteredAdmins => _admins.where((admin) {
+    final matchesQuery =
+        (admin.username ?? '').toLowerCase().contains(
+          _searchText.toLowerCase(),
+        ) ||
+        (admin.fullName ?? '').toLowerCase().contains(
+          _searchText.toLowerCase(),
+        ) ||
+        (admin.facultyName ?? '').toLowerCase().contains(
+          _searchText.toLowerCase(),
+        );
+
+    if (_selectedFacultyFilter == 'All') return matchesQuery;
+    return matchesQuery && (admin.facultyName ?? '') == _selectedFacultyFilter;
+  }).toList();
 
   @override
   void initState() {
@@ -158,7 +160,7 @@ class _AdminsPageState extends State<AdminsPage> {
           await _useAdmins.deleteAdmin(existing.first.id);
         }
         // Convert faculty name to id for the DB insert (if available)
-        final facultyId = _facultyNameToId[result.facultyName] ?? null;
+        final facultyId = _facultyNameToId[result.facultyName];
         final admin = api.Admin(
           id: '', // DB will generate uuid
           username: result.id,
@@ -231,7 +233,7 @@ class _AdminsPageState extends State<AdminsPage> {
         if (existing.isNotEmpty) {
           await _useAdmins.deleteAdmin(existing.first.id);
         }
-        final facultyId = _facultyNameToId[result.facultyName] ?? null;
+        final facultyId = _facultyNameToId[result.facultyName];
         final updated = api.Admin(
           id: admin.id, // keep DB uuid
           username: result.id,
@@ -343,6 +345,44 @@ class _AdminsPageState extends State<AdminsPage> {
                             _selectedIndex = null;
                           });
                         },
+                      ),
+                      const SizedBox(height: 12),
+                      // Faculty filter (All + each faculty)
+                      Row(
+                        children: [
+                          const Text('Filter by faculty: '),
+                          const SizedBox(width: 8),
+                          DropdownButton<String>(
+                            value:
+                                (_facultyNames.contains(
+                                      _selectedFacultyFilter,
+                                    ) ||
+                                    _selectedFacultyFilter == 'All')
+                                ? _selectedFacultyFilter
+                                : 'All',
+                            items: [
+                              const DropdownMenuItem(
+                                value: 'All',
+                                child: Text('All'),
+                              ),
+                              ..._facultyNames
+                                  .map(
+                                    (f) => DropdownMenuItem(
+                                      value: f,
+                                      child: Text(f),
+                                    ),
+                                  )
+                                  ,
+                            ],
+                            onChanged: (val) {
+                              if (val == null) return;
+                              setState(() {
+                                _selectedFacultyFilter = val;
+                                _selectedIndex = null;
+                              });
+                            },
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       Row(
