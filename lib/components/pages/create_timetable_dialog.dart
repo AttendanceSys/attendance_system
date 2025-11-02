@@ -1,20 +1,28 @@
+// Full corrected CreateTimetableDialog implementation
+// - Fixed missing braces and misplaced helper class definitions
+// - Ensures _recomputeTeachingIndices exists and _AddPeriodResult / TimeSpan are top-level
+// - Loads classes exactly like TimetablePage and clears class selection when department changes
+//
+// Save as: lib/components/pages/create_timetable_dialog.dart
+
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// A single session result (one timetable cell)
 class CreateTimetableTimeResult {
-  final String department;
-  final String classKey;
-  final String section;
-  final int dayIndex; // 0 = Sat, 1 = Sun, ...
-  final int startMinutes; // minutes since midnight
-  final int endMinutes; // minutes since midnight
-  final String cellText; // "Course" or "Course\nLecturer"
+  final String department; // department display name (now)
+  final String classKey; // class display name (now)
+  final int dayIndex;
+  final int startMinutes;
+  final int endMinutes;
+  final String cellText;
 
   CreateTimetableTimeResult({
     required this.department,
     required this.classKey,
-    required this.section,
     required this.dayIndex,
     required this.startMinutes,
     required this.endMinutes,
@@ -25,39 +33,37 @@ class CreateTimetableTimeResult {
 /// Dialog payload returned to parent
 class CreateTimetableTimePayload {
   final List<CreateTimetableTimeResult> results;
-  final List<String>? periodsOverride; // full (periods + breaks) list if changed
+  final List<String>? periodsOverride;
 
   CreateTimetableTimePayload({required this.results, this.periodsOverride});
 }
 
 class CreateTimetableDialog extends StatefulWidget {
-  final List<String> departments;
-  final Map<String, List<String>> departmentClasses;
+  final List<String> departments; // display names list (UI only)
+  final Map<String, List<String>> departmentClasses; // fallback mapping
   final List<String> lecturers;
-  final List<String> sections;
   final List<String> days;
   final List<String>? courses;
 
-  final String? initialDepartment;
-  final String? initialClass;
-  final String? initialSection;
+  final String? initialDepartment; // display name (optional)
+  final String? initialClass; // display name or id (optional)
 
-  /// If provided, the existing schedule (periods + breaks) so user can
-  /// add sessions or append new periods without re-configuring from scratch.
-  final List<String>? preconfiguredLabels;
+  // departmentArg: DocumentReference or department id string (preferred for querying)
+  final dynamic departmentArg;
+
+  final List<String>? preconfiguredLabels; // optional periods passed in
 
   const CreateTimetableDialog({
     super.key,
     required this.departments,
     required this.departmentClasses,
     required this.lecturers,
-    required this.sections,
     required this.days,
     this.courses,
     this.initialDepartment,
     this.initialClass,
-    this.initialSection,
     this.preconfiguredLabels,
+    this.departmentArg,
   });
 
   @override
@@ -65,54 +71,68 @@ class CreateTimetableDialog extends StatefulWidget {
 }
 
 class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
-  // Selections
-  String? _department;
-  String? _classKey;
-  String? _section;
+  String? _department; // display name selected by user
+  String? _classKey; // display name shown in dropdown (class name)
+  String?
+  _classIdForSave; // class document id used for loading courses (not used in payload)
   String? _lecturer;
   bool _useCustomLecturer = false;
   final TextEditingController _lecturerCustomCtrl = TextEditingController();
   String? _course;
 
-  // Sessions
   final List<_SessionRow> _sessions = [_SessionRow()];
 
-  // Generated schedule (labels + spans + indices)
   List<String> _labels = [];
   List<(int, int)> _spans = [];
   List<int> _teachingIndices = [];
-  int? _inferredPeriodMinutes; // teaching period length (if consistent)
+  int? _inferredPeriodMinutes;
 
-  // Mock courses
-  static const List<String> _mockCourses = [
-    'Math',
-    'E-Commerce',
-    'Data Science and Analytics',
-    'Network Security',
-    'Computer Ethics',
-    'Selected Topics in Comp Scien.',
-  ];
-  List<String> get _courseList =>
-      (widget.courses != null && widget.courses!.isNotEmpty)
-          ? widget.courses!
-          : _mockCourses;
+  List<Map<String, dynamic>> _loadedClasses = []; // {id,name,raw,ref}
+  List<Map<String, dynamic>> _loadedCourses = []; // {id,course_name,raw,ref}
+  bool _loadingClasses = false;
+  bool _loadingCourses = false;
+
+  List<String> get _courseList => (_loadedCourses.isNotEmpty)
+      ? _loadedCourses
+            .map((c) => c['course_name']?.toString() ?? c['id'].toString())
+            .toList()
+      : [];
 
   bool get _configured =>
       _labels.isNotEmpty &&
       _spans.length == _labels.length &&
       _teachingIndices.isNotEmpty;
 
+  final RegExp _timeLabelRegex = RegExp(
+    r'^\s*(\d{1,2}):([0-5]\d)\s*-\s*(\d{1,2}):([0-5]\d)(?:\s*\(break\))?\s*$',
+    caseSensitive: false,
+  );
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   @override
   void initState() {
     super.initState();
     _department = widget.initialDepartment;
     _classKey = widget.initialClass;
-    _section = widget.initialSection;
+    _classIdForSave = null;
 
-    // If preconfigured labels passed, load them
     if (widget.preconfiguredLabels != null &&
         widget.preconfiguredLabels!.isNotEmpty) {
       _loadPreconfigured(widget.preconfiguredLabels!);
+    }
+
+    if (widget.departmentArg != null) {
+      _loadClassesForDepartment(
+        widget.departmentArg,
+        preserveInitialClass: true,
+      );
+    } else if (_department != null && _department!.isNotEmpty) {
+      _loadClassesForDepartment(_department, preserveInitialClass: true);
+    }
+
+    if (_classKey != null && _classKey!.isNotEmpty) {
+      _safeLoadCoursesForClass(_classIdForSave ?? _classKey);
     }
   }
 
@@ -122,7 +142,230 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     super.dispose();
   }
 
-  // --------------------- Helpers ---------------------
+  // ---------------- Loaders ----------------
+
+  void _safeLoadClassesForDepartment(dynamic dep) {
+    if (dep == null) return;
+    _loadClassesForDepartment(dep, preserveInitialClass: false);
+  }
+
+  Future<void> _loadClassesForDepartment(
+    dynamic depIdOrRef, {
+    bool preserveInitialClass = false,
+  }) async {
+    setState(() {
+      _loadingClasses = true;
+      _loadedClasses = [];
+      _loadedCourses = [];
+      if (!preserveInitialClass) {
+        _classKey = null;
+        _classIdForSave = null;
+      }
+      _course = null;
+    });
+
+    try {
+      debugPrint('CreateDialog: loading classes for $depIdOrRef');
+      final classesCol = _firestore.collection('classes');
+
+      Future<List<QueryDocumentSnapshot>> tryQuery(Query q, String tag) async {
+        try {
+          final snap = await q.get();
+          debugPrint(
+            'CreateDialog classes query [$tag] -> ${snap.docs.length} docs',
+          );
+          if (snap.docs.isNotEmpty)
+            debugPrint(
+              'CreateDialog classes [$tag] first doc: ${snap.docs.first.data()}',
+            );
+          return snap.docs;
+        } catch (e, st) {
+          debugPrint('CreateDialog classes query [$tag] failed: $e\n$st');
+          return <QueryDocumentSnapshot>[];
+        }
+      }
+
+      List<QueryDocumentSnapshot> docs = [];
+
+      if (depIdOrRef is DocumentReference) {
+        docs = await tryQuery(
+          classesCol.where('department_ref', isEqualTo: depIdOrRef),
+          'department_ref==DocumentReference',
+        );
+        if (docs.isEmpty)
+          docs = await tryQuery(
+            classesCol.where('department_ref', isEqualTo: depIdOrRef.id),
+            'department_ref==DocumentReference.id',
+          );
+      } else if (depIdOrRef is String) {
+        docs = await tryQuery(
+          classesCol.where('department_ref', isEqualTo: depIdOrRef),
+          'department_ref==String',
+        );
+        if (docs.isEmpty)
+          docs = await tryQuery(
+            classesCol.where('department_id', isEqualTo: depIdOrRef),
+            'department_id==String',
+          );
+        if (docs.isEmpty)
+          docs = await tryQuery(
+            classesCol.where('department', isEqualTo: depIdOrRef),
+            'department==String',
+          );
+        if (docs.isEmpty)
+          docs = await tryQuery(
+            classesCol.where('department_name', isEqualTo: depIdOrRef),
+            'department_name==String',
+          );
+      }
+
+      final classes = docs.map((d) {
+        final data = d.data() as Map<String, dynamic>;
+        final name = (data['class_name'] ?? data['name'] ?? d.id).toString();
+        return {'id': d.id, 'name': name, 'raw': data, 'ref': d.reference};
+      }).toList();
+
+      classes.sort(
+        (a, b) => a['name'].toString().compareTo(b['name'].toString()),
+      );
+
+      setState(() {
+        _loadedClasses = classes;
+      });
+
+      if (_loadedClasses.isNotEmpty &&
+          preserveInitialClass &&
+          widget.initialClass != null &&
+          widget.initialClass!.isNotEmpty) {
+        final init = widget.initialClass!;
+        final byId = _loadedClasses.firstWhere(
+          (c) => (c['id']?.toString() ?? '') == init,
+          orElse: () => <String, dynamic>{},
+        );
+        if (byId is Map && byId.isNotEmpty) {
+          setState(() {
+            _classKey = byId['name']?.toString();
+            _classIdForSave = byId['id']?.toString();
+          });
+          await _loadCoursesForClass(_classIdForSave);
+          return;
+        }
+        final byName = _loadedClasses.firstWhere(
+          (c) => (c['name']?.toString() ?? '') == init,
+          orElse: () => <String, dynamic>{},
+        );
+        if (byName is Map && byName.isNotEmpty) {
+          setState(() {
+            _classKey = byName['name']?.toString();
+            _classIdForSave = byName['id']?.toString();
+          });
+          await _loadCoursesForClass(_classIdForSave);
+          return;
+        }
+      }
+
+      if (_loadedClasses.isNotEmpty && !preserveInitialClass) {
+        setState(() {
+          _classKey =
+              _loadedClasses.first['name']?.toString() ??
+              _loadedClasses.first['id']?.toString();
+          _classIdForSave = _loadedClasses.first['id']?.toString();
+        });
+        await _loadCoursesForClass(_classIdForSave);
+      }
+
+      if (_loadedClasses.isEmpty) {
+        debugPrint('CreateDialog: no classes found for $depIdOrRef');
+        setState(() {
+          _classKey = null;
+          _classIdForSave = null;
+        });
+      }
+    } catch (e, st) {
+      debugPrint('CreateDialog loadClasses error: $e\n$st');
+      setState(() {
+        _loadedClasses = [];
+        _classKey = null;
+        _classIdForSave = null;
+      });
+    } finally {
+      setState(() => _loadingClasses = false);
+    }
+  }
+
+  void _safeLoadCoursesForClass(String? classId) {
+    if (classId == null) return;
+    _loadCoursesForClass(classId);
+  }
+
+  Future<void> _loadCoursesForClass(String? classId) async {
+    if (classId == null) return;
+    setState(() {
+      _loadingCourses = true;
+      _loadedCourses = [];
+      _course = null;
+    });
+
+    try {
+      final coursesCol = _firestore.collection('courses');
+
+      Future<QuerySnapshot> tryQ(String field) =>
+          coursesCol.where(field, isEqualTo: classId).get();
+
+      QuerySnapshot snap = await tryQ('class');
+      if (snap.docs.isEmpty) snap = await tryQ('class_id');
+      if (snap.docs.isEmpty) snap = await tryQ('class_ref');
+      if (snap.docs.isEmpty) snap = await tryQ('class_name');
+
+      if (snap.docs.isEmpty) {
+        debugPrint('CreateDialog: no courses found for classId=$classId');
+        setState(() {
+          _loadedCourses = [];
+          _course = null;
+        });
+        return;
+      }
+
+      final courses = snap.docs.map((d) {
+        final data = d.data() as Map<String, dynamic>;
+        final name =
+            (data['course_name'] ??
+                    data['title'] ??
+                    data['course_code'] ??
+                    d.id)
+                .toString();
+        return {
+          'id': d.id,
+          'course_name': name,
+          'raw': data,
+          'ref': d.reference,
+        };
+      }).toList();
+
+      courses.sort(
+        (a, b) =>
+            a['course_name'].toString().compareTo(b['course_name'].toString()),
+      );
+
+      setState(() {
+        _loadedCourses = courses;
+        if (_loadedCourses.isNotEmpty)
+          _course =
+              _loadedCourses.first['course_name']?.toString() ??
+              _loadedCourses.first['id']?.toString();
+      });
+    } catch (e, st) {
+      debugPrint('CreateDialog loadCourses error: $e\n$st');
+      setState(() {
+        _loadedCourses = [];
+        _course = null;
+      });
+    } finally {
+      setState(() => _loadingCourses = false);
+    }
+  }
+
+  // ---------------- Helpers & UI logic ----------------
 
   Future<bool> _confirm({
     required String title,
@@ -137,11 +380,16 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         title: Text(title),
         content: Text(content),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(cancelText)),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(cancelText),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: destructive ? Colors.red : Theme.of(context).colorScheme.primary,
+              backgroundColor: destructive
+                  ? Colors.red
+                  : Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
             ),
             child: Text(confirmText),
@@ -151,13 +399,6 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     );
     return res == true;
   }
-
-  // --------------------- Parsing & Integrity ---------------------
-
-  final RegExp _timeLabelRegex = RegExp(
-    r'^\s*(\d{1,2}):([0-5]\d)\s*-\s*(\d{1,2}):([0-5]\d)(\s*\(break\))?\s*$',
-    caseSensitive: false,
-  );
 
   void _loadPreconfigured(List<String> labels) {
     final newSpans = <(int, int)>[];
@@ -169,7 +410,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       final m = _timeLabelRegex.firstMatch(l);
       if (m == null) {
         debugPrint('Skipping unparsable existing label: $l');
-        return; // abort load to avoid partial mismatch
+        return;
       }
       final sh = int.parse(m.group(1)!);
       final sm = int.parse(m.group(2)!);
@@ -182,14 +423,11 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         return;
       }
       newSpans.add((start, end));
-      final isBreak = (m.group(5) ?? '').toLowerCase().contains('break');
+      final isBreak = (l.toLowerCase().contains('break'));
       if (!isBreak) {
         final len = end - start;
         inferredLen ??= len;
-        // Keep inference only if consistent
-        if (inferredLen != len) {
-          inferredLen = null; // inconsistent pattern
-        }
+        if (inferredLen != len) inferredLen = null;
         teachingIdx.add(i);
       }
     }
@@ -199,7 +437,6 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       _spans = newSpans;
       _teachingIndices = teachingIdx;
       _inferredPeriodMinutes = inferredLen;
-      // Reset existing session selection
       for (final s in _sessions) {
         s.dayIndex ??= 0;
         s.periodDropdownIndex = null;
@@ -224,16 +461,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     _inferredPeriodMinutes = consistent ? periodLen : null;
   }
 
-  void _assertIntegrity() {
-    if (_labels.length != _spans.length) {
-      _labels.clear();
-      _spans.clear();
-      _teachingIndices.clear();
-      _inferredPeriodMinutes = null;
-    }
-  }
-
-  // --------------------- Period Generator (Full Reconfigure) ---------------------
+  // ---------------- Period generator & append ----------------
 
   Future<void> _openFullGenerator() async {
     if (_configured) {
@@ -262,13 +490,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       _spans = result.spans;
       _teachingIndices = result.teachingIndices;
       _recomputeTeachingIndices();
-      for (final s in _sessions) {
-        s.periodDropdownIndex = null;
-      }
+      for (final s in _sessions) s.periodDropdownIndex = null;
     });
   }
-
-  // --------------------- Append Period / Break (incremental) ---------------------
 
   Future<void> _appendPeriodOrBreak() async {
     if (!_configured) {
@@ -288,7 +512,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
     final start = res.start;
     final end = res.end;
-    final label = '${_fmt(start)} - ${_fmt(end)}${res.isBreak ? ' (Break)' : ''}';
+    final label =
+        '${_fmt(start)} - ${_fmt(end)}${res.isBreak ? ' (Break)' : ''}';
 
     final ok = await _confirm(
       title: 'Add ${res.isBreak ? 'Break' : 'Period'}?',
@@ -298,29 +523,26 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     );
     if (!ok) return;
 
-    // Find insert position by start time
     int insertAt = 0;
-    while (insertAt < _spans.length && _spans[insertAt].$1 < start) {
-      insertAt++;
-    }
+    while (insertAt < _spans.length && _spans[insertAt].$1 < start) insertAt++;
 
     setState(() {
       _spans.insert(insertAt, (start, end));
       _labels.insert(insertAt, label);
-
-      // Recompute teaching indices to ensure correctness with breaks and order
       _recomputeTeachingIndices();
     });
 
-    // If period length becomes inconsistent after insertion, warn user
     if (_inferredPeriodMinutes == null && !res.isBreak) {
-      _snack('Note: Teaching period length is now inconsistent. Consider reconfiguring.');
+      _snack(
+        'Note: Teaching period length is now inconsistent. Consider reconfiguring.',
+      );
     }
   }
 
-  // --------------------- Sessions ---------------------
+  // ---------------- Sessions ----------------
 
   void _addSession() => setState(() => _sessions.add(_SessionRow()));
+
   void _removeSession(int i) async {
     if (i == 0) return;
     final ok = await _confirm(
@@ -336,8 +558,6 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   List<String> get _teachingLabels =>
       _teachingIndices.map((i) => _labels[i]).toList();
 
-  // --------------------- Clear Generated Schedule ---------------------
-
   Future<void> _clearGenerated() async {
     final ok = await _confirm(
       title: 'Clear period structure?',
@@ -347,23 +567,20 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       destructive: true,
     );
     if (!ok) return;
-
     setState(() {
       _labels.clear();
       _spans.clear();
       _teachingIndices.clear();
       _inferredPeriodMinutes = null;
-      for (final s in _sessions) {
-        s.periodDropdownIndex = null;
-      }
+      for (final s in _sessions) s.periodDropdownIndex = null;
     });
   }
 
-  // --------------------- Save ---------------------
+  // ---------------- Save ----------------
 
   Future<void> _save() async {
-    if (_department == null || _classKey == null || _section == null) {
-      _snack('Please select Department, Class, and Section');
+    if (_department == null || (_classKey == null && _classIdForSave == null)) {
+      _snack('Please select Department and Class');
       return;
     }
     if ((_course ?? '').trim().isEmpty) {
@@ -388,7 +605,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         : '${_course!.trim()}\n$lecturerName';
 
     final results = <CreateTimetableTimeResult>[];
-    final seenPairs = <String>{}; // to detect duplicates in sessions within this dialog
+    final seenPairs = <String>{};
 
     for (int i = 0; i < _sessions.length; i++) {
       final s = _sessions[i];
@@ -411,8 +628,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         return;
       }
 
-      // Build a unique key to detect duplicate sessions within the dialog
-      final key = '${s.dayIndex}-${labelIdx}';
+      final key = '${s.dayIndex}-$labelIdx';
       if (seenPairs.contains(key)) {
         final proceed = await _confirm(
           title: 'Duplicate session?',
@@ -426,11 +642,14 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       }
 
       final span = _spans[labelIdx];
+
+      final returnedDeptName = _department!.trim();
+      final returnedClassName = _classKey!.trim();
+
       results.add(
         CreateTimetableTimeResult(
-          department: _department!.trim(),
-          classKey: _classKey!.trim(),
-          section: _section!.trim(),
+          department: returnedDeptName,
+          classKey: returnedClassName,
           dayIndex: s.dayIndex!,
           startMinutes: span.$1,
           endMinutes: span.$2,
@@ -444,17 +663,18 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       return;
     }
 
-    // Confirmation summary before returning payload
-    final summary = results.map((r) {
-      final d = widget.days[r.dayIndex];
-      final t = '${_fmt(r.startMinutes)} - ${_fmt(r.endMinutes)}';
-      return '- $d  $t  • ${_course!.trim()}${lecturerName.isNotEmpty ? ' • $lecturerName' : ''}';
-    }).join('\n');
+    final summary = results
+        .map((r) {
+          final d = widget.days[r.dayIndex];
+          final t = '${_fmt(r.startMinutes)} - ${_fmt(r.endMinutes)}';
+          return '- $d  $t  • ${_course!.trim()}${lecturerName.isNotEmpty ? ' • $lecturerName' : ''}';
+        })
+        .join('\n');
 
     final ok = await _confirm(
       title: 'Save timetable entries?',
       content:
-          'Department: ${_department!}\nClass: ${_classKey!}  • Section: ${_section!}\n\nEntries:\n$summary',
+          'Department: ${_department!}\nClass: ${_classKey ?? _classIdForSave}\n\nEntries:\n$summary',
       confirmText: 'Save',
     );
     if (!ok) return;
@@ -467,27 +687,46 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     );
   }
 
-  // --------------------- UI utils ---------------------
+  // ---------------- UI utils & helpers ----------------
 
-  String _fmt(int minutes) {
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    return '${h}:${m.toString().padLeft(2, '0')}';
-  }
+  String _fmt(int minutes) =>
+      '${minutes ~/ 60}:${(minutes % 60).toString().padLeft(2, '0')}';
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (mounted)
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _assertIntegrity() {
+    if (_labels.length != _spans.length) {
+      _labels.clear();
+      _spans.clear();
+      _teachingIndices.clear();
+      _inferredPeriodMinutes = null;
+    }
+  }
+
+  List<String> _classesForDepartmentKey(String? dept) {
+    if (dept == null || dept.trim().isEmpty) return [];
+    final lower = dept.toLowerCase();
+    if (widget.departmentClasses.containsKey(dept))
+      return widget.departmentClasses[dept]!;
+    final matchKey = widget.departmentClasses.keys.firstWhere(
+      (k) => k.toLowerCase() == lower,
+      orElse: () => '',
+    );
+    if (matchKey.isNotEmpty) return widget.departmentClasses[matchKey] ?? [];
+    return [];
   }
 
   List<String> get _classesForDepartment {
-    final d = _department;
-    if (d == null) return [];
-    final match = widget.departmentClasses.keys.firstWhere(
-      (k) => k.toLowerCase() == d.toLowerCase(),
-      orElse: () => '',
-    );
-    if (match.isEmpty) return [];
-    return widget.departmentClasses[match] ?? [];
+    if (_loadedClasses.isNotEmpty)
+      return _loadedClasses
+          .map((c) => c['name']?.toString() ?? c['id'].toString())
+          .toList();
+    final list = _classesForDepartmentKey(_department);
+    if (list.isNotEmpty) return list;
+    return widget.departmentClasses.values.expand((e) => e).toList();
   }
 
   Widget _dropdownBox<T>({
@@ -526,26 +765,23 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     );
   }
 
-  // Responsive container for fields (wraps on mobile)
   Widget _wrapFields(List<Widget> children) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Target widths that work on phones and tablets
         final double maxW = constraints.maxWidth;
         final double itemMax = maxW < 420
-            ? maxW // single column
-            : (maxW < 720 ? (maxW - 12) / 2 : 280); // 2 cols or fixed width
+            ? maxW
+            : (maxW < 720 ? (maxW - 12) / 2 : 280);
         return Wrap(
           spacing: 12,
           runSpacing: 12,
           children: children
-              .map((c) => ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: 180,
-                      maxWidth: itemMax,
-                    ),
-                    child: c,
-                  ))
+              .map(
+                (c) => ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: 180, maxWidth: itemMax),
+                  child: c,
+                ),
+              )
               .toList(),
         );
       },
@@ -589,38 +825,134 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                   ),
                   const SizedBox(height: 8),
 
-                  // Dept / Class / Section (responsive)
+                  // Dept / Class
                   _wrapFields([
                     _dropdownBox<String>(
                       hint: 'Department',
                       value: _department,
                       items: widget.departments,
-                      onChanged: (v) => setState(() {
-                        _department = v;
-                        _classKey = null;
-                      }),
+                      onChanged: (v) async {
+                        setState(() {
+                          _department = v;
+                          _classKey = null;
+                          _classIdForSave = null;
+                          _loadedClasses = [];
+                          _loadedCourses = [];
+                          _course = null;
+                        });
+
+                        try {
+                          dynamic depArg = widget.departmentArg;
+                          bool matchedParentArg = false;
+                          if (v != null && depArg is DocumentReference) {
+                            try {
+                              final doc = await depArg.get();
+                              final data = doc.data() as Map<String, dynamic>?;
+                              final name = data != null
+                                  ? (data['name'] ??
+                                            data['department_name'] ??
+                                            data['displayName'])
+                                        ?.toString()
+                                  : null;
+                              if (name != null &&
+                                  name.toLowerCase() == v.toLowerCase())
+                                matchedParentArg = true;
+                            } catch (_) {
+                              matchedParentArg = false;
+                            }
+                          }
+
+                          if (!matchedParentArg && v != null) {
+                            try {
+                              final deptCol = _firestore.collection(
+                                'departments',
+                              );
+                              QuerySnapshot snap = await deptCol
+                                  .where('name', isEqualTo: v)
+                                  .get();
+                              if (snap.docs.isEmpty)
+                                snap = await deptCol
+                                    .where('department_name', isEqualTo: v)
+                                    .get();
+                              if (snap.docs.isEmpty)
+                                snap = await deptCol
+                                    .where('displayName', isEqualTo: v)
+                                    .get();
+                              if (snap.docs.isNotEmpty) {
+                                depArg = snap.docs.first.reference;
+                              } else {
+                                depArg = v;
+                              }
+                            } catch (e, st) {
+                              debugPrint(
+                                'Error resolving department name to doc: $e\n$st',
+                              );
+                              depArg = v;
+                            }
+                          }
+
+                          if (depArg != null) {
+                            await _loadClassesForDepartment(
+                              depArg,
+                              preserveInitialClass: false,
+                            );
+                          }
+                        } catch (err, st) {
+                          debugPrint(
+                            'CreateDialog department change error: $err\n$st',
+                          );
+                        }
+                      },
                     ),
                     _dropdownBox<String>(
-                      hint: 'Class',
+                      hint: _loadingClasses ? 'Loading classes...' : 'Class',
                       value: _classKey,
                       items: _classesForDepartment.isNotEmpty
                           ? _classesForDepartment
                           : widget.departmentClasses.values
-                              .expand((e) => e)
-                              .toList(),
-                      onChanged: (v) => setState(() => _classKey = v),
-                    ),
-                    _dropdownBox<String>(
-                      hint: 'Section',
-                      value: _section,
-                      items: widget.sections,
-                      onChanged: (v) => setState(() => _section = v),
+                                .expand((e) => e)
+                                .toList(),
+                      onChanged: (v) async {
+                        setState(() {
+                          _classKey = v;
+                          _loadedCourses = [];
+                          _course = null;
+                          _classIdForSave = null;
+                        });
+
+                        if (_loadedClasses.isNotEmpty && v != null) {
+                          try {
+                            final found = _loadedClasses.firstWhere(
+                              (c) => (c['name']?.toString() ?? '') == v,
+                              orElse: () => <String, dynamic>{},
+                            );
+                            if (found.isNotEmpty) {
+                              setState(
+                                () => _classIdForSave = found['id']?.toString(),
+                              );
+                              await _loadCoursesForClass(_classIdForSave);
+                              return;
+                            }
+                          } catch (_) {}
+                        }
+
+                        final classId = v;
+                        if (classId != null) {
+                          try {
+                            await _loadCoursesForClass(classId);
+                          } catch (err, st) {
+                            debugPrint(
+                              'CreateDialog class change loadCourses error: $err\n$st',
+                            );
+                          }
+                        }
+                      },
                     ),
                   ]),
 
                   const SizedBox(height: 12),
 
-                  // Lecturer / Course (responsive)
+                  // Lecturer / Course
                   _wrapFields([
                     !_useCustomLecturer
                         ? _dropdownBox<String>(
@@ -644,7 +976,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                             ),
                           ),
                     _dropdownBox<String>(
-                      hint: 'Course',
+                      hint: _loadingCourses ? 'Loading courses...' : 'Course',
                       value: _course,
                       items: _courseList,
                       onChanged: (v) => setState(() => _course = v),
@@ -656,16 +988,13 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                     children: [
                       Switch(
                         value: _useCustomLecturer,
-                        onChanged: (v) => setState(() {
-                          _useCustomLecturer = v;
-                          if (!v) _lecturerCustomCtrl.clear();
-                        }),
+                        onChanged: (v) =>
+                            setState(() => _useCustomLecturer = v),
                       ),
                       const SizedBox(width: 6),
                       const Text('Custom lecturer'),
                     ],
                   ),
-
                   const SizedBox(height: 12),
 
                   // Schedule controls
@@ -697,7 +1026,6 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
                   if (_configured) ...[
                     const SizedBox(height: 8),
-                    // Labels chips (wrap nicely on mobile)
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -705,22 +1033,19 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                         final l = _labels[i];
                         final isBreak = l.toLowerCase().contains('break');
                         return Chip(
-                          label: Text(
-                            l,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          backgroundColor:
-                              isBreak ? Colors.grey.shade200 : Colors.blue.shade50,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          label: Text(l, style: const TextStyle(fontSize: 12)),
+                          backgroundColor: isBreak
+                              ? Colors.grey.shade200
+                              : Colors.blue.shade50,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                           visualDensity: VisualDensity.compact,
                         );
                       }),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Ends at ${_fmt(_spans.last.$2)} • Teaching: '
-                      '${_teachingTotalHours()} • Breaks: ${_totalBreakMinutes()}m'
-                      '${_inferredPeriodMinutes != null ? ' • Period=${_inferredPeriodMinutes}m' : ''}',
+                      'Ends at ${_fmt(_spans.last.$2)} • Teaching: ${_teachingTotalHours()} • Breaks: ${_totalBreakMinutes()}m${_inferredPeriodMinutes != null ? ' • Period=${_inferredPeriodMinutes}m' : ''}',
                       style: const TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
@@ -739,8 +1064,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                         border: Border.all(color: Colors.amber.shade200),
                       ),
                       child: const Text(
-                        'Configure (or rely on an existing schedule) before adding sessions. '
-                        'You can later append new periods or breaks without recreating everything.',
+                        'Configure (or rely on an existing schedule) before adding sessions. You can later append new periods or breaks without recreating everything.',
                         style: TextStyle(fontSize: 12),
                       ),
                     ),
@@ -792,10 +1116,10 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                                 teachingLabels.length,
                                 (p) => p,
                               ),
-                              onChanged: (v) => setState(() => s.periodDropdownIndex = v),
+                              onChanged: (v) =>
+                                  setState(() => s.periodDropdownIndex = v),
                               builder: (p) => Text(teachingLabels[p]),
                             ),
-                            // Remove button as its own row item so it wraps
                             Row(
                               children: [
                                 if (i > 0)
@@ -818,7 +1142,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
                   const SizedBox(height: 16),
 
-                  // Footer actions (stick to end)
+                  // Footer
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -865,7 +1189,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   }
 }
 
-// Session row model
+/// Session row model
 class _SessionRow {
   int? dayIndex;
   int? periodDropdownIndex;
@@ -883,7 +1207,7 @@ class _GeneratedScheduleResult {
   });
 }
 
-/// Period generator dialog (same logic as before, with guardrails).
+/// Period generator dialog
 class _PeriodGeneratorDialog extends StatefulWidget {
   final List<String> existingLabels;
   final List<(int, int)> existingSpans;
@@ -919,7 +1243,6 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
     if (widget.existingLabels.isNotEmpty &&
         widget.existingSpans.length == widget.existingLabels.length &&
         widget.existingTeachingIndices.isNotEmpty) {
-      // Infer from existing
       final firstTeach = widget.existingTeachingIndices.first;
       final span = widget.existingSpans[firstTeach];
       _dayStart = span.$1;
@@ -931,11 +1254,12 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
       }
       _periodCount = widget.existingTeachingIndices.length;
 
-      // Derive breaks
       _breaks.clear();
       int teachingSeen = 0;
       for (int i = 0; i < widget.existingLabels.length; i++) {
-        final isBreak = widget.existingLabels[i].toLowerCase().contains('break');
+        final isBreak = widget.existingLabels[i].toLowerCase().contains(
+          'break',
+        );
         if (isBreak) {
           final sp = widget.existingSpans[i];
           final mins = sp.$2 - sp.$1;
@@ -950,8 +1274,9 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
     }
   }
 
-  List<int> get _afterPeriodOptions =>
-      (_periodCount <= 1) ? const [] : List<int>.generate(_periodCount - 1, (i) => i + 1);
+  List<int> get _afterPeriodOptions => (_periodCount <= 1)
+      ? const []
+      : List<int>.generate(_periodCount - 1, (i) => i + 1);
 
   TimeOfDay _toTimeOfDay(int minutes) {
     final h = (minutes ~/ 60) % 24;
@@ -959,11 +1284,8 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
     return TimeOfDay(hour: h, minute: m);
   }
 
-  String _fmt(int minutes) {
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    return '${h}:${m.toString().padLeft(2, '0')}';
-  }
+  String _fmt(int minutes) =>
+      '${minutes ~/ 60}:${(minutes % 60).toString().padLeft(2, '0')}';
 
   void _generate() {
     if (_periodMinutes <= 0) {
@@ -1012,7 +1334,7 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
       );
       if (b.after == i && b.minutes != null && b.minutes! > 0) {
         final bs = t;
-        final be = t + b.minutes!;
+        final be = t + (b.minutes ?? 0);
         labels.add('${_fmt(bs)} - ${_fmt(be)} (Break)');
         spans.add((bs, be));
         t = be;
@@ -1038,23 +1360,26 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // Day start
               InkWell(
                 onTap: () async {
                   final picked = await showTimePicker(
                     context: context,
                     initialTime: _toTimeOfDay(_dayStart),
                   );
-                  if (picked != null) {
-                    setState(() => _dayStart = picked.hour * 60 + picked.minute);
-                  }
+                  if (picked != null)
+                    setState(
+                      () => _dayStart = picked.hour * 60 + picked.minute,
+                    );
                 },
                 child: InputDecorator(
                   decoration: const InputDecoration(
                     labelText: 'Day start',
                     border: OutlineInputBorder(),
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1066,7 +1391,6 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                 ),
               ),
               const SizedBox(height: 12),
-
               Row(
                 children: [
                   Expanded(
@@ -1075,7 +1399,10 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         labelText: 'Period duration',
                         border: OutlineInputBorder(),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
@@ -1083,13 +1410,28 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                           value: _useCustom
                               ? null
                               : (_presetDurations.contains(_periodMinutes)
-                                  ? _periodMinutes
-                                  : null),
-                          hint: Text(_useCustom ? 'Custom (${_periodMinutes}m)' : '${_periodMinutes}m'),
-                          items: _presetDurations
-                              .map((m) => DropdownMenuItem<int>(value: m, child: Text('$m min')))
-                              .toList()
-                            ..add(const DropdownMenuItem<int>(value: -1, child: Text('Custom…'))),
+                                    ? _periodMinutes
+                                    : null),
+                          hint: Text(
+                            _useCustom
+                                ? 'Custom (${_periodMinutes}m)'
+                                : '${_periodMinutes}m',
+                          ),
+                          items:
+                              _presetDurations
+                                  .map(
+                                    (m) => DropdownMenuItem<int>(
+                                      value: m,
+                                      child: Text('$m min'),
+                                    ),
+                                  )
+                                  .toList()
+                                ..add(
+                                  const DropdownMenuItem<int>(
+                                    value: -1,
+                                    child: Text('Custom…'),
+                                  ),
+                                ),
                           onChanged: (v) {
                             if (v == null) return;
                             if (v == -1) {
@@ -1114,18 +1456,22 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                           labelText: 'Custom minutes',
                           border: OutlineInputBorder(),
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                         ),
                         keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         onChanged: (v) {
                           final n = int.tryParse(v.trim());
-                          if (n != null && n > 0) {
+                          if (n != null && n > 0)
                             setState(() {
                               _customDuration = n;
                               _periodMinutes = n;
                             });
-                          }
                         },
                       ),
                     ),
@@ -1137,23 +1483,29 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         labelText: 'Number of periods',
                         border: OutlineInputBorder(),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                       ),
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       onChanged: (v) {
                         final n = int.tryParse(v.trim());
-                        if (n != null && n >= 1 && n <= 40) setState(() => _periodCount = n);
+                        if (n != null && n >= 1 && n <= 40)
+                          setState(() => _periodCount = n);
                       },
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 18),
               const Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Breaks (optional)', style: TextStyle(fontWeight: FontWeight.w600)),
+                child: Text(
+                  'Breaks (optional)',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
               const SizedBox(height: 6),
               Column(
@@ -1169,7 +1521,10 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                               labelText: 'After period #',
                               border: OutlineInputBorder(),
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                             ),
                             child: DropdownButtonHideUnderline(
                               child: DropdownButton<int>(
@@ -1177,7 +1532,12 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                                 value: b.after,
                                 hint: const Text('Choose'),
                                 items: _afterPeriodOptions
-                                    .map((n) => DropdownMenuItem<int>(value: n, child: Text('$n')))
+                                    .map(
+                                      (n) => DropdownMenuItem<int>(
+                                        value: n,
+                                        child: Text('$n'),
+                                      ),
+                                    )
                                     .toList(),
                                 onChanged: (v) => setState(() => b.after = v),
                               ),
@@ -1192,13 +1552,21 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                               labelText: 'Break minutes',
                               border: OutlineInputBorder(),
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                             ),
                             keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
                             onChanged: (v) {
                               final n = int.tryParse(v.trim());
-                              setState(() => b.minutes = (n != null && n > 0) ? n : null);
+                              setState(
+                                () =>
+                                    b.minutes = (n != null && n > 0) ? n : null,
+                              );
                             },
                           ),
                         ),
@@ -1206,9 +1574,13 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         if (i > 0)
                           IconButton(
                             onPressed: () {
-                              if (_breaks.length > 1) setState(() => _breaks.removeAt(i));
+                              if (_breaks.length > 1)
+                                setState(() => _breaks.removeAt(i));
                             },
-                            icon: const Icon(Icons.close, color: Colors.redAccent),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.redAccent,
+                            ),
                           )
                         else
                           const SizedBox(width: 40),
@@ -1232,11 +1604,17 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         ElevatedButton(onPressed: _generate, child: const Text('Generate')),
       ],
     );
   }
+
+  void _toast(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
   Widget _rulesBox() {
     return Container(
@@ -1258,11 +1636,9 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
       ),
     );
   }
-
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
 }
+
+// ---------------- Break + AddPeriod helpers (top-level classes) ----------------
 
 class _BreakConfig {
   int? after;
@@ -1270,7 +1646,6 @@ class _BreakConfig {
   _BreakConfig({this.after, this.minutes});
 }
 
-/// Add new period or break dialog (incremental change)
 class _AddPeriodDialog extends StatefulWidget {
   final List<(int, int)> existingSpans;
   final List<String> existingLabels;
@@ -1289,8 +1664,8 @@ class _AddPeriodDialog extends StatefulWidget {
 
 class _AddPeriodDialogState extends State<_AddPeriodDialog> {
   bool isBreak = false;
-  int? customBreakMinutes; // for breaks
-  TimeOfDay? startPicker; // user-chosen start (must not overlap)
+  int? customBreakMinutes;
+  TimeOfDay? startPicker;
   String? error;
 
   String fmt(int m) => '${m ~/ 60}:${(m % 60).toString().padLeft(2, '0')}';
@@ -1325,12 +1700,11 @@ class _AddPeriodDialogState extends State<_AddPeriodDialog> {
                   context: context,
                   initialTime: initial,
                 );
-                if (picked != null) {
+                if (picked != null)
                   setState(() {
                     startPicker = picked;
                     error = null;
                   });
-                }
               },
               child: InputDecorator(
                 decoration: const InputDecoration(
@@ -1426,23 +1800,21 @@ class _AddPeriodDialogState extends State<_AddPeriodDialog> {
       return null;
     }
     final start = startPicker!.hour * 60 + startPicker!.minute;
-    // Determine length
     int? length;
     if (isBreak) {
       if (customBreakMinutes == null || customBreakMinutes! <= 0) {
         error = 'Enter break minutes';
         return null;
       }
-      length = customBreakMinutes;
+      length = customBreakMinutes!;
     } else {
       if (widget.periodMinutes == null) {
         error = 'Period length inconsistent. Reconfigure.';
         return null;
       }
-      length = widget.periodMinutes;
+      length = widget.periodMinutes!;
     }
-    final end = start + length!;
-    // Overlap check with existing spans
+    final end = start + length;
     for (final sp in widget.existingSpans) {
       final s = sp.$1;
       final e = sp.$2;
@@ -1459,7 +1831,7 @@ class _AddPeriodDialogState extends State<_AddPeriodDialog> {
     setState(() => error = null);
     final res = buildResult();
     if (res == null) {
-      setState(() {}); // refresh error
+      setState(() {});
       return;
     }
     Navigator.pop(context, res);
@@ -1470,47 +1842,38 @@ class _AddPeriodDialogState extends State<_AddPeriodDialog> {
       final now = TimeOfDay.now();
       return TimeOfDay(hour: now.hour, minute: 0);
     }
-    // Suggest end of last span
-    final lastEnd =
-        widget.existingSpans.map((e) => e.$2).reduce((a, b) => a > b ? a : b);
+    final lastEnd = widget.existingSpans
+        .map((e) => e.$2)
+        .reduce((a, b) => a > b ? a : b);
     return TimeOfDay(hour: lastEnd ~/ 60, minute: lastEnd % 60);
   }
 
-  Widget hintBox(int? periodLen) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.blueGrey.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blueGrey.shade100),
-      ),
-      child: Text(
-        isBreak
-            ? 'Break can be any positive minutes. It must not overlap existing spans.'
-            : (periodLen != null
-                ? 'New teaching period will be exactly $periodLen minutes; choose a start time that does not overlap.'
-                : 'Period length unknown (inconsistent). Please reconfigure.'),
-        style: const TextStyle(fontSize: 12),
-      ),
-    );
-  }
+  Widget hintBox(int? periodLen) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: Colors.blueGrey.shade50,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.blueGrey.shade100),
+    ),
+    child: Text(
+      periodLen != null
+          ? 'New teaching period will be exactly $periodLen minutes; choose a start time that does not overlap.'
+          : 'Period length unknown (inconsistent). Please reconfigure.',
+      style: const TextStyle(fontSize: 12),
+    ),
+  );
 }
 
+// Define the missing _AddPeriodResult class
 class _AddPeriodResult {
   final int start;
   final int end;
   final bool isBreak;
+
   _AddPeriodResult({
     required this.start,
     required this.end,
     required this.isBreak,
   });
-}
-
-class TimeSpan {
-  final int start;
-  final int end;
-
-  TimeSpan({required this.start, required this.end});
 }

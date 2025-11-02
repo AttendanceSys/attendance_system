@@ -41,20 +41,29 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   void initState() {
     super.initState();
 
-    _course = widget.initialCourse != null && widget.initialCourse!.isNotEmpty
-        ? widget.initialCourse
+    // Course initial
+    _course = (widget.initialCourse != null && widget.initialCourse!.trim().isNotEmpty)
+        ? widget.initialCourse!.trim()
         : null;
 
-    if (widget.initialLecturer != null && widget.initialLecturer!.isNotEmpty) {
-      if (widget.lecturers
-          .map((e) => e.toLowerCase())
-          .contains(widget.initialLecturer!.toLowerCase())) {
-        _lecturer = widget.initialLecturer;
+    // Lecturer initial: try to match existing lecturer values case-insensitively.
+    if (widget.initialLecturer != null && widget.initialLecturer!.trim().isNotEmpty) {
+      final initLect = widget.initialLecturer!.trim();
+      final matched = widget.lecturers.firstWhere(
+        (e) => e.toLowerCase() == initLect.toLowerCase(),
+        orElse: () => '',
+      );
+      if (matched.isNotEmpty) {
+        _lecturer = matched; // use canonical value from list
         _useCustomLecturer = false;
       } else {
         _useCustomLecturer = true;
-        _customLecturerCtrl.text = widget.initialLecturer!;
+        _customLecturerCtrl.text = initLect;
+        // keep _lecturer null for clarity (it's a named lecturer when not custom)
       }
+    } else {
+      _lecturer = null;
+      _useCustomLecturer = false;
     }
 
     _initialCourse = (widget.initialCourse ?? '').trim();
@@ -120,6 +129,15 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   }
 
   Future<void> _clear() async {
+    // If already empty, just close without extra confirmation
+    final courseEmpty = _currentCourse.isEmpty;
+    final lecturerEmpty = _currentLecturer.isEmpty;
+    if (courseEmpty && lecturerEmpty) {
+      // nothing to clear
+      Navigator.pop(context, TimetableCellEditResult(cellText: ''));
+      return;
+    }
+
     final ok = await _confirm(
       title: 'Clear this cell?',
       content: 'This will remove the course and lecturer from this time slot.',
@@ -147,19 +165,21 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       return;
     }
 
+    // If you want to force a course to be required, you can validate here and show a snack
     final cellText = lecturer.isEmpty ? course : '$course\n$lecturer';
 
-    // Confirm applying non-empty edits (show before -> after summary)
+    // Confirm applying non-empty edits (show before -> after summary) only if changed
     if (_hasChanges) {
       final display = (String s) => s.isEmpty ? '(empty)' : s;
-      final before = [
-        if (_initialCourse.isNotEmpty || _initialLecturer.isNotEmpty) display(_initialCourse),
-        if (_initialLecturer.isNotEmpty) display(_initialLecturer),
-      ].join('\n');
-      final after = [
-        if (course.isNotEmpty || lecturer.isNotEmpty) display(course),
-        if (lecturer.isNotEmpty) display(lecturer),
-      ].join('\n');
+      final beforeParts = <String>[];
+      if (_initialCourse.isNotEmpty) beforeParts.add(_initialCourse);
+      if (_initialLecturer.isNotEmpty) beforeParts.add(_initialLecturer);
+      final before = beforeParts.isEmpty ? '(empty)' : beforeParts.join('\n');
+
+      final afterParts = <String>[];
+      if (course.isNotEmpty) afterParts.add(course);
+      if (lecturer.isNotEmpty) afterParts.add(lecturer);
+      final after = afterParts.isEmpty ? '(empty)' : afterParts.join('\n');
 
       final ok = await _confirm(
         title: 'Apply changes?',
@@ -193,17 +213,10 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                     const Expanded(
                       child: Text(
                         'Edit Cell',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Close',
-                      onPressed: _onCloseOrCancel,
-                    ),
+                    IconButton(icon: const Icon(Icons.close), tooltip: 'Close', onPressed: _onCloseOrCancel),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -225,7 +238,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                       onChanged: (v) {
                         setState(() {
                           _useCustomLecturer = v;
-                          if (!v) _customLecturerCtrl.clear();
+                          // preserve custom text in controller so user can toggle without data loss
                         });
                       },
                     ),
@@ -242,10 +255,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                           hintText: 'Lecturer name',
                           border: OutlineInputBorder(),
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         ),
                       )
                     : _dropdownBox<String>(
@@ -306,14 +316,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
           isExpanded: true,
           value: value,
           hint: Text(hint),
-          items: items
-              .map(
-                (e) => DropdownMenuItem<T>(
-                  value: e,
-                  child: Text(e.toString()),
-                ),
-              )
-              .toList(),
+          items: items.map((e) => DropdownMenuItem<T>(value: e, child: Text(e.toString()))).toList(),
           onChanged: onChanged,
         ),
       ),

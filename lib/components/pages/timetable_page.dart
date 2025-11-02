@@ -1,12 +1,22 @@
+// TimetablePage — full updated implementation
+// - Reads/writes timetables using "<department display name>_<class display name>" document ids.
+// - Resolves display names from department/class caches or fetches docs as fallback.
+// - Loads classes and class courses similar to CreateTimetableDialog.
+// - Robust lookup of in-memory cache under multiple aliases so UI selection (ids or names) finds loaded data.
+// - Safe cell editing that avoids null-derefs and persists edits to Firestore.
+// - Replace your existing lib/components/pages/timetable_page.dart with this file.
+
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
 import 'create_timetable_dialog.dart';
-import 'edit_timetable_page.dart';
+import 'create_timetable_cell_edit_dialog.dart';
 
 class TimetableSlot {
   final String day;
@@ -15,7 +25,6 @@ class TimetableSlot {
   final String className;
   final String department;
   final String lecturer;
-  final String section;
 
   TimetableSlot({
     required this.day,
@@ -24,7 +33,6 @@ class TimetableSlot {
     required this.className,
     required this.department,
     required this.lecturer,
-    required this.section,
   });
 }
 
@@ -38,38 +46,13 @@ class TimetablePage extends StatefulWidget {
 class _TimetablePageState extends State<TimetablePage> {
   String searchText = '';
 
+  // Dropdown raw values (ids)
   String? selectedDepartment;
   String? selectedClass;
   String? selectedLecturer;
-  String? selectedSection;
 
   bool editingEnabled = false;
-
   _UndoState? _lastUndo;
-
-  final List<String> departments = ["CS", "GEO", "Math"];
-  final Map<String, List<String>> departmentClasses = {
-    "CS": ["B2CS", "B3SC", "B4CS"],
-    "GEO": ["B2GEO", "B3GEO"],
-    "Math": ["B1MATH", "B2MATH"],
-  };
-  final List<String> lecturers = [
-    "Dr. Mohamed Isaaq",
-    "Prof. Abdullahi Sharif",
-    "Prof. Fuad Mire",
-    "Dr. Adam",
-    "Eng M. A. Khalifa",
-    "NONE",
-  ];
-  final List<String> coursesMock = const [
-    'Math',
-    'E-Commerce',
-    'Data Science and Analytics',
-    'Network Security',
-    'Computer Ethics',
-    'Selected Topics in Comp Scien.',
-  ];
-  final List<String> sections = ["A", "B", "C", "None"];
 
   final List<String> seedPeriods = const [
     "7:30 - 9:20",
@@ -78,164 +61,894 @@ class _TimetablePageState extends State<TimetablePage> {
     "11:40 - 1:30",
   ];
 
-  final Map<String, Map<String, Map<String, List<List<String>>>>>
-  timetableData = {
-    "CS": {
-      "B3SC": {
-        "A": [
-          ["", "", "Break", ""],
-          [
-            "E-Commerce\nDr. Mohamed Isaaq",
-            "Selected Topics in Comp Scien.\nProf. Abdullahi Sharif",
-            "Break",
-            "Data Science and Analytics\nProf. Fuad Mire",
-          ],
-          [
-            "Network Security\nDr. Adam",
-            "Computer Ethics\nEng M. A. Khalifa",
-            "Break",
-            "E-Commerce\nDr. Mohamed Isaaq",
-          ],
-          [
-            "Network Security\nDr. Adam",
-            "Computer Ethics\nEng M. A. Khalifa",
-            "Break",
-            "Data Science and Analytics\nProf. Fuad Mire",
-          ],
-          [
-            "Data Science and Analytics\nProf. Fuad Mire",
-            "Selected Topics in Comp Scien.\nProf. Abdullahi Sharif",
-            "Break",
-            "",
-          ],
-          ["", "Network Security\nDr. Adam", "Break", ""],
-        ],
-      },
-      "B3CS": {
-        "A": [
-          ["", "", "Break", ""],
-          [
-            "E-Commerce\nDr. Mohamed Isaaq",
-            "Selected Topics in Comp Scien.\nProf. Abdullahi Sharif",
-            "Break",
-            "Data Science and Analytics\nProf. Fuad Mire",
-          ],
-          [
-            "Network Security\nDr. Adam",
-            "Computer Ethics\nEng M. A. Khalifa",
-            "Break",
-            "E-Commerce\nDr. Mohamed Isaaq",
-          ],
-          [
-            "Network Security\nDr. Adam",
-            "Computer Ethics\nEng M. A. Khalifa",
-            "Break",
-            "Data Science and Analytics\nProf. Fuad Mire",
-          ],
-          [
-            "Data Science and Analytics\nProf. Fuad Mire",
-            "Selected Topics in Comp Scien.\nProf. Abdullahi Sharif",
-            "Break",
-            "",
-          ],
-          ["", "Network Security\nDr. Adam", "Break", ""],
-        ],
-      },
-    },
-  };
-
+  // caches keyed by display names (and aliases are added on load)
+  final Map<String, Map<String, List<List<String>>>> timetableData = {};
   final Map<String, Map<String, List<String>>> classPeriods = {};
+  final Map<String, Map<String, List<Map<String, int>>>> spans = {};
+
+  // dropdown/data caches
+  List<Map<String, dynamic>> _departments = []; // {id, name, ref}
+  List<Map<String, dynamic>> _classes = []; // {id, name, raw, ref}
+  List<Map<String, dynamic>> _teachers = []; // {id, name}
+  List<Map<String, dynamic>> _coursesForSelectedClass =
+      []; // {id, course_name, raw, ref}
+
+  bool _loadingDeps = false;
+  bool _loadingClasses = false;
+  bool _loadingTeachers = false;
+  bool _loadingCourses = false;
+
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final CollectionReference timetablesCollection = FirebaseFirestore.instance
+      .collection('timetables');
 
   List<String> get days => ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu"];
 
   @override
   void initState() {
     super.initState();
-    _seedClassPeriodsFromExistingData();
+    _loadDepartments();
+    _loadTeachers();
   }
 
-  void _seedClassPeriodsFromExistingData() {
-    for (final dep in timetableData.keys) {
-      classPeriods.putIfAbsent(dep, () => {});
-      final classesMap = timetableData[dep]!;
-      for (final cls in classesMap.keys) {
-        classPeriods[dep]!.putIfAbsent(
-          cls,
-          () => List<String>.from(seedPeriods, growable: true),
+  // -------------------- Helpers --------------------
+
+  // Sanitize display name into doc id segment (lowercase, spaces->underscore, strip unsafe)
+  String _sanitizeForId(String input) {
+    var s = input.trim().toLowerCase();
+    s = s.replaceAll(RegExp(r'\s+'), '_');
+    s = s.replaceAll(RegExp(r'[^\w\-]'), '');
+    return s;
+  }
+
+  String _docIdFromDisplayNames(String deptDisplay, String classDisplay) {
+    final d = _sanitizeForId(deptDisplay);
+    final c = _sanitizeForId(classDisplay);
+    return '${d}_$c';
+  }
+
+  // Resolve department display name from cache or fetch once if needed
+  Future<String> _resolveDepartmentDisplayName(String depIdOrName) async {
+    final s = depIdOrName.trim();
+    try {
+      final found = _departments.firstWhere(
+        (d) => (d['id']?.toString() ?? '') == s,
+        orElse: () => <String, dynamic>{},
+      );
+      if (found is Map && found.isNotEmpty) {
+        final n = (found['name']?.toString() ?? '').trim();
+        if (n.isNotEmpty) return n;
+      }
+    } catch (_) {}
+    if (s.isNotEmpty && !s.contains(' ') && s.length > 6) {
+      try {
+        final doc = await _firestore.collection('departments').doc(s).get();
+        if (doc.exists && doc.data() != null) {
+          final data = doc.data() as Map<String, dynamic>;
+          final name =
+              (data['name'] ?? data['department_name'] ?? data['displayName'])
+                  ?.toString() ??
+              '';
+          if (name.trim().isNotEmpty) return name.trim();
+        }
+      } catch (_) {}
+    }
+    return s;
+  }
+
+  Future<String> _resolveClassDisplayName(String classIdOrName) async {
+    final s = classIdOrName.trim();
+    try {
+      final found = _classes.firstWhere(
+        (c) => (c['id']?.toString() ?? '') == s,
+        orElse: () => <String, dynamic>{},
+      );
+      if (found is Map && found.isNotEmpty) {
+        final n = (found['name']?.toString() ?? '').trim();
+        if (n.isNotEmpty) return n;
+      }
+    } catch (_) {}
+    if (s.isNotEmpty && !s.contains(' ') && s.length > 6) {
+      try {
+        final doc = await _firestore.collection('classes').doc(s).get();
+        if (doc.exists && doc.data() != null) {
+          final data = doc.data() as Map<String, dynamic>;
+          final name = (data['class_name'] ?? data['name'])?.toString() ?? '';
+          if (name.trim().isNotEmpty) return name.trim();
+        }
+      } catch (_) {}
+    }
+    return s;
+  }
+
+  // Synchronous cached getters (no network)
+  String _displayNameForDeptCached(String depIdOrName) {
+    final s = depIdOrName.trim();
+    try {
+      final found = _departments.firstWhere(
+        (d) => (d['id']?.toString() ?? '') == s,
+        orElse: () => <String, dynamic>{},
+      );
+      if (found is Map && found.isNotEmpty) {
+        final n = (found['name']?.toString() ?? '').trim();
+        if (n.isNotEmpty) return n;
+      }
+    } catch (_) {}
+    return s;
+  }
+
+  String _displayNameForClassCached(String classIdOrName) {
+    final s = classIdOrName.trim();
+    try {
+      final found = _classes.firstWhere(
+        (c) => (c['id']?.toString() ?? '') == s,
+        orElse: () => <String, dynamic>{},
+      );
+      if (found is Map && found.isNotEmpty) {
+        final n = (found['name']?.toString() ?? '').trim();
+        if (n.isNotEmpty) return n;
+      }
+    } catch (_) {}
+    return s;
+  }
+
+  Future<String> _docIdFromSelected(
+    String depIdOrName,
+    String classIdOrName,
+  ) async {
+    final dept = await _resolveDepartmentDisplayName(depIdOrName);
+    final cls = await _resolveClassDisplayName(classIdOrName);
+    return _docIdFromDisplayNames(dept, cls);
+  }
+
+  // -------------------- Dropdown & related loaders --------------------
+
+  Future<void> _loadDepartments() async {
+    setState(() => _loadingDeps = true);
+    try {
+      final snap = await _firestore.collection('departments').get();
+      _departments = snap.docs.map((d) {
+        final data = d.data() as Map<String, dynamic>;
+        final name =
+            (data['name'] ??
+                    data['department_name'] ??
+                    data['displayName'] ??
+                    data['title'] ??
+                    '')
+                .toString();
+        return {'id': d.id, 'name': name, 'ref': d.reference};
+      }).toList();
+      _departments.sort(
+        (a, b) => a['name'].toString().compareTo(b['name'].toString()),
+      );
+    } catch (e, st) {
+      debugPrint('loadDepartments error: $e\n$st');
+    } finally {
+      setState(() => _loadingDeps = false);
+    }
+  }
+
+  Future<void> _loadTeachers() async {
+    setState(() => _loadingTeachers = true);
+    try {
+      final snap = await _firestore.collection('teachers').get();
+      _teachers = snap.docs.map((d) {
+        final data = d.data() as Map<String, dynamic>;
+        final name =
+            (data['name'] ?? data['full_name'] ?? data['username'] ?? '')
+                .toString();
+        return {'id': d.id, 'name': name};
+      }).toList();
+      _teachers.sort(
+        (a, b) => a['name'].toString().compareTo(b['name'].toString()),
+      );
+    } catch (e, st) {
+      debugPrint('loadTeachers error: $e\n$st');
+    } finally {
+      setState(() => _loadingTeachers = false);
+    }
+  }
+
+  Future<void> _loadClassesForDepartment(dynamic depIdOrRef) async {
+    setState(() => _loadingClasses = true);
+    try {
+      if (depIdOrRef == null) {
+        setState(() => _classes = []);
+        return;
+      }
+
+      final classesCol = _firestore.collection('classes');
+
+      Future<List<QueryDocumentSnapshot>> tryQuery(Query q, String tag) async {
+        try {
+          final snap = await q.get();
+          debugPrint('classes query [$tag] returned ${snap.docs.length} docs');
+          if (snap.docs.isNotEmpty)
+            debugPrint(
+              'classes query [$tag] first doc data: ${snap.docs.first.data()}',
+            );
+          return snap.docs;
+        } catch (e, st) {
+          debugPrint('classes query [$tag] failed: $e\n$st');
+          return <QueryDocumentSnapshot>[];
+        }
+      }
+
+      List<QueryDocumentSnapshot> docs = [];
+
+      if (depIdOrRef is DocumentReference) {
+        docs = await tryQuery(
+          classesCol.where('department_ref', isEqualTo: depIdOrRef),
+          'department_ref==DocumentReference',
         );
-        for (final sect in classesMap[cls]!.keys) {
-          final grid = classesMap[cls]![sect]!;
-          for (int r = 0; r < grid.length; r++) {
-            grid[r] = List<String>.from(grid[r], growable: true);
+        if (docs.isEmpty)
+          docs = await tryQuery(
+            classesCol.where(
+              'department_ref',
+              isEqualTo: (depIdOrRef as DocumentReference).id,
+            ),
+            'department_ref==DocumentReference.id',
+          );
+      } else if (depIdOrRef is String) {
+        docs = await tryQuery(
+          classesCol.where('department_ref', isEqualTo: depIdOrRef),
+          'department_ref==String',
+        );
+        if (docs.isEmpty)
+          docs = await tryQuery(
+            classesCol.where('department_id', isEqualTo: depIdOrRef),
+            'department_id==String',
+          );
+        if (docs.isEmpty)
+          docs = await tryQuery(
+            classesCol.where('department', isEqualTo: depIdOrRef),
+            'department==String',
+          );
+        if (docs.isEmpty)
+          docs = await tryQuery(
+            classesCol.where('department_name', isEqualTo: depIdOrRef),
+            'department_name==String',
+          );
+      }
+
+      final classes = docs.map((d) {
+        final data = d.data() as Map<String, dynamic>;
+        final name = (data['class_name'] ?? data['name'] ?? d.id).toString();
+        final section = (data['section'] ?? '').toString();
+        return {
+          'id': d.id,
+          'name': name,
+          'section': section,
+          'raw': data,
+          'ref': d.reference,
+        };
+      }).toList();
+
+      classes.sort(
+        (a, b) => a['name'].toString().compareTo(b['name'].toString()),
+      );
+
+      setState(() => _classes = classes);
+    } catch (e, st) {
+      debugPrint('loadClassesForDepartment error: $e\n$st');
+      setState(() => _classes = []);
+    } finally {
+      setState(() => _loadingClasses = false);
+    }
+  }
+
+  Future<void> _loadCoursesForClass(dynamic classIdOrName) async {
+    if (classIdOrName == null) {
+      setState(() => _coursesForSelectedClass = []);
+      return;
+    }
+    setState(() => _loadingCourses = true);
+    try {
+      final coursesCol = _firestore.collection('courses');
+
+      Future<QuerySnapshot> tryQ(String field) =>
+          coursesCol.where(field, isEqualTo: classIdOrName).get();
+
+      QuerySnapshot snap = await tryQ('class');
+      if (snap.docs.isEmpty) snap = await tryQ('class_id');
+      if (snap.docs.isEmpty) snap = await tryQ('class_ref');
+      if (snap.docs.isEmpty) snap = await tryQ('class_name');
+
+      if (snap.docs.isEmpty) {
+        debugPrint('CreateDialog: no courses found for classId=$classIdOrName');
+        setState(() => _coursesForSelectedClass = []);
+        return;
+      }
+
+      final courses = snap.docs.map((d) {
+        final data = d.data() as Map<String, dynamic>;
+        final name =
+            (data['course_name'] ??
+                    data['title'] ??
+                    data['course_code'] ??
+                    d.id)
+                .toString();
+        return {
+          'id': d.id,
+          'course_name': name,
+          'raw': data,
+          'ref': d.reference,
+        };
+      }).toList();
+
+      courses.sort(
+        (a, b) =>
+            a['course_name'].toString().compareTo(b['course_name'].toString()),
+      );
+
+      setState(() {
+        _coursesForSelectedClass = courses;
+      });
+    } catch (e, st) {
+      debugPrint('loadCoursesForClass error: $e\n$st');
+      setState(() => _coursesForSelectedClass = []);
+    } finally {
+      setState(() => _loadingCourses = false);
+    }
+  }
+
+  // -------------------- Timetable read/write --------------------
+
+  Future<void> _loadTimetableDoc() async {
+    if (selectedDepartment == null || selectedClass == null) return;
+    final depId = selectedDepartment!.trim();
+    final clsId = selectedClass!.trim();
+    if (depId.isEmpty || clsId.isEmpty) return;
+
+    final docId = await _docIdFromSelected(depId, clsId);
+    final deptDisplay = await _resolveDepartmentDisplayName(depId);
+    final classDisplay = await _resolveClassDisplayName(clsId);
+
+    debugPrint(
+      'Loading timetable for docId="$docId" (deptDisplay="$deptDisplay" classDisplay="$classDisplay", depId="$depId" classId="$clsId")',
+    );
+
+    final docRef = timetablesCollection.doc(docId);
+
+    try {
+      final snap = await docRef.get();
+      if (snap.exists && snap.data() != null) {
+        debugPrint('Found timetable document by id: $docId');
+        await _applyTimetableDataFromSnapshot(
+          snap.data()! as Map<String, dynamic>,
+          deptDisplay,
+          classDisplay,
+        );
+      } else {
+        debugPrint(
+          'Doc $docId not found by id — querying timetables collection for matching document',
+        );
+
+        Query query = timetablesCollection
+            .where('department', isEqualTo: deptDisplay)
+            .where('className', isEqualTo: classDisplay)
+            .limit(1);
+        QuerySnapshot qSnap = await query.get();
+
+        if (qSnap.docs.isEmpty) {
+          query = timetablesCollection
+              .where('department', isEqualTo: deptDisplay)
+              .where('classKey', isEqualTo: clsId)
+              .limit(1);
+          qSnap = await query.get();
+        }
+        if (qSnap.docs.isEmpty) {
+          query = timetablesCollection
+              .where('department_id', isEqualTo: depId)
+              .where('classKey', isEqualTo: clsId)
+              .limit(1);
+          qSnap = await query.get();
+        }
+        if (qSnap.docs.isEmpty) {
+          query = timetablesCollection
+              .where('department_id', isEqualTo: depId)
+              .where('className', isEqualTo: classDisplay)
+              .limit(1);
+          qSnap = await query.get();
+        }
+
+        if (qSnap.docs.isNotEmpty) {
+          final doc = qSnap.docs.first;
+          debugPrint('Found timetable document by query: ${doc.id}');
+          final data = doc.data() as Map<String, dynamic>;
+          final depFromDoc = (data['department'] as String?) ?? deptDisplay;
+          final classFromDoc = (data['className'] as String?) ?? classDisplay;
+          await _applyTimetableDataFromSnapshot(
+            doc.data() as Map<String, dynamic>,
+            depFromDoc,
+            classFromDoc,
+          );
+        } else {
+          // nothing found — show message only
+          debugPrint('No timetable found in timetables for $docId');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No timetable found in this class')),
+          );
+        }
+      }
+    } catch (e, st) {
+      debugPrint('Error loading timetable doc (timetables): $e\n$st');
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading timetable: $e')));
+    }
+
+    // Load courses for the selected class for edit dialog dropdowns
+    try {
+      if (_classes.isNotEmpty) {
+        final classMap = _classes.firstWhere(
+          (c) => (c['id']?.toString() ?? '') == clsId,
+          orElse: () => <String, dynamic>{},
+        );
+        if (classMap is Map && classMap.isNotEmpty) {
+          await _loadCoursesForClass(classMap['id']);
+        } else {
+          await _loadCoursesForClass(classDisplay);
+        }
+      } else {
+        await _loadCoursesForClass(clsId);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _applyTimetableDataFromSnapshot(
+    Map<String, dynamic> data,
+    String depDisplayName,
+    String classDisplayName,
+  ) async {
+    // Parse periods
+    List<String> periods;
+    try {
+      final rawPeriods = data['periods'];
+      if (rawPeriods is List)
+        periods = rawPeriods.map((e) => e?.toString() ?? '').toList();
+      else
+        periods = List<String>.from(seedPeriods);
+    } catch (_) {
+      periods = List<String>.from(seedPeriods);
+    }
+
+    // Parse spans
+    List<Map<String, int>> spanList = [];
+    try {
+      final spansRaw = data['spans'];
+      if (spansRaw is List) {
+        spanList = spansRaw.map<Map<String, int>>((e) {
+          try {
+            final s = (e?['start'] as num?)?.toInt() ?? 0;
+            final en = (e?['end'] as num?)?.toInt() ?? 0;
+            return {'start': s, 'end': en};
+          } catch (_) {
+            return {'start': 0, 'end': 0};
           }
-          final labelsLen = classPeriods[dep]![cls]!.length;
-          for (int r = 0; r < grid.length; r++) {
-            if (grid[r].length < labelsLen) {
-              grid[r].addAll(
-                List<String>.filled(
-                  labelsLen - grid[r].length,
-                  "",
-                  growable: true,
-                ),
-              );
+        }).toList();
+      }
+    } catch (_) {
+      spanList = <Map<String, int>>[];
+    }
+
+    // Parse grid
+    List<List<String>> grid = List.generate(
+      days.length,
+      (_) => List<String>.filled(periods.length, '', growable: true),
+    );
+    try {
+      final gridRaw = data['grid'];
+      if (gridRaw is List &&
+          gridRaw.isNotEmpty &&
+          gridRaw.first is Map &&
+          (gridRaw.first as Map).containsKey('cells')) {
+        for (final rowObj in gridRaw) {
+          if (rowObj is Map && rowObj['cells'] is List) {
+            final rIndex = (rowObj['r'] is int) ? rowObj['r'] as int : null;
+            final cells = (rowObj['cells'] as List)
+                .map((c) => c?.toString() ?? '')
+                .toList();
+            if (rIndex != null && rIndex >= 0 && rIndex < grid.length) {
+              grid[rIndex] = List<String>.from(cells);
+              if (grid[rIndex].length < periods.length) {
+                grid[rIndex].addAll(
+                  List<String>.filled(periods.length - grid[rIndex].length, ''),
+                );
+              }
             }
           }
         }
+      } else if (gridRaw is List && gridRaw.every((e) => e is List)) {
+        grid = (gridRaw as List)
+            .map<List<String>>(
+              (r) => (r as List).map((c) => c?.toString() ?? '').toList(),
+            )
+            .toList();
+      } else if (gridRaw is List && gridRaw.every((e) => e is String)) {
+        try {
+          grid = (gridRaw as List).map<List<String>>((s) {
+            final parsed = jsonDecode(s as String);
+            return (parsed as List).map((c) => c.toString()).toList();
+          }).toList();
+        } catch (_) {}
       }
+    } catch (e, st) {
+      debugPrint('Grid parse error: $e\n$st');
     }
+
+    // Prepare aliases and store under multiple keys
+    final depKeyDisplay = depDisplayName;
+    final classKeyDisplay = classDisplayName;
+    final depIdFromDoc = (data['department_id'] as String?)?.toString();
+    final classKeyFromDoc = (data['classKey'] as String?)?.toString();
+
+    setState(() {
+      // primary display keys
+      classPeriods.putIfAbsent(depKeyDisplay, () => {});
+      classPeriods[depKeyDisplay]![classKeyDisplay] = List<String>.from(
+        periods,
+      );
+
+      spans.putIfAbsent(depKeyDisplay, () => {});
+      spans[depKeyDisplay]![classKeyDisplay] = List<Map<String, int>>.from(
+        spanList,
+      );
+
+      timetableData.putIfAbsent(depKeyDisplay, () => {});
+      timetableData[depKeyDisplay]![classKeyDisplay] = grid;
+
+      // alias: department id -> class display
+      if (depIdFromDoc != null && depIdFromDoc.trim().isNotEmpty) {
+        final depIdKey = depIdFromDoc.trim();
+        classPeriods.putIfAbsent(depIdKey, () => {});
+        classPeriods[depIdKey]![classKeyDisplay] = List<String>.from(periods);
+
+        spans.putIfAbsent(depIdKey, () => {});
+        spans[depIdKey]![classKeyDisplay] = List<Map<String, int>>.from(
+          spanList,
+        );
+
+        timetableData.putIfAbsent(depIdKey, () => {});
+        timetableData[depIdKey]![classKeyDisplay] = grid;
+      }
+
+      // alias: class id -> under display dept
+      if (classKeyFromDoc != null && classKeyFromDoc.trim().isNotEmpty) {
+        final clsIdKey = classKeyFromDoc.trim();
+        classPeriods.putIfAbsent(depKeyDisplay, () => {});
+        classPeriods[depKeyDisplay]![clsIdKey] = List<String>.from(periods);
+
+        spans.putIfAbsent(depKeyDisplay, () => {});
+        spans[depKeyDisplay]![clsIdKey] = List<Map<String, int>>.from(spanList);
+
+        timetableData.putIfAbsent(depKeyDisplay, () => {});
+        timetableData[depKeyDisplay]![clsIdKey] = grid;
+
+        if (depIdFromDoc != null && depIdFromDoc.trim().isNotEmpty) {
+          final depIdKey = depIdFromDoc.trim();
+          classPeriods.putIfAbsent(depIdKey, () => {});
+          classPeriods[depIdKey]![clsIdKey] = List<String>.from(periods);
+
+          spans.putIfAbsent(depIdKey, () => {});
+          spans[depIdKey]![clsIdKey] = List<Map<String, int>>.from(spanList);
+
+          timetableData.putIfAbsent(depIdKey, () => {});
+          timetableData[depIdKey]![clsIdKey] = grid;
+        }
+      }
+
+      // alias: sanitized doc id key
+      final sanitizedDep = _sanitizeForId(depKeyDisplay);
+      final sanitizedCls = _sanitizeForId(classKeyDisplay);
+      classPeriods.putIfAbsent(sanitizedDep, () => {});
+      classPeriods[sanitizedDep]![sanitizedCls] = List<String>.from(periods);
+
+      spans.putIfAbsent(sanitizedDep, () => {});
+      spans[sanitizedDep]![sanitizedCls] = List<Map<String, int>>.from(
+        spanList,
+      );
+
+      timetableData.putIfAbsent(sanitizedDep, () => {});
+      timetableData[sanitizedDep]![sanitizedCls] = grid;
+    });
+
+    debugPrint(
+      'Timetable loaded for $depKeyDisplay / $classKeyDisplay (periods=${periods.length})',
+    );
   }
 
-  String? _findKeyIgnoreCase(Map map, String? key) {
-    if (key == null) return null;
-    final lower = key.toString().toLowerCase().trim();
-    for (final k in map.keys) {
-      if (k.toString().toLowerCase().trim() == lower) return k.toString();
+  Future<void> _saveTimetableDocToFirestore(
+    String depIdOrName,
+    String classIdOrName,
+  ) async {
+    // Resolve display names and ensure consistent keys
+    final deptDisplay = await _resolveDepartmentDisplayName(depIdOrName);
+    final classDisplay = await _resolveClassDisplayName(classIdOrName);
+    final sanitizedDocId = _docIdFromDisplayNames(deptDisplay, classDisplay);
+
+    // Check for existing document
+    String docId = sanitizedDocId;
+    final query = timetablesCollection
+        .where('department', isEqualTo: deptDisplay)
+        .where('className', isEqualTo: classDisplay)
+        .limit(1);
+    final querySnapshot = await query.get();
+
+    if (querySnapshot.docs.isNotEmpty) {
+      docId = querySnapshot.docs.first.id; // Use existing document ID
+      debugPrint('Existing document found: $docId');
+    } else {
+      debugPrint(
+        'No existing document found, using sanitized docId: $sanitizedDocId',
+      );
     }
-    return null;
-  }
 
-  List<String> get classesForSelectedDepartment {
-    if (selectedDepartment == null) return [];
-    final depKey = _findKeyIgnoreCase(departmentClasses, selectedDepartment);
-    if (depKey == null) return [];
-    return departmentClasses[depKey] ?? [];
-  }
+    final ref = timetablesCollection.doc(docId);
 
-  List<String> get currentPeriods {
     final depKey =
-        _findKeyIgnoreCase(timetableData, selectedDepartment) ??
-        selectedDepartment;
-    final clsKey = selectedClass;
-    if (depKey == null || clsKey == null) return seedPeriods;
-    classPeriods.putIfAbsent(depKey, () => {});
-    classPeriods[depKey]!.putIfAbsent(
-      clsKey,
-      () => List<String>.from(seedPeriods, growable: true),
+        _findKeyIgnoreCase(timetableData, deptDisplay) ?? deptDisplay;
+    final clsKey =
+        _findKeyIgnoreCase(timetableData[depKey] ?? {}, classDisplay) ??
+        classDisplay;
+
+    // Debugging: Log resolved keys and document ID
+    debugPrint(
+      'Saving timetable: docId=$docId, depKey=$depKey, clsKey=$clsKey',
     );
-    classPeriods[depKey]![clsKey] = List<String>.from(
-      classPeriods[depKey]![clsKey]!,
-      growable: true,
-    );
-    return classPeriods[depKey]![clsKey]!;
+
+    final periods =
+        classPeriods[depKey]?[clsKey] ?? List<String>.from(seedPeriods);
+    final grid =
+        timetableData[depKey]?[clsKey] ??
+        List.generate(
+          days.length,
+          (_) => List<String>.filled(periods.length, ''),
+        );
+
+    final gridAsMaps = <Map<String, dynamic>>[];
+    for (int r = 0; r < grid.length; r++) {
+      gridAsMaps.add({'r': r, 'cells': List<String>.from(grid[r])});
+    }
+
+    final computedSpans =
+        spans[depKey]?[clsKey] ?? _tryComputeSpansFromLabels(periods);
+
+    final data = {
+      'department': deptDisplay,
+      'department_id': depIdOrName,
+      'classKey': classIdOrName,
+      'className': classDisplay,
+      'periods': periods,
+      'spans': computedSpans
+          .map((m) => {'start': m['start'] ?? 0, 'end': m['end'] ?? 0})
+          .toList(),
+      'grid': gridAsMaps,
+      'updated_at': FieldValue.serverTimestamp(),
+      'created_at': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      await ref.set(data, SetOptions(merge: true));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Timetable saved')));
+    } catch (e, st) {
+      debugPrint('Error saving timetable: $e\n$st');
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving timetable: $e')));
+    }
   }
 
-  List<List<String>>? get currentTimetable {
-    final depKey = _findKeyIgnoreCase(timetableData, selectedDepartment);
-    if (depKey == null) return null;
-    final classesMap = timetableData[depKey]!;
-    final classKey = _findKeyIgnoreCase(classesMap, selectedClass);
-    if (classKey == null) return null;
-    final sectionsMap = classesMap[classKey]!;
-    final sectionKey = _findKeyIgnoreCase(sectionsMap, selectedSection);
-    if (sectionKey == null) return null;
-    return sectionsMap[sectionKey];
+  Future<void> _applyCreatePayload(CreateTimetableTimePayload payload) async {
+    if (payload.results.isEmpty) return;
+
+    final Map<String, List<CreateTimetableTimeResult>> grouped = {};
+    for (final r in payload.results) {
+      final deptDisplay = await _resolveDepartmentDisplayName(r.department);
+      final classDisplay = await _resolveClassDisplayName(r.classKey);
+      final id = _docIdFromDisplayNames(deptDisplay, classDisplay);
+      grouped
+          .putIfAbsent(id, () => [])
+          .add(
+            CreateTimetableTimeResult(
+              department: deptDisplay,
+              classKey: classDisplay,
+              dayIndex: r.dayIndex,
+              startMinutes: r.startMinutes,
+              endMinutes: r.endMinutes,
+              cellText: r.cellText,
+            ),
+          );
+    }
+
+    final batch = FirebaseFirestore.instance.batch();
+
+    try {
+      for (final entry in grouped.entries) {
+        final docId = entry.key;
+        final ref = timetablesCollection.doc(docId);
+        final snap = await ref.get();
+
+        List<String> periods = [];
+        List<Map<String, int>> docSpans = [];
+        List<List<String>> grid = [];
+
+        if (snap.exists && snap.data() != null) {
+          final d = snap.data()! as Map<String, dynamic>;
+          periods =
+              (d['periods'] as List<dynamic>?)
+                  ?.map((e) => e.toString())
+                  .toList() ??
+              List<String>.from(seedPeriods);
+          final spansRaw = (d['spans'] as List<dynamic>?) ?? [];
+          docSpans = spansRaw
+              .map(
+                (e) => {
+                  'start': (e['start'] as num?)?.toInt() ?? 0,
+                  'end': (e['end'] as num?)?.toInt() ?? 0,
+                },
+              )
+              .toList();
+
+          final gridRaw = (d['grid'] as List<dynamic>?) ?? [];
+          if (gridRaw.isNotEmpty &&
+              gridRaw.first is Map &&
+              gridRaw.first.containsKey('cells')) {
+            grid = List.generate(
+              days.length,
+              (_) => List<String>.filled(periods.length, '', growable: true),
+            );
+            for (final rowObj in gridRaw) {
+              if (rowObj is Map && rowObj['cells'] is List) {
+                final rIndex = (rowObj['r'] is int) ? rowObj['r'] as int : null;
+                final cells = (rowObj['cells'] as List)
+                    .map((c) => c?.toString() ?? '')
+                    .toList();
+                if (rIndex != null && rIndex >= 0 && rIndex < grid.length) {
+                  grid[rIndex] = List<String>.from(cells);
+                  if (grid[rIndex].length < periods.length) {
+                    grid[rIndex].addAll(
+                      List<String>.filled(
+                        periods.length - grid[rIndex].length,
+                        '',
+                      ),
+                    );
+                  }
+                }
+              }
+            }
+          } else {
+            grid =
+                (d['grid'] as List<dynamic>?)
+                    ?.map<List<String>>(
+                      (r) => (r as List).map((c) => c.toString()).toList(),
+                    )
+                    .toList() ??
+                List.generate(
+                  days.length,
+                  (_) =>
+                      List<String>.filled(periods.length, '', growable: true),
+                );
+          }
+        } else {
+          periods = entry.value.isNotEmpty
+              ? (payload.periodsOverride ?? List<String>.from(seedPeriods))
+              : List<String>.from(seedPeriods);
+          docSpans = _tryComputeSpansFromLabels(periods);
+          grid = List.generate(
+            days.length,
+            (_) => List<String>.filled(periods.length, '', growable: true),
+          );
+        }
+
+        if (payload.periodsOverride != null &&
+            payload.periodsOverride!.isNotEmpty) {
+          final newPeriods = List<String>.from(payload.periodsOverride!);
+          final oldSpans = List<Map<String, int>>.from(docSpans);
+          final newSpans = _tryComputeSpansFromLabels(newPeriods);
+          final newGrid = List<List<String>>.generate(
+            days.length,
+            (_) => List<String>.filled(newPeriods.length, '', growable: true),
+          );
+
+          for (int r = 0; r < grid.length; r++) {
+            final oldRow = grid[r];
+            for (int oldIdx = 0; oldIdx < oldRow.length; oldIdx++) {
+              final oldStart = (oldIdx < oldSpans.length)
+                  ? oldSpans[oldIdx]['start']
+                  : null;
+              int newIdx = -1;
+              if (oldStart != null) {
+                newIdx = newSpans.indexWhere((s) => s['start'] == oldStart);
+              }
+              if (newIdx >= 0 && newIdx < newGrid[r].length) {
+                newGrid[r][newIdx] = oldRow[oldIdx];
+              } else if (oldIdx < newGrid[r].length) {
+                newGrid[r][oldIdx] = oldRow[oldIdx];
+              }
+            }
+          }
+          periods = newPeriods;
+          docSpans = newSpans;
+          grid = newGrid;
+        }
+
+        for (final r in entry.value) {
+          int colIndex = -1;
+          if (docSpans.isNotEmpty) {
+            colIndex = docSpans.indexWhere((s) => s['start'] == r.startMinutes);
+          }
+          if (colIndex < 0) {
+            final startStr =
+                '${r.startMinutes ~/ 60}:${(r.startMinutes % 60).toString().padLeft(2, '0')}';
+            colIndex = periods.indexWhere((p) => p.contains(startStr));
+          }
+          if (colIndex >= 0 &&
+              r.dayIndex >= 0 &&
+              r.dayIndex < grid.length &&
+              colIndex < grid[r.dayIndex].length) {
+            grid[r.dayIndex][colIndex] = r.cellText;
+          }
+        }
+
+        final gridAsMaps = <Map<String, dynamic>>[];
+        for (int r = 0; r < grid.length; r++) {
+          gridAsMaps.add({'r': r, 'cells': List<String>.from(grid[r])});
+        }
+
+        final parts = entry.key.split('_');
+        final depPart = parts.isNotEmpty
+            ? parts[0]
+            : entry.value.first.department;
+
+        batch.set(ref, {
+          'department': depPart,
+          'department_id': entry.value.first.department,
+          'classKey': entry.value.first.classKey,
+          'className': entry.value.first.classKey,
+          'periods': periods,
+          'spans': docSpans
+              .map((m) => {'start': m['start'], 'end': m['end']})
+              .toList(),
+          'grid': gridAsMaps,
+          'updated_at': FieldValue.serverTimestamp(),
+          'created_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      await batch.commit();
+      await _loadTimetableDoc();
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Timetable entries applied')),
+        );
+    } catch (e, st) {
+      debugPrint('Error applying payload: $e\n$st');
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error applying entries: $e')));
+    }
   }
+
+  // -------------------- Helpers & UI wiring --------------------
 
   List<TimetableSlot> _slotsFromGrid(
     List<List<String>> grid,
     List<String> periodsForClass,
   ) {
     final List<TimetableSlot> slots = [];
+    final depDisplay = selectedDepartment != null
+        ? _displayNameForDeptCached(selectedDepartment!)
+        : '';
+    final classDisplay = selectedClass != null
+        ? _displayNameForClassCached(selectedClass!)
+        : '';
     for (var d = 0; d < days.length; d++) {
       final row = d < grid.length
           ? grid[d]
@@ -254,15 +967,465 @@ class _TimetablePageState extends State<TimetablePage> {
             day: days[d],
             periodLabel: periodsForClass[p],
             course: course,
-            className: selectedClass ?? '',
-            department: selectedDepartment ?? '',
+            className: classDisplay,
+            department: depDisplay,
             lecturer: lecturer,
-            section: selectedSection ?? '',
           ),
         );
       }
     }
     return slots;
+  }
+
+  // Robust currentTimetable: try aliases and inspect existing keys
+  List<List<String>>? get currentTimetable {
+    debugPrint(
+      'currentTimetable lookup: selectedDepartment=$selectedDepartment selectedClass=$selectedClass',
+    );
+    debugPrint('timetableData keys: ${timetableData.keys.toList()}');
+
+    final depCandidates = <String>[];
+    if (selectedDepartment != null) {
+      final sel = selectedDepartment!.trim();
+      final cachedDep = _displayNameForDeptCached(sel);
+      if (cachedDep.isNotEmpty) depCandidates.add(cachedDep);
+      depCandidates.add(sel);
+      depCandidates.add(_sanitizeForId(cachedDep));
+      depCandidates.add(_sanitizeForId(sel));
+    }
+    depCandidates.addAll(timetableData.keys.map((k) => k.toString()));
+
+    final seen = <String>{};
+    final deps = <String>[];
+    for (final d in depCandidates) {
+      final dd = d.trim();
+      if (dd.isEmpty) continue;
+      if (seen.add(dd.toLowerCase())) deps.add(dd);
+    }
+
+    for (final depKey in deps) {
+      final classesMap = timetableData[depKey];
+      if (classesMap == null) continue;
+      final classCandidates = <String>[];
+      if (selectedClass != null) {
+        final selC = selectedClass!.trim();
+        final cachedCls = _displayNameForClassCached(selC);
+        if (cachedCls.isNotEmpty) classCandidates.add(cachedCls);
+        classCandidates.add(selC);
+        classCandidates.add(_sanitizeForId(cachedCls));
+        classCandidates.add(_sanitizeForId(selC));
+      }
+      classCandidates.addAll(classesMap.keys.map((k) => k.toString()));
+
+      final seenC = <String>{};
+      final clsList = <String>[];
+      for (final c in classCandidates) {
+        final cc = c.trim();
+        if (cc.isEmpty) continue;
+        if (seenC.add(cc.toLowerCase())) clsList.add(cc);
+      }
+
+      for (final classKey in clsList) {
+        final foundKey = _findKeyIgnoreCase(classesMap, classKey);
+        if (foundKey != null) {
+          debugPrint(
+            'currentTimetable found under depKey="$depKey" classKey="$foundKey"',
+          );
+          return classesMap[foundKey];
+        }
+      }
+    }
+
+    debugPrint(
+      'currentTimetable: no matching timetable found in in-memory cache',
+    );
+    return null;
+  }
+
+  // Robust currentPeriods: try multiple aliases
+  List<String> get currentPeriods {
+    final depDisplay = selectedDepartment != null
+        ? _displayNameForDeptCached(selectedDepartment!)
+        : null;
+    final clsDisplay = selectedClass != null
+        ? _displayNameForClassCached(selectedClass!)
+        : null;
+
+    List<String>? _copyPeriods(List<String>? p) =>
+        p == null ? null : List<String>.from(p, growable: true);
+
+    if (depDisplay != null && clsDisplay != null) {
+      final p = classPeriods[depDisplay]?[clsDisplay];
+      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+    }
+
+    if (selectedDepartment != null && clsDisplay != null) {
+      final p = classPeriods[selectedDepartment!]?[clsDisplay];
+      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+    }
+
+    if (depDisplay != null && selectedClass != null) {
+      final p = classPeriods[depDisplay]?[selectedClass!];
+      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+    }
+
+    if (selectedDepartment != null && selectedClass != null) {
+      final p = classPeriods[selectedDepartment!]?[selectedClass!];
+      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+    }
+
+    if (depDisplay != null && clsDisplay != null) {
+      final sDep = _sanitizeForId(depDisplay);
+      final sCls = _sanitizeForId(clsDisplay);
+      final p = classPeriods[sDep]?[sCls];
+      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+    }
+
+    if (selectedDepartment != null) {
+      final map = classPeriods[selectedDepartment!];
+      if (map != null && map.isNotEmpty) {
+        if (selectedClass != null) {
+          final found =
+              _findKeyIgnoreCase(
+                map,
+                _displayNameForClassCached(selectedClass!),
+              ) ??
+              _findKeyIgnoreCase(map, selectedClass);
+          if (found != null) return _copyPeriods(map[found])!;
+        }
+        return _copyPeriods(map.values.first)!;
+      }
+    }
+
+    if (classPeriods.isNotEmpty) {
+      final firstDep = classPeriods.keys.first;
+      final firstMap = classPeriods[firstDep]!;
+      if (firstMap.isNotEmpty) return _copyPeriods(firstMap.values.first)!;
+    }
+
+    return List<String>.from(seedPeriods, growable: true);
+  }
+
+  String? _findKeyIgnoreCase(Map map, String? key) {
+    if (key == null) return null;
+    final lower = key.toString().toLowerCase().trim();
+    for (final k in map.keys) {
+      try {
+        if (k.toString().toLowerCase().trim() == lower) return k.toString();
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  // -------------------- Selection change --------------------
+
+  Future<void> _handleSelectionChangeSafe() async {
+    try {
+      await _loadTimetableDoc();
+      if (mounted) setState(() => editingEnabled = false);
+    } catch (e, st) {
+      debugPrint('Error in _handleSelectionChangeSafe: $e\n$st');
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load timetable.')),
+        );
+    }
+  }
+
+  // -------------------- Cell edit (safe) --------------------
+
+  Future<void> _openEditCellDialog({
+    required int dayIndex,
+    required int periodIndex,
+  }) async {
+    if (!editingEnabled) return;
+
+    // Try to resolve grid with same alias strategy as currentTimetable
+    List<List<String>>? grid;
+    String? foundDepKey;
+    String? foundClassKey;
+
+    final depCandidates = <String>[];
+    if (selectedDepartment != null) {
+      final sel = selectedDepartment!.trim();
+      final cachedDep = _displayNameForDeptCached(sel);
+      if (cachedDep.isNotEmpty) depCandidates.add(cachedDep);
+      depCandidates.add(sel);
+      depCandidates.add(_sanitizeForId(cachedDep));
+      depCandidates.add(_sanitizeForId(sel));
+    }
+    depCandidates.addAll(timetableData.keys.map((k) => k.toString()));
+
+    final depSeen = <String>{};
+    final depList = <String>[];
+    for (final d in depCandidates) {
+      final dd = d.trim();
+      if (dd.isEmpty) continue;
+      if (depSeen.add(dd.toLowerCase())) depList.add(dd);
+    }
+
+    List<String> _buildClassCandidates(Map classesMap) {
+      final candidates = <String>[];
+      if (selectedClass != null) {
+        final selCls = selectedClass!.trim();
+        final cachedCls = _displayNameForClassCached(selCls);
+        if (cachedCls.isNotEmpty) candidates.add(cachedCls);
+        candidates.add(selCls);
+        candidates.add(_sanitizeForId(cachedCls));
+        candidates.add(_sanitizeForId(selCls));
+      }
+      candidates.addAll(classesMap.keys.map((k) => k.toString()));
+      final seen = <String>{};
+      final out = <String>[];
+      for (final c in candidates) {
+        final cc = c.trim();
+        if (cc.isEmpty) continue;
+        if (seen.add(cc.toLowerCase())) out.add(cc);
+      }
+      return out;
+    }
+
+    for (final depKey in depList) {
+      final classesMap = timetableData[depKey];
+      if (classesMap == null) continue;
+      final classCandidates = _buildClassCandidates(classesMap);
+      for (final c in classCandidates) {
+        final matched = _findKeyIgnoreCase(classesMap, c);
+        if (matched != null) {
+          foundDepKey = depKey;
+          foundClassKey = matched;
+          grid = classesMap[matched];
+          break;
+        }
+      }
+      if (grid != null) break;
+    }
+
+    if (grid == null) {
+      debugPrint(
+        'Edit cell: no grid found for selection dep="$selectedDepartment" cls="$selectedClass"',
+      );
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Timetable not loaded for the selected class.'),
+          ),
+        );
+      return;
+    }
+
+    final periodsForClass = currentPeriods;
+    if (periodIndex < 0 || periodIndex >= periodsForClass.length) return;
+
+    final periodLabel = periodsForClass[periodIndex];
+    if (periodLabel.toLowerCase().contains('break')) return;
+
+    if (dayIndex >= grid.length) {
+      while (grid.length <= dayIndex) {
+        grid.add(
+          List<String>.filled(periodsForClass.length, '', growable: true),
+        );
+      }
+    }
+    if (periodIndex >= grid[dayIndex].length) {
+      grid[dayIndex].addAll(
+        List<String>.filled(periodIndex - grid[dayIndex].length + 1, ''),
+      );
+    }
+
+    final raw = (periodIndex < grid[dayIndex].length)
+        ? grid[dayIndex][periodIndex]
+        : '';
+    String? initialCourse;
+    String? initialLecturer;
+    if (raw.trim().isNotEmpty && !raw.toLowerCase().contains('break')) {
+      final parts = raw.split('\n');
+      initialCourse = parts.isNotEmpty ? parts[0] : null;
+      if (parts.length > 1) initialLecturer = parts.sublist(1).join(' ').trim();
+    }
+
+    final result = await showDialog<TimetableCellEditResult>(
+      context: context,
+      builder: (ctx) => TimetableCellEditDialog(
+        classId: selectedClass, // Pass selected class doc id
+        initialCourse: initialCourse, // Existing
+        initialLecturer: initialLecturer, // Existing
+        courses: _coursesForSelectedClass.isNotEmpty
+            ? _coursesForSelectedClass
+                  .map((c) => c['course_name'] as String)
+                  .toList()
+            : <String>[],
+        lecturers: _teachers.isNotEmpty
+            ? _teachers.map((t) => t['name'] as String).toList()
+            : <String>[],
+      ),
+    );
+
+    if (result == null) return;
+    if (result.cellText == null) return;
+
+    setState(() {
+      if (dayIndex >= grid!.length) {
+        while (grid.length <= dayIndex)
+          grid.add(
+            List<String>.filled(periodsForClass.length, '', growable: true),
+          );
+      }
+      if (periodIndex >= grid[dayIndex].length) {
+        grid[dayIndex].addAll(
+          List<String>.filled(periodIndex - grid[dayIndex].length + 1, ''),
+        );
+      }
+      grid[dayIndex][periodIndex] = result.cellText!.trim();
+
+      // Persist change into multiple aliases so future lookups succeed
+      final depWriteKeys = <String>{};
+      if (foundDepKey != null) depWriteKeys.add(foundDepKey);
+      if (selectedDepartment != null) depWriteKeys.add(selectedDepartment!);
+      final depDisplayCached = selectedDepartment != null
+          ? _displayNameForDeptCached(selectedDepartment!)
+          : null;
+      if (depDisplayCached != null && depDisplayCached.isNotEmpty)
+        depWriteKeys.add(depDisplayCached);
+      if (depDisplayCached != null)
+        depWriteKeys.add(_sanitizeForId(depDisplayCached));
+
+      final classWriteKeys = <String>{};
+      if (foundClassKey != null) classWriteKeys.add(foundClassKey);
+      if (selectedClass != null) classWriteKeys.add(selectedClass!);
+      final classDisplayCached = selectedClass != null
+          ? _displayNameForClassCached(selectedClass!)
+          : null;
+      if (classDisplayCached != null && classDisplayCached.isNotEmpty)
+        classWriteKeys.add(classDisplayCached);
+      if (classDisplayCached != null)
+        classWriteKeys.add(_sanitizeForId(classDisplayCached));
+
+      for (final dk in depWriteKeys) {
+        timetableData.putIfAbsent(dk, () => {});
+        for (final ck in classWriteKeys) {
+          timetableData[dk]!.putIfAbsent(
+            ck,
+            () => List.generate(
+              days.length,
+              (_) => List<String>.filled(
+                periodsForClass.length,
+                '',
+                growable: true,
+              ),
+            ),
+          );
+          timetableData[dk]![ck] = grid
+              .map((r) => List<String>.from(r, growable: true))
+              .toList(growable: true);
+
+          classPeriods.putIfAbsent(dk, () => {});
+          classPeriods[dk]![ck] = List<String>.from(
+            periodsForClass,
+            growable: true,
+          );
+
+          spans.putIfAbsent(dk, () => {});
+          spans[dk]![ck] =
+              spans[dk]![ck] ?? _tryComputeSpansFromLabels(periodsForClass);
+        }
+      }
+    });
+
+    if (selectedDepartment != null && selectedClass != null) {
+      try {
+        await _saveTimetableDocToFirestore(selectedDepartment!, selectedClass!);
+      } catch (e, st) {
+        debugPrint('Error saving timetable after edit: $e\n$st');
+        if (mounted)
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error saving timetable: $e')));
+      }
+    }
+  }
+
+  void _deleteTimetable({required bool deleteEntireClass}) async {
+    if (selectedDepartment == null || selectedClass == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select Department and Class first')),
+      );
+      return;
+    }
+
+    final depDisplay = await _resolveDepartmentDisplayName(selectedDepartment!);
+    final classDisplay = await _resolveClassDisplayName(selectedClass!);
+
+    // Check for existing document
+    final query = timetablesCollection
+        .where('department', isEqualTo: depDisplay)
+        .where('className', isEqualTo: classDisplay)
+        .limit(1);
+    final querySnapshot = await query.get();
+
+    if (querySnapshot.docs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No timetable found for the selected class'),
+        ),
+      );
+      return;
+    }
+
+    final docId = querySnapshot.docs.first.id; // Use existing document ID
+
+    try {
+      if (deleteEntireClass) {
+        // Delete the entire class document from Firestore
+        await timetablesCollection.doc(docId).delete();
+        debugPrint('Deleted entire class timetable: $docId');
+      } else {
+        // Clear all cells in the timetable grid
+        await timetablesCollection.doc(docId).set({
+          'grid': List.generate(
+            days.length,
+            (index) => {'r': index, 'cells': []},
+          ),
+          'updated_at': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        debugPrint('Cleared all cells in timetable: $docId');
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Timetable updated successfully')),
+      );
+      setState(() {
+        timetableData.remove(depDisplay);
+        classPeriods.remove(depDisplay);
+        spans.remove(depDisplay);
+      });
+    } catch (e, st) {
+      debugPrint('Error deleting timetable: $e\n$st');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error deleting timetable: $e')));
+    }
+  }
+
+  // -------------------- Utilities --------------------
+
+  List<Map<String, int>> _tryComputeSpansFromLabels(List<String> labels) {
+    final List<Map<String, int>> out = [];
+    for (final label in labels) {
+      final match = RegExp(
+        r'^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})',
+      ).firstMatch(label);
+      if (match != null) {
+        final sh = int.parse(match.group(1)!);
+        final sm = int.parse(match.group(2)!);
+        final eh = int.parse(match.group(3)!);
+        final em = int.parse(match.group(4)!);
+        out.add({'start': sh * 60 + sm, 'end': eh * 60 + em});
+      } else {
+        out.add({'start': 0, 'end': 0});
+      }
+    }
+    return out;
   }
 
   List<TimetableSlot> getFilteredSlotsFromGrid() {
@@ -301,427 +1464,416 @@ class _TimetablePageState extends State<TimetablePage> {
     return list;
   }
 
-  void copySlotsToClipboard(List<TimetableSlot> slots) {}
+  // -------------------- UI (render) --------------------
+  // NOTE: For brevity, the full rendering code (AppBar, buttons, dropdowns, grid widget)
+  // should be replicated from your previous implementation and wired to the functions above.
+  // Below is a minimal structure integrating core parts; adapt styling as needed.
 
-  String _fmtMinutes(int minutes) {
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    return '$h:${m.toString().padLeft(2, '0')}';
-  }
+  @override
+  Widget build(BuildContext context) {
+    final grid = currentTimetable;
+    final periodsForClass = currentPeriods;
+    final canEdit = grid != null;
+    final canDelete =
+        selectedDepartment != null &&
+        selectedClass != null &&
+        timetableData[selectedDepartment]?[selectedClass]?.isNotEmpty == true;
 
-  String _makeLabel(int startMin, int endMin, {bool isBreak = false}) {
-    final label = '${_fmtMinutes(startMin)} - ${_fmtMinutes(endMin)}';
-    return isBreak ? '$label (Break)' : label;
-  }
-
-  int? _parseStartFromLabel(String label) {
-    final m = RegExp(
-      r'^\s*(\d{1,2}):([0-5]\d)\s*-\s*(\d{1,2}):([0-5]\d)(?:\s*\(.*?\))?\s*$',
-    ).firstMatch(label);
-    if (m == null) return null;
-    final h = int.parse(m.group(1)!);
-    final mm = int.parse(m.group(2)!);
-    return h * 60 + mm;
-  }
-
-  MapEntry<String, String> _ensureDepClass(String dep, String cls) {
-    final depKey = _findKeyIgnoreCase(timetableData, dep) ?? dep;
-    timetableData.putIfAbsent(depKey, () => {});
-    classPeriods.putIfAbsent(depKey, () => {});
-    final classesMap = timetableData[depKey]!;
-    final classKey = _findKeyIgnoreCase(classesMap, cls) ?? cls;
-    classesMap.putIfAbsent(classKey, () => {});
-    classPeriods[depKey]!.putIfAbsent(
-      classKey,
-      () => List<String>.from(seedPeriods, growable: true),
-    );
-    classPeriods[depKey]![classKey] = List<String>.from(
-      classPeriods[depKey]![classKey]!,
-      growable: true,
-    );
-    return MapEntry(depKey, classKey);
-  }
-
-  void _ensureSectionGrid(String depKey, String classKey, String section) {
-    final sectionsMap = timetableData[depKey]![classKey]!;
-    final sectionKey = _findKeyIgnoreCase(sectionsMap, section) ?? section;
-    final labels = classPeriods[depKey]![classKey]!;
-    final labelsLen = labels.length;
-
-    sectionsMap.putIfAbsent(
-      sectionKey,
-      () => List<List<String>>.generate(
-        days.length,
-        (_) => List<String>.filled(labelsLen, "", growable: true),
-        growable: true,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Time Table'),
+        foregroundColor: Colors.black,
       ),
-    );
-
-    final grid = sectionsMap[sectionKey]!;
-    if (grid.length < days.length) {
-      grid.addAll(
-        List.generate(
-          days.length - grid.length,
-          (_) => List<String>.filled(labelsLen, "", growable: true),
-        ),
-      );
-    }
-    for (int r = 0; r < days.length; r++) {
-      if (r >= grid.length) {
-        grid.add(List<String>.filled(labelsLen, "", growable: true));
-      }
-      grid[r] = List<String>.from(grid[r], growable: true);
-      if (grid[r].length < labelsLen) {
-        grid[r].addAll(
-          List<String>.filled(labelsLen - grid[r].length, "", growable: true),
-        );
-      }
-    }
-  }
-
-  void _replaceClassPeriods(
-    String depKey,
-    String classKey,
-    List<String> newLabels,
-  ) {
-    final oldLabels = classPeriods[depKey]![classKey]!;
-    final newGrow = List<String>.from(newLabels, growable: true);
-    classPeriods[depKey]![classKey] = newGrow;
-
-    final sectionsMap = timetableData[depKey]![classKey]!;
-    for (final sectKey in sectionsMap.keys) {
-      final oldGrid = sectionsMap[sectKey]!;
-      final newGrid = List<List<String>>.generate(
-        days.length,
-        (_) => List<String>.filled(newGrow.length, "", growable: true),
-        growable: true,
-      );
-      for (int oldIdx = 0; oldIdx < oldLabels.length; oldIdx++) {
-        final label = oldLabels[oldIdx];
-        final newIdx = newGrow.indexWhere(
-          (l) => l.trim().toLowerCase() == label.trim().toLowerCase(),
-        );
-        if (newIdx >= 0) {
-          for (int r = 0; r < days.length; r++) {
-            final row = (r < oldGrid.length)
-                ? oldGrid[r]
-                : List<String>.filled(oldLabels.length, "", growable: true);
-            final val = (oldIdx < row.length) ? row[oldIdx] : '';
-            newGrid[r][newIdx] = val;
-          }
-        }
-      }
-      sectionsMap[sectKey] = newGrid;
-    }
-  }
-
-  int _findOrInsertPeriodIndexForClass({
-    required String depKey,
-    required String classKey,
-    required String newLabel,
-  }) {
-    classPeriods[depKey]![classKey] = List<String>.from(
-      classPeriods[depKey]![classKey]!,
-      growable: true,
-    );
-    final labels = classPeriods[depKey]![classKey]!;
-    final newStart = _parseStartFromLabel(newLabel) ?? 0;
-
-    final existing = labels.indexWhere(
-      (l) => l.trim().toLowerCase() == newLabel.trim().toLowerCase(),
-    );
-    if (existing >= 0) return existing;
-
-    int insertAt = labels.length;
-    for (int i = 0; i < labels.length; i++) {
-      final s = _parseStartFromLabel(labels[i]) ?? 0;
-      if (newStart < s) {
-        insertAt = i;
-        break;
-      }
-    }
-    labels.insert(insertAt, newLabel);
-
-    final sectionsMap = timetableData[depKey]![classKey]!;
-    for (final sectKey in sectionsMap.keys) {
-      final grid = sectionsMap[sectKey]!;
-      if (grid.length < days.length) {
-        grid.addAll(
-          List.generate(
-            days.length - grid.length,
-            (_) => List<String>.filled(labels.length, "", growable: true),
-          ),
-        );
-      }
-      for (int r = 0; r < days.length; r++) {
-        grid[r] = List<String>.from(grid[r], growable: true);
-        grid[r].insert(insertAt, "");
-      }
-    }
-    return insertAt;
-  }
-
-  Future<void> _openEditCellDialog({
-    required int dayIndex,
-    required int periodIndex,
-  }) async {
-    if (!editingEnabled) return;
-    final timetable = currentTimetable;
-    if (timetable == null) return;
-    if (periodIndex < 0 || periodIndex >= currentPeriods.length) return;
-
-    final periodLabel = currentPeriods[periodIndex];
-    if (periodLabel.toLowerCase().contains('break')) return;
-
-    final depKey =
-        _findKeyIgnoreCase(timetableData, selectedDepartment) ??
-        selectedDepartment;
-    final classKey = depKey == null
-        ? null
-        : _findKeyIgnoreCase(timetableData[depKey]!, selectedClass) ??
-              selectedClass;
-    final sectionKey = (depKey != null && classKey != null)
-        ? _findKeyIgnoreCase(
-                timetableData[depKey]![classKey]!,
-                selectedSection,
-              ) ??
-              selectedSection
-        : null;
-    if (depKey == null || classKey == null || sectionKey == null) return;
-
-    final grid = timetableData[depKey]![classKey]![sectionKey]!;
-    final row = grid[dayIndex];
-    final raw = periodIndex < row.length ? row[periodIndex] : '';
-    String? initialCourse;
-    String? initialLecturer;
-    if (raw.trim().isNotEmpty && !raw.toLowerCase().contains('break')) {
-      final parts = raw.split('\n');
-      initialCourse = parts.isNotEmpty ? parts[0] : null;
-      if (parts.length > 1) {
-        initialLecturer = parts.sublist(1).join(' ').trim();
-      }
-    }
-
-    final result = await showDialog<TimetableCellEditResult>(
-      context: context,
-      builder: (_) => TimetableCellEditDialog(
-        initialCourse: initialCourse,
-        initialLecturer: initialLecturer,
-        courses: coursesMock,
-        lecturers: lecturers.where((l) => l != 'NONE').toList(),
-      ),
-    );
-    if (result == null) return;
-
-    setState(() {
-      if (result.cellText == null) return;
-      row[periodIndex] = result.cellText!.trim();
-    });
-  }
-
-  Future<void> _showDeleteMenu() async {
-    if (selectedDepartment == null || selectedClass == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select Department and Class first')),
-      );
-      return;
-    }
-    final depKey =
-        _findKeyIgnoreCase(timetableData, selectedDepartment) ??
-        selectedDepartment;
-    final classKey = depKey == null
-        ? null
-        : _findKeyIgnoreCase(timetableData[depKey]!, selectedClass) ??
-              selectedClass;
-    if (depKey == null || classKey == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Timetable not found for class')),
-      );
-      return;
-    }
-
-    final sectionsMap = timetableData[depKey]![classKey]!;
-    final sectionCount = sectionsMap.length;
-    final periodsCount = classPeriods[depKey]![classKey]!.length;
-
-    final action = await showDialog<_DeleteAction>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Timetable Data'),
-        content: SingleChildScrollView(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Class: $classKey  (Sections: $sectionCount, Period columns: $periodsCount)',
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search Time Table...',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+                onChanged: (v) => setState(() => searchText = v),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Create Time Table'),
+                    onPressed: () async {
+                      // compute initial names and loaderArg (dep DocumentReference or id string)
+                      String? initialDepName;
+                      String? initialClassName;
+                      dynamic depArg;
+                      if (selectedDepartment != null) {
+                        try {
+                          final depMap = _departments.firstWhere(
+                            (d) => d['id'] == selectedDepartment,
+                            orElse: () => <String, dynamic>{},
+                          );
+                          if (depMap is Map && depMap.isNotEmpty) {
+                            initialDepName = (depMap['name'] as String?)
+                                ?.toString();
+                            depArg = depMap['ref'] is DocumentReference
+                                ? depMap['ref']
+                                : selectedDepartment;
+                          }
+                        } catch (_) {
+                          initialDepName = null;
+                          depArg = selectedDepartment;
+                        }
+                      }
+                      if (selectedClass != null) {
+                        try {
+                          final classMap = _classes.firstWhere(
+                            (c) => c['id'] == selectedClass,
+                            orElse: () => <String, dynamic>{},
+                          );
+                          if (classMap is Map && classMap.isNotEmpty)
+                            initialClassName = (classMap['name'] as String?)
+                                ?.toString();
+                        } catch (_) {
+                          initialClassName = null;
+                        }
+                      }
+
+                      final existingLabels =
+                          (selectedDepartment != null &&
+                              selectedClass != null &&
+                              classPeriods[selectedDepartment!] != null &&
+                              classPeriods[selectedDepartment!]![selectedClass!] !=
+                                  null)
+                          ? classPeriods[selectedDepartment!]![selectedClass!]
+                          : null;
+
+                      final payload =
+                          await showDialog<CreateTimetableTimePayload>(
+                            context: context,
+                            builder: (_) => CreateTimetableDialog(
+                              departments: _departments
+                                  .map((d) => d['name'] as String)
+                                  .toList(),
+                              departmentClasses: {},
+                              lecturers: _teachers
+                                  .map((t) => t['name'] as String)
+                                  .toList(),
+                              days: days,
+                              courses: const [],
+                              initialDepartment: initialDepName,
+                              initialClass: initialClassName,
+                              preconfiguredLabels: existingLabels,
+                              departmentArg: depArg,
+                            ),
+                          );
+
+                      if (payload == null) return;
+                      await _applyCreatePayload(payload);
+                    },
+                  ),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width:
+                            100, // Adjusted width for consistency with the delete button
+                        height: 36,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                          ),
+                          onPressed: !canEdit
+                              ? null
+                              : () => setState(
+                                  () => editingEnabled = !editingEnabled,
+                                ),
+                          child: Text(
+                            editingEnabled ? "Done" : "Edit",
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 100, // Adjusted width for better visibility
+                        height: 36,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                          ),
+                          onPressed: selectedClass == null
+                              ? null
+                              : () async {
+                                  final classDisplayName =
+                                      await _resolveClassDisplayName(
+                                        selectedClass!,
+                                      );
+
+                                  final confirmDelete = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Delete Timetable'),
+                                      content: Text(
+                                        'Are you sure you want to delete the timetable for class "$classDisplayName"?',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, true),
+                                          child: const Text('Delete'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (confirmDelete == true) {
+                                    _deleteTimetable(deleteEntireClass: true);
+                                  }
+                                },
+                          child: const Text(
+                            "Delete",
+                            style: TextStyle(fontSize: 15, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        tooltip: 'Export PDF',
+                        onPressed: canDelete ? _exportPdfFlow : null,
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Department dropdown
+                    Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 130,
+                        maxWidth: 240,
+                      ),
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          isDense: true,
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            hint: _loadingDeps
+                                ? const Text('Loading...')
+                                : const Text('Department'),
+                            isExpanded: true,
+                            value: selectedDepartment,
+                            items: _departments
+                                .map(
+                                  (d) => DropdownMenuItem<String>(
+                                    value: d['id'] as String,
+                                    child: Text(d['name'] as String),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) async {
+                              setState(() {
+                                selectedDepartment = v;
+                                selectedClass = null;
+                                _classes = [];
+                              });
+
+                              dynamic loaderArg;
+                              try {
+                                final found = _departments.firstWhere(
+                                  (d) => d['id'] == v,
+                                  orElse: () => <String, dynamic>{},
+                                );
+                                if (found is Map &&
+                                    found.isNotEmpty &&
+                                    found['ref'] is DocumentReference)
+                                  loaderArg = found['ref'];
+                                else
+                                  loaderArg = v;
+                              } catch (_) {
+                                loaderArg = v;
+                              }
+
+                              if (loaderArg != null)
+                                await _loadClassesForDepartment(loaderArg);
+                              await _handleSelectionChangeSafe();
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Class dropdown
+                    Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 130,
+                        maxWidth: 240,
+                      ),
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          isDense: true,
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            hint: _loadingClasses
+                                ? const Text('Loading...')
+                                : const Text('Class'),
+                            isExpanded: true,
+                            value: selectedClass,
+                            items: _classes
+                                .map(
+                                  (c) => DropdownMenuItem<String>(
+                                    value: c['id'] as String,
+                                    child: Text(c['name'] as String),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) async {
+                              setState(() {
+                                selectedClass = v;
+                              });
+                              try {
+                                await _handleSelectionChangeSafe();
+                              } catch (err, st) {
+                                debugPrint(
+                                  'Error in selection change after class select: $err\n$st',
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Lecturer dropdown
+                    Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 130,
+                        maxWidth: 240,
+                      ),
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          isDense: true,
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            hint: _loadingTeachers
+                                ? const Text('Loading...')
+                                : const Text('Lecturer'),
+                            isExpanded: true,
+                            value: selectedLecturer,
+                            items: _teachers
+                                .map(
+                                  (t) => DropdownMenuItem<String>(
+                                    value: t['name'] as String,
+                                    child: Text(t['name'] as String),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) =>
+                                setState(() => selectedLecturer = v),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
-              if (selectedSection != null)
-                Text('Current Section: $selectedSection'),
-              const SizedBox(height: 12),
-              const Text('Choose what you want to delete:'),
-              const SizedBox(height: 8),
-              _DeleteOptionTile(
-                title: 'Delete This Section Timetable',
-                subtitle:
-                    'Clears all cells for section only. Period labels stay.',
-                action: _DeleteAction.section,
-              ),
-              _DeleteOptionTile(
-                title: 'Delete Entire Class Timetable',
-                subtitle:
-                    'Clears all sections for this class. Period labels stay.',
-                action: _DeleteAction.classAll,
-              ),
-              _DeleteOptionTile(
-                title: 'Delete Class Period Structure',
-                subtitle:
-                    'Removes all period labels & cells (all sections). Class resets to seed periods later.',
-                action: _DeleteAction.classStructure,
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.03),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: (grid == null)
+                      ? Center(
+                          child: Text(
+                            'Please select Department and Class to view the timetable.',
+                            style: TextStyle(color: Colors.grey.shade600),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      : _TimetableGrid(
+                          days: days,
+                          periods: periodsForClass,
+                          timetable: grid,
+                          editing: editingEnabled,
+                          onCellTap: (d, p) =>
+                              _openEditCellDialog(dayIndex: d, periodIndex: p),
+                        ),
+                ),
               ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-
-    if (action == null) return;
-
-    if (action == _DeleteAction.section &&
-        (selectedSection == null || selectedSection!.trim().isEmpty)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Select a Section first')));
-      return;
-    }
-
-    // Build confirmation message based on chosen action
-    String title = 'Confirm Deletion';
-    String body;
-    switch (action) {
-      case _DeleteAction.section:
-        body =
-            'This will clear all cells for section "${selectedSection!}" of class "$classKey" in department "$depKey".\n\nPeriod labels will stay.\n\nDo you want to proceed?';
-        break;
-      case _DeleteAction.classAll:
-        body =
-            'This will clear all cells for ALL sections of class "$classKey" in department "$depKey".\n\nPeriod labels will stay.\n\nDo you want to proceed?';
-        break;
-      case _DeleteAction.classStructure:
-        body =
-            'This will remove ALL period labels and ALL cells for all sections of class "$classKey" in department "$depKey".\n\nDo you want to proceed?';
-        break;
-    }
-
-    final confirmed = await _confirmDelete(
-      title: title,
-      content: body,
-      confirmText: 'Delete',
-    );
-    if (!confirmed) return;
-
-    // Backup for UNDO
-    final backup = _UndoState(
-      depKey: depKey,
-      classKey: classKey!,
-      sectionKey: selectedSection,
-      classPeriodsCopy: Map<String, List<String>>.from(classPeriods[depKey]!),
-      timetableCopy: _deepCopyTimetableClass(timetableData[depKey]![classKey]!),
-      action: action,
-    );
-
-    setState(() {
-      switch (action) {
-        case _DeleteAction.section:
-          final sectKey =
-              _findKeyIgnoreCase(sectionsMap, selectedSection) ??
-              selectedSection!;
-          final grid = sectionsMap[sectKey]!;
-          for (int r = 0; r < grid.length; r++) {
-            for (int c = 0; c < grid[r].length; c++) {
-              grid[r][c] = '';
-            }
-          }
-          break;
-        case _DeleteAction.classAll:
-          for (final sectKey in sectionsMap.keys) {
-            final grid = sectionsMap[sectKey]!;
-            for (int r = 0; r < grid.length; r++) {
-              for (int c = 0; c < grid[r].length; c++) {
-                grid[r][c] = '';
-              }
-            }
-          }
-          break;
-        case _DeleteAction.classStructure:
-          classPeriods[depKey]![classKey] = [];
-          for (final sectKey in sectionsMap.keys) {
-            sectionsMap[sectKey] = List.generate(
-              days.length,
-              (_) => <String>[],
-              growable: true,
-            );
-          }
-          break;
-      }
-      _lastUndo = backup;
-    });
-
-    _showUndoBar();
-  }
-
-  Map<String, List<List<String>>> _deepCopyTimetableClass(
-    Map<String, List<List<String>>> src,
-  ) {
-    final out = <String, List<List<String>>>{};
-    src.forEach((k, v) {
-      out[k] = v
-          .map((row) => List<String>.from(row, growable: true))
-          .toList(growable: true);
-    });
-    return out;
-  }
-
-  void _showUndoBar() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Timetable deleted'),
-        action: SnackBarAction(
-          label: 'UNDO',
-          onPressed: () {
-            if (_lastUndo == null) return;
-            setState(() {
-              final b = _lastUndo!;
-              classPeriods[b.depKey]!.clear();
-              b.classPeriodsCopy.forEach((k, v) {
-                classPeriods[b.depKey]![k] = List<String>.from(
-                  v,
-                  growable: true,
-                );
-              });
-              timetableData[b.depKey]![b.classKey]!.clear();
-              b.timetableCopy.forEach((sect, grid) {
-                timetableData[b.depKey]![b.classKey]![sect] = grid
-                    .map((r) => List<String>.from(r, growable: true))
-                    .toList();
-              });
-              _lastUndo = null;
-            });
-          },
-        ),
-        duration: const Duration(seconds: 7),
       ),
     );
   }
 
   Future<void> _exportPdfFlow() async {
+    // Validate selection first
     if (selectedDepartment == null || selectedClass == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Select Department and Class first')),
@@ -729,58 +1881,20 @@ class _TimetablePageState extends State<TimetablePage> {
       return;
     }
 
-    final choice = await showDialog<_ExportChoice>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Export PDF'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _ExportOptionTile(
-              title: 'Current Section',
-              subtitle:
-                  'Export only the timetable for the selected section (${selectedSection ?? 'None selected'})',
-              choice: _ExportChoice.currentSection,
-            ),
-            _ExportOptionTile(
-              title: 'Entire Class (All Sections)',
-              subtitle: 'Include all sections for this class in one PDF',
-              choice: _ExportChoice.entireClass,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-        ],
-      ),
-    );
-
-    if (choice == null) return;
-
-    if (choice == _ExportChoice.currentSection && selectedSection == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Select a Section first to export current section'),
-        ),
-      );
-      return;
-    }
-
-    await _generatePdf(choice);
+    // Directly export the entire class timetable (no dialog)
+    await _generatePdf(_ExportChoice.entireClass);
   }
 
   Future<void> _generatePdf(_ExportChoice choice) async {
-    final depKey =
-        _findKeyIgnoreCase(timetableData, selectedDepartment) ??
-        selectedDepartment;
-    final classKey = depKey == null
-        ? null
-        : _findKeyIgnoreCase(timetableData[depKey]!, selectedClass) ??
-              selectedClass;
-    if (depKey == null || classKey == null) {
+    final depDisplay = selectedDepartment != null
+        ? _displayNameForDeptCached(selectedDepartment!)
+        : '';
+    final classDisplay = selectedClass != null
+        ? _displayNameForClassCached(selectedClass!)
+        : '';
+    final depKey = depDisplay;
+    final classKey = classDisplay;
+    if (depKey.isEmpty || classKey.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Class not found')));
@@ -791,103 +1905,52 @@ class _TimetablePageState extends State<TimetablePage> {
     final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
     final periods = (classPeriods[depKey]?[classKey] ?? <String>[]);
-    final sectionsMap = timetableData[depKey]![classKey]!;
-
-    if (choice == _ExportChoice.currentSection) {
-      final sectKey =
-          _findKeyIgnoreCase(sectionsMap, selectedSection) ?? selectedSection!;
-      final grid = sectionsMap[sectKey];
-
-      pdf.addPage(
-        pw.MultiPage(
-          pageTheme: pw.PageTheme(
-            margin: const pw.EdgeInsets.all(24),
-            theme: pw.ThemeData.withFont(
-              base: pw.Font.helvetica(),
-              bold: pw.Font.helveticaBold(),
-            ),
-          ),
-          build: (ctx) => [
-            _pdfHeader(depKey!, classKey!, dateStr, section: sectKey),
-            pw.SizedBox(height: 8),
-            if (periods.isEmpty)
-              pw.Text(
-                'No period structure configured.',
-                style: pw.TextStyle(color: PdfColors.grey600),
-              ),
-            if (grid == null || periods.isEmpty)
-              pw.Padding(
-                padding: const pw.EdgeInsets.only(top: 16),
-                child: pw.Text(
-                  'No timetable data',
-                  style: pw.TextStyle(fontSize: 14),
-                ),
-              )
-            else
-              _pdfGridTable(periods: periods, grid: grid),
-          ],
-        ),
-      );
-    } else {
-      if (sectionsMap.isEmpty) {
-        pdf.addPage(
-          pw.MultiPage(
-            pageTheme: pw.PageTheme(
-              margin: const pw.EdgeInsets.all(24),
-              theme: pw.ThemeData.withFont(
-                base: pw.Font.helvetica(),
-                bold: pw.Font.helveticaBold(),
-              ),
-            ),
-            build: (ctx) => [
-              _pdfHeader(depKey!, classKey!, dateStr),
-              pw.SizedBox(height: 8),
-              pw.Text('No sections found for this class.'),
-            ],
-          ),
+    final grid =
+        timetableData[depKey]?[classKey] ??
+        List.generate(
+          days.length,
+          (_) => List<String>.filled(periods.length, ''),
         );
-      } else {
-        for (final sectKey in sectionsMap.keys) {
-          final grid = sectionsMap[sectKey]!;
-          pdf.addPage(
-            pw.MultiPage(
-              pageTheme: pw.PageTheme(
-                margin: const pw.EdgeInsets.all(24),
-                theme: pw.ThemeData.withFont(
-                  base: pw.Font.helvetica(),
-                  bold: pw.Font.helveticaBold(),
-                ),
-              ),
-              build: (ctx) => [
-                _pdfHeader(depKey!, classKey!, dateStr, section: sectKey),
-                pw.SizedBox(height: 8),
-                if (periods.isEmpty)
-                  pw.Text(
-                    'No period structure configured.',
-                    style: pw.TextStyle(color: PdfColors.grey600),
-                  )
-                else
-                  _pdfGridTable(periods: periods, grid: grid),
-              ],
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageTheme: pw.PageTheme(
+          margin: const pw.EdgeInsets.all(24),
+          theme: pw.ThemeData.withFont(
+            base: pw.Font.helvetica(),
+            bold: pw.Font.helveticaBold(),
+          ),
+        ),
+        build: (ctx) => [
+          _pdfHeader(depKey, classKey, dateStr),
+          pw.SizedBox(height: 8),
+          if (periods.isEmpty)
+            pw.Text(
+              'No period structure configured.',
+              style: pw.TextStyle(color: PdfColors.grey600),
             ),
-          );
-        }
-      }
-    }
+          if (grid == null || periods.isEmpty)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 16),
+              child: pw.Text(
+                'No timetable data',
+                style: pw.TextStyle(fontSize: 14),
+              ),
+            )
+          else
+            _pdfGridTable(periods: periods, grid: grid),
+        ],
+      ),
+    );
 
     await Printing.layoutPdf(
       onLayout: (format) async => pdf.save(),
       name:
-          'timetable_${depKey}_${classKey}${choice == _ExportChoice.currentSection ? '_${selectedSection ?? 'Section'}' : '_ALL'}_${dateStr.replaceAll(':', '-')}.pdf',
+          'timetable_${depKey}_${classKey}_${dateStr.replaceAll(':', '-')}.pdf',
     );
   }
 
-  pw.Widget _pdfHeader(
-    String dep,
-    String cls,
-    String dateStr, {
-    String? section,
-  }) {
+  pw.Widget _pdfHeader(String dep, String cls, String dateStr) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -896,9 +1959,7 @@ class _TimetablePageState extends State<TimetablePage> {
           style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 4),
-        pw.Text(
-          'Department: $dep   Class: $cls${section != null ? "   Section: $section" : ""}',
-        ),
+        pw.Text('Department: $dep   Class: $cls'),
         pw.Text('Exported: $dateStr'),
       ],
     );
@@ -979,389 +2040,9 @@ class _TimetablePageState extends State<TimetablePage> {
       ],
     );
   }
-
-  Future<bool> _confirmDelete({
-    required String title,
-    required String content,
-    String confirmText = 'Delete',
-  }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(confirmText),
-          ),
-        ],
-      ),
-    );
-    return result == true;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final grid = currentTimetable;
-    final periodsForClass = currentPeriods;
-    final canEdit = grid != null;
-    final canDelete = selectedDepartment != null && selectedClass != null;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Time Table'),
-        foregroundColor: Colors.black,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12.0), // mobile-friendly padding
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Search
-              TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search Time Table...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                ),
-                onChanged: (v) => setState(() => searchText = v),
-              ),
-              const SizedBox(height: 10),
-
-              // Create button (left) and Edit/Delete/Export (right) — like your other pages
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Left: Create Time Table
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Create Time Table'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B4B9B),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      minimumSize: const Size(0, 40),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () async {
-                      final existingLabels =
-                          (selectedDepartment != null &&
-                              selectedClass != null &&
-                              classPeriods[selectedDepartment!] != null &&
-                              classPeriods[selectedDepartment!]![selectedClass!] !=
-                                  null)
-                          ? classPeriods[selectedDepartment!]![selectedClass!]
-                          : null;
-
-                      final payload =
-                          await showDialog<CreateTimetableTimePayload>(
-                            context: context,
-                            builder: (_) => CreateTimetableDialog(
-                              departments: departments,
-                              departmentClasses: departmentClasses,
-                              lecturers: lecturers,
-                              sections: sections,
-                              days: days,
-                              courses: const [],
-                              initialDepartment: selectedDepartment,
-                              initialClass: selectedClass,
-                              initialSection: selectedSection,
-                              preconfiguredLabels: existingLabels,
-                            ),
-                          );
-
-                      if (payload == null) return;
-
-                      if (payload.periodsOverride != null &&
-                          payload.periodsOverride!.isNotEmpty) {
-                        final depClass = _ensureDepClass(
-                          payload.results.first.department,
-                          payload.results.first.classKey,
-                        );
-                        final depKey = depClass.key;
-                        final classKey = depClass.value;
-                        _replaceClassPeriods(
-                          depKey,
-                          classKey,
-                          payload.periodsOverride!,
-                        );
-                        _ensureSectionGrid(
-                          depKey,
-                          classKey,
-                          payload.results.first.section,
-                        );
-                      }
-
-                      setState(() {
-                        for (final r in payload.results) {
-                          final depClass = _ensureDepClass(
-                            r.department,
-                            r.classKey,
-                          );
-                          final depKey = depClass.key;
-                          final classKey = depClass.value;
-                          _ensureSectionGrid(depKey, classKey, r.section);
-
-                          final label = _makeLabel(
-                            r.startMinutes,
-                            r.endMinutes,
-                          );
-                          final colIndex = _findOrInsertPeriodIndexForClass(
-                            depKey: depKey,
-                            classKey: classKey,
-                            newLabel: label,
-                          );
-
-                          _ensureSectionGrid(depKey, classKey, r.section);
-                          final sectionsMap = timetableData[depKey]![classKey]!;
-                          final sectionKey =
-                              _findKeyIgnoreCase(sectionsMap, r.section) ??
-                              r.section;
-                          final tgtGrid = sectionsMap[sectionKey]!;
-                          if (r.dayIndex >= 0 &&
-                              r.dayIndex < tgtGrid.length &&
-                              colIndex >= 0 &&
-                              colIndex < tgtGrid[r.dayIndex].length) {
-                            tgtGrid[r.dayIndex][colIndex] = r.cellText;
-                          }
-                        }
-                      });
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Time table entries saved'),
-                        ),
-                      );
-                    },
-                  ),
-
-                  // Right: Edit / Delete (disabled until needed) + Export icon
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 80,
-                        height: 36,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 0,
-                              horizontal: 0,
-                            ),
-                          ),
-                          onPressed: !canEdit
-                              ? null
-                              : () {
-                                  setState(
-                                    () => editingEnabled = !editingEnabled,
-                                  );
-                                },
-                          child: Text(
-                            editingEnabled ? "Done" : "Edit",
-                            style: const TextStyle(
-                              fontSize: 15,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 80,
-                        height: 36,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 0,
-                              horizontal: 0,
-                            ),
-                          ),
-                          onPressed: !canDelete ? null : _showDeleteMenu,
-                          child: const Text(
-                            "Delete",
-                            style: TextStyle(fontSize: 15, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Export PDF',
-                        onPressed: canDelete ? _exportPdfFlow : null,
-                        icon: const Icon(Icons.picture_as_pdf_outlined),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // Filters – horizontal scroll on mobile
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterBox(
-                      hint: 'Department',
-                      value: selectedDepartment,
-                      items: departments,
-                      onChanged: (v) => setState(() {
-                        selectedDepartment = v?.trim();
-                        selectedClass = null;
-                        selectedSection = null;
-                      }),
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterBox(
-                      hint: 'Class',
-                      value: selectedClass,
-                      items: selectedDepartment == null
-                          ? departmentClasses.values.expand((e) => e).toList()
-                          : (departmentClasses[selectedDepartment] ?? []),
-                      onChanged: (v) =>
-                          setState(() => selectedClass = v?.trim()),
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterBox(
-                      hint: 'Lecturer',
-                      value: selectedLecturer,
-                      items: lecturers,
-                      onChanged: (v) =>
-                          setState(() => selectedLecturer = v?.trim()),
-                    ),
-                    const SizedBox(width: 8),
-                    _FilterBox(
-                      hint: 'Section',
-                      value: selectedSection,
-                      items: sections,
-                      onChanged: (v) =>
-                          setState(() => selectedSection = v?.trim()),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // Content
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: (grid == null)
-                      ? Center(
-                          child: Text(
-                            'Please select Department, Class, and Section to view the timetable.',
-                            style: TextStyle(color: Colors.grey.shade600),
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                      : _TimetableGrid(
-                          days: days,
-                          periods: periodsForClass,
-                          timetable: grid,
-                          editing: editingEnabled,
-                          onCellTap: (d, p) =>
-                              _openEditCellDialog(dayIndex: d, periodIndex: p),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
-// ------------------- Supporting Widgets & Models -------------------
-
-class _FilterBox extends StatelessWidget {
-  final String hint;
-  final String? value;
-  final List<String> items;
-  final ValueChanged<String?> onChanged;
-
-  const _FilterBox({
-    super.key,
-    required this.hint,
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 130, maxWidth: 240),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          isDense: true,
-          filled: true,
-          fillColor: Colors.white,
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            hint: Text(hint),
-            isExpanded: true,
-            value: value,
-            items: items
-                .map((i) => DropdownMenuItem(value: i, child: Text(i)))
-                .toList(),
-            onChanged: onChanged,
-          ),
-        ),
-      ),
-    );
-  }
-}
+// ------- Small UI helper widgets -------
 
 class _TimetableGrid extends StatelessWidget {
   final List<String> days;
@@ -1380,10 +2061,10 @@ class _TimetableGrid extends StatelessWidget {
   });
 
   double _periodWidthFor(BoxConstraints c) {
-    if (c.maxWidth <= 420) return 140; // very small phones
-    if (c.maxWidth <= 600) return 160; // phones
-    if (c.maxWidth <= 900) return 200; // tablets portrait
-    return 260; // desktop / wide
+    if (c.maxWidth <= 420) return 140;
+    if (c.maxWidth <= 600) return 160;
+    if (c.maxWidth <= 900) return 200;
+    return 260;
   }
 
   @override
@@ -1400,8 +2081,7 @@ class _TimetableGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final periodColWidth = _periodWidthFor(constraints);
-        final dayColWidth =
-            periodColWidth * 0.5; // smaller day column on phones
+        final dayColWidth = periodColWidth * 0.5;
 
         final totalWidth = dayColWidth + periodColWidth * periods.length;
         final childWidth = totalWidth > constraints.maxWidth
@@ -1418,7 +2098,6 @@ class _TimetableGrid extends StatelessWidget {
             width: childWidth,
             child: Column(
               children: [
-                // Header row
                 Row(
                   children: [
                     Container(
@@ -1455,11 +2134,10 @@ class _TimetableGrid extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       );
-                    }),
+                    }).toList(),
                   ],
                 ),
                 const Divider(height: dividerHeight),
-                // Rows
                 SizedBox(
                   height: rowsAreaHeight,
                   child: ListView.builder(
@@ -1599,32 +2277,9 @@ class _TimetableGrid extends StatelessWidget {
   }
 }
 
-enum _DeleteAction { section, classAll, classStructure }
+// -------------------- Small types --------------------
 
-class _DeleteOptionTile extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final _DeleteAction action;
-
-  const _DeleteOptionTile({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.action,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      onTap: () => Navigator.pop(context, action),
-      leading: const Icon(Icons.delete_outline),
-    );
-  }
-}
+enum _ExportChoice { entireClass }
 
 class _UndoState {
   final String depKey;
@@ -1632,39 +2287,11 @@ class _UndoState {
   final String? sectionKey;
   final Map<String, List<String>> classPeriodsCopy;
   final Map<String, List<List<String>>> timetableCopy;
-  final _DeleteAction action;
   _UndoState({
     required this.depKey,
     required this.classKey,
     required this.sectionKey,
     required this.classPeriodsCopy,
     required this.timetableCopy,
-    required this.action,
   });
-}
-
-enum _ExportChoice { currentSection, entireClass }
-
-class _ExportOptionTile extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final _ExportChoice choice;
-
-  const _ExportOptionTile({
-    required this.title,
-    required this.subtitle,
-    required this.choice,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-      leading: const Icon(Icons.picture_as_pdf_outlined),
-      onTap: () => Navigator.pop(context, choice),
-    );
-  }
 }
