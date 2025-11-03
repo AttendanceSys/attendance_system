@@ -17,6 +17,7 @@ import 'package:printing/printing.dart';
 
 import 'create_timetable_dialog.dart';
 import 'create_timetable_cell_edit_dialog.dart';
+import '../../services/session.dart';
 
 class TimetableSlot {
   final String day;
@@ -87,6 +88,8 @@ class _TimetablePageState extends State<TimetablePage> {
   @override
   void initState() {
     super.initState();
+    // Load departments and teachers. Teachers will be filtered by session faculty
+    // when a faculty is set in `Session.facultyRef`.
     _loadDepartments();
     _loadTeachers();
   }
@@ -206,7 +209,12 @@ class _TimetablePageState extends State<TimetablePage> {
   Future<void> _loadDepartments() async {
     setState(() => _loadingDeps = true);
     try {
-      final snap = await _firestore.collection('departments').get();
+      // If Session.facultyRef is set (faculty-admin), limit departments to that faculty.
+      Query depQuery = _firestore.collection('departments');
+      if (Session.facultyRef != null) {
+        depQuery = depQuery.where('faculty_ref', isEqualTo: Session.facultyRef);
+      }
+      final snap = await depQuery.get();
       _departments = snap.docs.map((d) {
         final data = d.data() as Map<String, dynamic>;
         final name =
@@ -221,6 +229,44 @@ class _TimetablePageState extends State<TimetablePage> {
       _departments.sort(
         (a, b) => a['name'].toString().compareTo(b['name'].toString()),
       );
+
+      // If the session is scoped to a faculty try to auto-select its department
+      // (useful for faculty-admins). We look for a department whose ref or id
+      // matches the facultyRef id.
+      if (Session.facultyRef != null && _departments.isNotEmpty) {
+        try {
+          final candidate = _departments.firstWhere((d) {
+            try {
+              if (d['ref'] is DocumentReference &&
+                  (d['ref'] as DocumentReference) == Session.facultyRef) {
+                return true;
+              }
+            } catch (_) {}
+            try {
+              if (d['id'] == (Session.facultyRef?.id ?? '')) return true;
+            } catch (_) {}
+            return false;
+          }, orElse: () => <String, dynamic>{});
+
+          if (candidate is Map && candidate.isNotEmpty) {
+            // set selected department and load its classes automatically
+            setState(() {
+              selectedDepartment = candidate['id'] as String?;
+              selectedClass = null;
+              _classes = [];
+              // clear previous lecturer selection when department changes
+              selectedLecturer = null;
+              _teachers = [];
+            });
+            dynamic loaderArg = candidate['ref'] is DocumentReference
+                ? candidate['ref']
+                : candidate['id'];
+            await _loadClassesForDepartment(loaderArg);
+            await _loadTeachers();
+            await _handleSelectionChangeSafe();
+          }
+        } catch (_) {}
+      }
     } catch (e, st) {
       debugPrint('loadDepartments error: $e\n$st');
     } finally {
@@ -229,21 +275,312 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<void> _loadTeachers() async {
+    // If department or class is not selected we intentionally keep the
+    // lecturer list empty. Teachers should only appear when both are chosen.
+    if (selectedDepartment == null || selectedClass == null) {
+      setState(() {
+        _teachers = [];
+        _loadingTeachers = false;
+      });
+      return;
+    }
+
     setState(() => _loadingTeachers = true);
     try {
-      final snap = await _firestore.collection('teachers').get();
-      _teachers = snap.docs.map((d) {
-        final data = d.data() as Map<String, dynamic>;
+      final teachersCol = _firestore.collection('teachers');
+
+      // Helper to normalize a teacher id from various stored shapes
+      String _normalizeId(dynamic cand) {
+        if (cand == null) return '';
+        if (cand is DocumentReference) return cand.id;
+        if (cand is String) {
+          final s = cand;
+          if (s.contains('/')) {
+            final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+            return parts.isNotEmpty ? parts.last : s;
+          }
+          return s;
+        }
+        return cand.toString();
+      }
+
+      // Resolve selected department ref/id if available from cache
+      dynamic selectedDeptRef;
+      String? selectedDeptId;
+      if (selectedDepartment != null) {
+        try {
+          final found = _departments.firstWhere(
+            (d) => d['id'] == selectedDepartment,
+            orElse: () => <String, dynamic>{},
+          );
+          if (found is Map && found.isNotEmpty) {
+            selectedDeptRef = found['ref'];
+            selectedDeptId = (found['id']?.toString() ?? selectedDepartment);
+          } else {
+            selectedDeptId = selectedDepartment;
+          }
+        } catch (_) {
+          selectedDeptId = selectedDepartment;
+        }
+      }
+
+      // If a class is selected, collect teacher ids assigned to that class via courses
+      // and from the class document itself. Try both String ids and DocumentReference
+      // shapes when querying courses (some docs store refs as strings or refs).
+      final Set<String> teacherIdsForClass = {};
+      if (selectedClass != null) {
+        try {
+          final coursesCol = _firestore.collection('courses');
+          final classRef = _firestore.collection('classes').doc(selectedClass);
+
+          // try both shapes for queries
+          QuerySnapshot snap = await coursesCol
+              .where('class', isEqualTo: selectedClass)
+              .get();
+          if (snap.docs.isEmpty)
+            snap = await coursesCol.where('class', isEqualTo: classRef).get();
+          if (snap.docs.isEmpty)
+            snap = await coursesCol
+                .where('class_id', isEqualTo: selectedClass)
+                .get();
+          if (snap.docs.isEmpty)
+            snap = await coursesCol
+                .where('class_ref', isEqualTo: classRef)
+                .get();
+          if (snap.docs.isEmpty)
+            snap = await coursesCol
+                .where('class_ref', isEqualTo: selectedClass)
+                .get();
+          if (snap.docs.isEmpty)
+            snap = await coursesCol
+                .where('className', isEqualTo: selectedClass)
+                .get();
+
+          for (final d in snap.docs) {
+            final data = d.data() as Map<String, dynamic>? ?? {};
+            final teacherCandidates = [
+              'teacher_assigned',
+              'teacher_ref',
+              'teacher',
+              'teacherRef',
+              'teacher_id',
+              'lecturer',
+              'lecturer_id',
+            ];
+            for (final k in teacherCandidates) {
+              if (!data.containsKey(k) || data[k] == null) continue;
+              final id = _normalizeId(data[k]);
+              if (id.isNotEmpty) teacherIdsForClass.add(id);
+            }
+          }
+
+          // Also inspect the class document for assigned teacher fields
+          try {
+            final clsDoc = await classRef.get();
+            if (clsDoc.exists) {
+              final cdata = clsDoc.data() as Map<String, dynamic>? ?? {};
+              final classTeacherKeys = [
+                'teacher',
+                'teacher_assigned',
+                'teacher_id',
+                'teacher_ref',
+                'assigned_teacher',
+                'lecturer',
+              ];
+              for (final k in classTeacherKeys) {
+                if (!cdata.containsKey(k) || cdata[k] == null) continue;
+                final id = _normalizeId(cdata[k]);
+                if (id.isNotEmpty) teacherIdsForClass.add(id);
+              }
+            }
+          } catch (_) {}
+        } catch (e, st) {
+          debugPrint(
+            'Error fetching courses for class when loading teachers: $e\n$st',
+          );
+        }
+      }
+
+      // Helper to fetch teacher docs by ids (supports >10 by batching)
+      Future<List<Map<String, dynamic>>> _fetchTeachersByIds(
+        List<String> ids,
+      ) async {
+        final out = <Map<String, dynamic>>[];
+        if (ids.isEmpty) return out;
+        try {
+          // Firestore whereIn limit is 10; batch if necessary
+          if (ids.length <= 10) {
+            final snap = await teachersCol
+                .where(FieldPath.documentId, whereIn: ids)
+                .get();
+            for (final d in snap.docs) out.add({'id': d.id, 'data': d.data()});
+          } else {
+            final batches = <List<String>>[];
+            for (var i = 0; i < ids.length; i += 10) {
+              batches.add(
+                ids.sublist(i, i + 10 > ids.length ? ids.length : i + 10),
+              );
+            }
+            for (final b in batches) {
+              final snap = await teachersCol
+                  .where(FieldPath.documentId, whereIn: b)
+                  .get();
+              for (final d in snap.docs)
+                out.add({'id': d.id, 'data': d.data()});
+            }
+          }
+        } catch (e, st) {
+          debugPrint('Error fetching teachers by ids: $e\n$st');
+        }
+        return out;
+      }
+
+      List<Map<String, dynamic>> fetched = [];
+
+      // If we discovered teacher ids for the selected class, prefer those.
+      // Do NOT further filter them by department — if a teacher is assigned to
+      // the class we want to show them regardless of department fields.
+      if (teacherIdsForClass.isNotEmpty) {
+        final ids = teacherIdsForClass.toList();
+        fetched = await _fetchTeachersByIds(ids);
+      }
+
+      // If we didn't get any teachers from class assignment (or none matched department),
+      // fall back to department-level server queries, then faculty scoping, then all teachers.
+      if (fetched.isEmpty) {
+        List<QueryDocumentSnapshot> docs = [];
+
+        Future<List<QueryDocumentSnapshot>> tryQuery(
+          Query q,
+          String tag,
+        ) async {
+          try {
+            final snap = await q.get();
+            debugPrint(
+              'teachers query [$tag] returned ${snap.docs.length} docs',
+            );
+            return snap.docs;
+          } catch (e, st) {
+            debugPrint('teachers query [$tag] failed: $e\n$st');
+            return <QueryDocumentSnapshot>[];
+          }
+        }
+
+        // If department selected, try to server-filter by department using many
+        // possible stored shapes: DocumentReference, id string, and path strings
+        if (selectedDeptRef != null ||
+            (selectedDeptId != null && selectedDeptId.isNotEmpty)) {
+          final List<dynamic> deptVariants = [];
+          if (selectedDeptRef is DocumentReference)
+            deptVariants.add(selectedDeptRef);
+          if (selectedDeptId != null) {
+            deptVariants.add(selectedDeptId);
+            deptVariants.add('departments/${selectedDeptId}');
+            deptVariants.add('/departments/${selectedDeptId}');
+          }
+
+          for (final v in deptVariants) {
+            if (docs.isNotEmpty) break;
+            try {
+              docs = await tryQuery(
+                teachersCol.where('department_ref', isEqualTo: v),
+                'department_ref==${v.toString()}',
+              );
+            } catch (_) {}
+            if (docs.isNotEmpty) break;
+            try {
+              docs = await tryQuery(
+                teachersCol.where('department_id', isEqualTo: v),
+                'department_id==${v.toString()}',
+              );
+            } catch (_) {}
+            if (docs.isNotEmpty) break;
+            try {
+              docs = await tryQuery(
+                teachersCol.where('department', isEqualTo: v),
+                'department==${v.toString()}',
+              );
+            } catch (_) {}
+          }
+        }
+
+        // If still empty, try faculty scoping like before
+        if (docs.isEmpty && Session.facultyRef != null) {
+          docs = await tryQuery(
+            teachersCol.where('faculty_ref', isEqualTo: Session.facultyRef),
+            'faculty_ref==DocumentReference',
+          );
+          if (docs.isEmpty) {
+            try {
+              final fid = Session.facultyRef!.id;
+              docs = await tryQuery(
+                teachersCol.where('faculty_id', isEqualTo: fid),
+                'faculty_id==String',
+              );
+            } catch (_) {}
+          }
+          if (docs.isEmpty) {
+            try {
+              final fid = Session.facultyRef!.id;
+              docs = await tryQuery(
+                teachersCol.where('faculty', isEqualTo: fid),
+                'faculty==String',
+              );
+            } catch (_) {}
+          }
+        }
+
+        if (docs.isEmpty) {
+          final snap = await teachersCol.get();
+          docs = snap.docs;
+        }
+
+        fetched = docs.map((d) => {'id': d.id, 'data': d.data()}).toList();
+
+        // If a department was selected but server queries didn't filter, perform client-side filter
+        if (selectedDeptRef != null ||
+            (selectedDeptId != null && selectedDeptId!.isNotEmpty)) {
+          fetched = fetched.where((d) {
+            final data = (d['data'] as Map<String, dynamic>?) ?? {};
+            final deptCand =
+                data['department_ref'] ??
+                data['department_id'] ??
+                data['department'];
+            final candId = _normalizeId(deptCand);
+            if (candId.isEmpty) return false;
+            if (selectedDeptRef is DocumentReference) {
+              try {
+                return candId == (selectedDeptRef as DocumentReference).id ||
+                    candId == selectedDeptRef.path ||
+                    candId == '/${selectedDeptRef.path}';
+              } catch (_) {}
+            }
+            if (selectedDeptId != null)
+              return candId == selectedDeptId || candId == '/${selectedDeptId}';
+            return true;
+          }).toList();
+        }
+      }
+
+      // Map to dropdown structure
+      _teachers = fetched.map((d) {
+        final data = (d['data'] as Map<String, dynamic>?) ?? {};
         final name =
-            (data['name'] ?? data['full_name'] ?? data['username'] ?? '')
+            (data['teacher_name'] ??
+                    data['name'] ??
+                    data['full_name'] ??
+                    data['username'] ??
+                    d['id'])
                 .toString();
-        return {'id': d.id, 'name': name};
+        return {'id': d['id'] as String, 'name': name};
       }).toList();
+
       _teachers.sort(
         (a, b) => a['name'].toString().compareTo(b['name'].toString()),
       );
     } catch (e, st) {
       debugPrint('loadTeachers error: $e\n$st');
+      setState(() => _teachers = []);
     } finally {
       setState(() => _loadingTeachers = false);
     }
@@ -398,7 +735,6 @@ class _TimetablePageState extends State<TimetablePage> {
     if (selectedDepartment == null || selectedClass == null) return;
     final depId = selectedDepartment!.trim();
     final clsId = selectedClass!.trim();
-    if (depId.isEmpty || clsId.isEmpty) return;
 
     final docId = await _docIdFromSelected(depId, clsId);
     final deptDisplay = await _resolveDepartmentDisplayName(depId);
@@ -1710,6 +2046,9 @@ class _TimetablePageState extends State<TimetablePage> {
                                 selectedDepartment = v;
                                 selectedClass = null;
                                 _classes = [];
+                                // clear previous lecturer selection when department changes
+                                selectedLecturer = null;
+                                _teachers = [];
                               });
 
                               dynamic loaderArg;
@@ -1718,8 +2057,7 @@ class _TimetablePageState extends State<TimetablePage> {
                                   (d) => d['id'] == v,
                                   orElse: () => <String, dynamic>{},
                                 );
-                                if (found is Map &&
-                                    found.isNotEmpty &&
+                                if (found.isNotEmpty &&
                                     found['ref'] is DocumentReference)
                                   loaderArg = found['ref'];
                                 else
@@ -1730,6 +2068,8 @@ class _TimetablePageState extends State<TimetablePage> {
 
                               if (loaderArg != null)
                                 await _loadClassesForDepartment(loaderArg);
+                              // ensure teachers reflect current session/faculty
+                              await _loadTeachers();
                               await _handleSelectionChangeSafe();
                             },
                           ),
@@ -1776,6 +2116,8 @@ class _TimetablePageState extends State<TimetablePage> {
                                 selectedClass = v;
                               });
                               try {
+                                // Ensure lecturer list refreshes after class selection
+                                await _loadTeachers();
                                 await _handleSelectionChangeSafe();
                               } catch (err, st) {
                                 debugPrint(
@@ -1860,6 +2202,8 @@ class _TimetablePageState extends State<TimetablePage> {
                           periods: periodsForClass,
                           timetable: grid,
                           editing: editingEnabled,
+                          selectedLecturer: selectedLecturer,
+                          teachers: _teachers,
                           onCellTap: (d, p) =>
                               _openEditCellDialog(dayIndex: d, periodIndex: p),
                         ),
@@ -2049,6 +2393,8 @@ class _TimetableGrid extends StatelessWidget {
   final List<String> periods;
   final List<List<String>> timetable;
   final bool editing;
+  final String? selectedLecturer;
+  final List<Map<String, dynamic>> teachers;
   final void Function(int dayIndex, int periodIndex)? onCellTap;
 
   const _TimetableGrid({
@@ -2057,6 +2403,8 @@ class _TimetableGrid extends StatelessWidget {
     required this.periods,
     required this.timetable,
     required this.editing,
+    this.selectedLecturer,
+    this.teachers = const [],
     this.onCellTap,
   });
 
@@ -2180,50 +2528,133 @@ class _TimetableGrid extends StatelessWidget {
                                 final tappable =
                                     editing && !isBreak && onCellTap != null;
 
-                                Widget content = cell.trim().isEmpty
-                                    ? (editing && !isBreak
-                                          ? Opacity(
-                                              opacity: 0.5,
-                                              child: Text(
-                                                'Tap to add',
-                                                style: TextStyle(
-                                                  fontStyle: FontStyle.italic,
-                                                  color: Colors.grey.shade600,
-                                                  fontSize: 12,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            )
-                                          : const SizedBox.shrink())
-                                    : Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            cell.split('\n').first,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
+                                // Parse cell and extract course + lecturer (if any)
+                                final lines = cell.split('\n');
+                                final courseOnly = lines.isNotEmpty
+                                    ? lines[0].trim()
+                                    : '';
+                                String lecturerOnly = (lines.length > 1)
+                                    ? lines.sublist(1).join(' ').trim()
+                                    : '';
+
+                                // If there's no lecturer recorded but exactly one teacher
+                                // is available for this class, use that teacher's name.
+                                if (lecturerOnly.isEmpty &&
+                                    teachers.length == 1) {
+                                  try {
+                                    final t0 = teachers.first;
+                                    lecturerOnly = (t0['name'] ?? '')
+                                        .toString();
+                                  } catch (_) {
+                                    lecturerOnly = '';
+                                  }
+                                }
+
+                                // Prepare default empty content; we'll override below
+                                Widget content = const SizedBox.shrink();
+
+                                // If a specific lecturer is selected, hide cells that don't match
+                                if (selectedLecturer != null &&
+                                    selectedLecturer!.trim().isNotEmpty &&
+                                    selectedLecturer != 'NONE' &&
+                                    selectedLecturer != 'All lecturers') {
+                                  final key = selectedLecturer!
+                                      .toLowerCase()
+                                      .trim();
+                                  if (!lecturerOnly.toLowerCase().contains(
+                                    key,
+                                  )) {
+                                    // Treat as empty for display (no match)
+                                    if (editing && !isBreak) {
+                                      content = Opacity(
+                                        opacity: 0.5,
+                                        child: Text(
+                                          'Tap to add',
+                                          style: TextStyle(
+                                            fontStyle: FontStyle.italic,
+                                            color: Colors.grey.shade600,
+                                            fontSize: 12,
                                           ),
-                                          const SizedBox(height: 4),
-                                          if (cell.split('\n').length > 1)
-                                            Text(
-                                              cell
-                                                  .split('\n')
-                                                  .skip(1)
-                                                  .join(' — '),
-                                              style: const TextStyle(
-                                                color: Colors.black87,
-                                                fontSize: 12,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                        ],
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       );
+                                    }
+                                    return InkWell(
+                                      onTap: tappable
+                                          ? () => onCellTap!(rowIdx, colIdx)
+                                          : null,
+                                      child: Container(
+                                        width: periodColWidth,
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            left: BorderSide(
+                                              color: Colors.grey.shade300,
+                                            ),
+                                          ),
+                                          color: isBreak
+                                              ? Colors.grey.shade100
+                                              : null,
+                                        ),
+                                        foregroundDecoration:
+                                            (editing && !isBreak)
+                                            ? ShapeDecoration(
+                                                shape: highlightShape,
+                                              )
+                                            : null,
+                                        child: content,
+                                      ),
+                                    );
+                                  }
+                                }
+
+                                // Build normal content for matching/visible cells
+                                if (courseOnly.isEmpty) {
+                                  if (editing && !isBreak) {
+                                    content = Opacity(
+                                      opacity: 0.5,
+                                      child: Text(
+                                        'Tap to add',
+                                        style: TextStyle(
+                                          fontStyle: FontStyle.italic,
+                                          color: Colors.grey.shade600,
+                                          fontSize: 12,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    );
+                                  } else {
+                                    content = const SizedBox.shrink();
+                                  }
+                                } else {
+                                  content = Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        courseOnly,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      if (lecturerOnly.isNotEmpty)
+                                        Text(
+                                          lecturerOnly,
+                                          style: const TextStyle(
+                                            color: Colors.black87,
+                                            fontSize: 12,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  );
+                                }
 
                                 return InkWell(
                                   onTap: tappable

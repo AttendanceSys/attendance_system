@@ -91,6 +91,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   List<Map<String, dynamic>> _loadedCourses = []; // {id,course_name,raw,ref}
   bool _loadingClasses = false;
   bool _loadingCourses = false;
+  // local copy of lecturers so we can add/auto-select class/course assigned teacher
+  List<String> _availableLecturers = [];
 
   List<String> get _courseList => (_loadedCourses.isNotEmpty)
       ? _loadedCourses
@@ -116,6 +118,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     _department = widget.initialDepartment;
     _classKey = widget.initialClass;
     _classIdForSave = null;
+
+    _availableLecturers = List<String>.from(widget.lecturers);
 
     if (widget.preconfiguredLabels != null &&
         widget.preconfiguredLabels!.isNotEmpty) {
@@ -238,11 +242,14 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
           widget.initialClass != null &&
           widget.initialClass!.isNotEmpty) {
         final init = widget.initialClass!;
-        final byId = _loadedClasses.firstWhere(
-          (c) => (c['id']?.toString() ?? '') == init,
-          orElse: () => <String, dynamic>{},
-        );
-        if (byId is Map && byId.isNotEmpty) {
+        Map<String, dynamic> byId = {};
+        for (final c in _loadedClasses) {
+          if ((c['id']?.toString() ?? '') == init) {
+            byId = Map<String, dynamic>.from(c);
+            break;
+          }
+        }
+        if (byId.isNotEmpty) {
           setState(() {
             _classKey = byId['name']?.toString();
             _classIdForSave = byId['id']?.toString();
@@ -250,11 +257,15 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
           await _loadCoursesForClass(_classIdForSave);
           return;
         }
-        final byName = _loadedClasses.firstWhere(
-          (c) => (c['name']?.toString() ?? '') == init,
-          orElse: () => <String, dynamic>{},
-        );
-        if (byName is Map && byName.isNotEmpty) {
+
+        Map<String, dynamic> byName = {};
+        for (final c in _loadedClasses) {
+          if ((c['name']?.toString() ?? '') == init) {
+            byName = Map<String, dynamic>.from(c);
+            break;
+          }
+        }
+        if (byName.isNotEmpty) {
           setState(() {
             _classKey = byName['name']?.toString();
             _classIdForSave = byName['id']?.toString();
@@ -264,15 +275,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         }
       }
 
-      if (_loadedClasses.isNotEmpty && !preserveInitialClass) {
-        setState(() {
-          _classKey =
-              _loadedClasses.first['name']?.toString() ??
-              _loadedClasses.first['id']?.toString();
-          _classIdForSave = _loadedClasses.first['id']?.toString();
-        });
-        await _loadCoursesForClass(_classIdForSave);
-      }
+      // Do NOT auto-select the first class when classes load. The user must
+      // explicitly pick a class. Preserve only the initialClass behavior above.
 
       if (_loadedClasses.isEmpty) {
         debugPrint('CreateDialog: no classes found for $depIdOrRef');
@@ -309,13 +313,25 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     try {
       final coursesCol = _firestore.collection('courses');
 
-      Future<QuerySnapshot> tryQ(String field) =>
-          coursesCol.where(field, isEqualTo: classId).get();
+      // Helper that attempts a where query for multiple possible stored shapes.
+      Future<QuerySnapshot> tryQ(String field, dynamic value) async {
+        try {
+          return await coursesCol.where(field, isEqualTo: value).get();
+        } catch (e) {
+          return await coursesCol.where(field, isEqualTo: value).get();
+        }
+      }
 
-      QuerySnapshot snap = await tryQ('class');
-      if (snap.docs.isEmpty) snap = await tryQ('class_id');
-      if (snap.docs.isEmpty) snap = await tryQ('class_ref');
-      if (snap.docs.isEmpty) snap = await tryQ('class_name');
+      // Many projects store the class reference either as the document id (String)
+      // or as a DocumentReference. Try both shapes for the likely fields.
+      final classRef = _firestore.collection('classes').doc(classId);
+
+      QuerySnapshot snap = await tryQ('class', classId);
+      if (snap.docs.isEmpty) snap = await tryQ('class', classRef);
+      if (snap.docs.isEmpty) snap = await tryQ('class_id', classId);
+      if (snap.docs.isEmpty) snap = await tryQ('class_ref', classRef);
+      if (snap.docs.isEmpty) snap = await tryQ('class_ref', classId);
+      if (snap.docs.isEmpty) snap = await tryQ('class_name', classId);
 
       if (snap.docs.isEmpty) {
         debugPrint('CreateDialog: no courses found for classId=$classId');
@@ -349,10 +365,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
       setState(() {
         _loadedCourses = courses;
-        if (_loadedCourses.isNotEmpty)
-          _course =
-              _loadedCourses.first['course_name']?.toString() ??
-              _loadedCourses.first['id']?.toString();
+        // Do NOT auto-select a course; user must explicitly pick the course.
+        _course = null;
       });
     } catch (e, st) {
       debugPrint('CreateDialog loadCourses error: $e\n$st');
@@ -733,7 +747,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     required String hint,
     required T? value,
     required List<T> items,
-    required ValueChanged<T?> onChanged,
+    ValueChanged<T?>? onChanged,
     Widget Function(T)? builder,
   }) {
     return InputDecorator(
@@ -920,31 +934,133 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                           _classIdForSave = null;
                         });
 
-                        if (_loadedClasses.isNotEmpty && v != null) {
-                          try {
-                            final found = _loadedClasses.firstWhere(
-                              (c) => (c['name']?.toString() ?? '') == v,
-                              orElse: () => <String, dynamic>{},
-                            );
-                            if (found.isNotEmpty) {
-                              setState(
-                                () => _classIdForSave = found['id']?.toString(),
-                              );
-                              await _loadCoursesForClass(_classIdForSave);
-                              return;
-                            }
-                          } catch (_) {}
-                        }
+                        if (v == null) return;
 
-                        final classId = v;
-                        if (classId != null) {
-                          try {
-                            await _loadCoursesForClass(classId);
-                          } catch (err, st) {
-                            debugPrint(
-                              'CreateDialog class change loadCourses error: $err\n$st',
-                            );
+                        try {
+                          String? classDocId;
+                          Map<String, dynamic>? classRaw;
+
+                          // Try to find class doc from loaded classes (match id or name, case-insensitive)
+                          if (_loadedClasses.isNotEmpty) {
+                            Map<String, dynamic> found = {};
+                            for (final c in _loadedClasses) {
+                              final name = (c['name']?.toString() ?? '')
+                                  .toLowerCase();
+                              final val = v.toLowerCase();
+                              final id = (c['id']?.toString() ?? '');
+                              if (name == val || id == v || id == val) {
+                                found = Map<String, dynamic>.from(c);
+                                break;
+                              }
+                            }
+                            if (found.isNotEmpty) {
+                              classDocId = found['id']?.toString();
+                              classRaw = Map<String, dynamic>.from(
+                                found['raw'] ?? {},
+                              );
+                            }
                           }
+
+                          // Fallback: try to query classes collection by name/id
+                          if (classDocId == null) {
+                            final classesCol = _firestore.collection('classes');
+                            QuerySnapshot csnap = await classesCol
+                                .where('class_name', isEqualTo: v)
+                                .get();
+                            if (csnap.docs.isEmpty)
+                              csnap = await classesCol
+                                  .where('name', isEqualTo: v)
+                                  .get();
+                            if (csnap.docs.isEmpty)
+                              csnap = await classesCol
+                                  .where('class_id', isEqualTo: v)
+                                  .get();
+                            if (csnap.docs.isEmpty)
+                              csnap = await classesCol
+                                  .where('department_ref', isEqualTo: v)
+                                  .get();
+                            if (csnap.docs.isNotEmpty) {
+                              final d = csnap.docs.first;
+                              classDocId = d.id;
+                              classRaw = d.data() as Map<String, dynamic>?;
+                            }
+                          }
+
+                          if (classDocId != null) {
+                            setState(() => _classIdForSave = classDocId);
+                            await _loadCoursesForClass(_classIdForSave);
+
+                            // If class doc has an assigned teacher, resolve and auto-select it
+                            try {
+                              if (classRaw != null && classRaw.isNotEmpty) {
+                                final candidateKeys = [
+                                  'teacher',
+                                  'teacher_assigned',
+                                  'teacher_id',
+                                  'teacher_ref',
+                                  'assigned_teacher',
+                                  'teacherAssigned',
+                                ];
+                                dynamic teacherVal;
+                                for (final k in candidateKeys) {
+                                  if (classRaw.containsKey(k) &&
+                                      classRaw[k] != null) {
+                                    teacherVal = classRaw[k];
+                                    break;
+                                  }
+                                }
+                                if (teacherVal != null) {
+                                  DocumentReference? tref;
+                                  if (teacherVal is DocumentReference)
+                                    tref = teacherVal;
+                                  else if (teacherVal is String) {
+                                    final s = teacherVal.trim();
+                                    try {
+                                      tref = s.contains('/')
+                                          ? _firestore.doc(s)
+                                          : _firestore
+                                                .collection('teachers')
+                                                .doc(s);
+                                    } catch (_) {
+                                      tref = _firestore
+                                          .collection('teachers')
+                                          .doc(s);
+                                    }
+                                  }
+                                  if (tref != null) {
+                                    final tdoc = await tref.get();
+                                    if (tdoc.exists) {
+                                      final data =
+                                          tdoc.data() as Map<String, dynamic>?;
+                                      final name =
+                                          (data?['teacher_name'] ??
+                                                  data?['name'] ??
+                                                  data?['displayName'] ??
+                                                  data?['username'] ??
+                                                  tdoc.id)
+                                              .toString();
+                                      if (mounted)
+                                        setState(() {
+                                          if (!_availableLecturers.contains(
+                                            name,
+                                          ))
+                                            _availableLecturers.add(name);
+                                          _lecturer = name;
+                                        });
+                                    }
+                                  }
+                                }
+                              }
+                            } catch (e, st) {
+                              debugPrint(
+                                'CreateDialog: error resolving class teacher: $e\n$st',
+                              );
+                            }
+                          }
+                        } catch (err, st) {
+                          debugPrint(
+                            'CreateDialog class change loadCourses error: $err\n$st',
+                          );
                         }
                       },
                     ),
@@ -955,11 +1071,36 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                   // Lecturer / Course
                   _wrapFields([
                     !_useCustomLecturer
-                        ? _dropdownBox<String>(
-                            hint: 'Lecturer',
-                            value: _lecturer,
-                            items: widget.lecturers,
-                            onChanged: (v) => setState(() => _lecturer = v),
+                        ? InputDecorator(
+                            isEmpty:
+                                (_lecturer == null ||
+                                _lecturer!.trim().isEmpty),
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.all(
+                                  Radius.circular(8),
+                                ),
+                              ),
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 22,
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ).copyWith(hintText: 'Lecturer'),
+                            child:
+                                (_lecturer != null &&
+                                    _lecturer!.trim().isNotEmpty)
+                                ? Text(
+                                    _lecturer!,
+                                    style: const TextStyle(
+                                      fontSize: 17,
+                                      // fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
                           )
                         : TextFormField(
                             controller: _lecturerCustomCtrl,
@@ -979,7 +1120,90 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                       hint: _loadingCourses ? 'Loading courses...' : 'Course',
                       value: _course,
                       items: _courseList,
-                      onChanged: (v) => setState(() => _course = v),
+                      onChanged: (v) async {
+                        setState(() {
+                          _course = v;
+                        });
+
+                        if (v == null) return;
+
+                        try {
+                          Map<String, dynamic>? found;
+                          if (_loadedCourses.isNotEmpty) {
+                            Map<String, dynamic> f = {};
+                            for (final c in _loadedCourses) {
+                              if ((c['course_name']?.toString() ?? '') == v ||
+                                  (c['id']?.toString() ?? '') == v) {
+                                f = Map<String, dynamic>.from(c);
+                                break;
+                              }
+                            }
+                            if (f.isNotEmpty)
+                              found = Map<String, dynamic>.from(f['raw'] ?? {});
+                          }
+
+                          if (found == null) return;
+
+                          final candidateKeys = [
+                            'teacher_assigned',
+                            'teacher',
+                            'teacher_id',
+                            'teacher_ref',
+                            'assigned_teacher',
+                            'teacherAssigned',
+                          ];
+
+                          dynamic teacherVal;
+                          for (final k in candidateKeys) {
+                            if (found.containsKey(k) && found[k] != null) {
+                              teacherVal = found[k];
+                              break;
+                            }
+                          }
+
+                          if (teacherVal == null) return;
+
+                          DocumentReference? tref;
+                          if (teacherVal is DocumentReference)
+                            tref = teacherVal;
+                          else if (teacherVal is String) {
+                            final s = teacherVal.trim();
+                            try {
+                              if (s.contains('/'))
+                                tref = _firestore.doc(s);
+                              else
+                                tref = _firestore.collection('teachers').doc(s);
+                            } catch (_) {
+                              tref = _firestore.collection('teachers').doc(s);
+                            }
+                          }
+
+                          if (tref == null) return;
+
+                          final doc = await tref.get();
+                          if (!doc.exists) return;
+                          final data = doc.data() as Map<String, dynamic>?;
+                          final name =
+                              (data?['teacher_name'] ??
+                                      data?['name'] ??
+                                      data?['displayName'] ??
+                                      data?['username'] ??
+                                      doc.id)
+                                  .toString();
+
+                          if (mounted) {
+                            setState(() {
+                              if (!_availableLecturers.contains(name))
+                                _availableLecturers.add(name);
+                              _lecturer = name;
+                            });
+                          }
+                        } catch (e, st) {
+                          debugPrint(
+                            'CreateDialog: error resolving course teacher: $e\n$st',
+                          );
+                        }
+                      },
                     ),
                   ]),
 
