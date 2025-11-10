@@ -130,7 +130,13 @@ class UseClasses {
         // If the error indicates the column doesn't exist, retry with the
         // legacy `department` column name. Otherwise rethrow.
         final msg = e.toString() ?? '';
-        if (msg.contains('does not exist') && msg.contains('department_id')) {
+        // Some PostgREST/Postgres error messages differ between versions.
+        // Accept either the 'does not exist' text or the newer
+        // 'Could not find the "department_id" column' (PGRST204) message.
+        if (msg.contains('department_id') &&
+            (msg.contains('does not exist') ||
+                msg.contains('Could not find') ||
+                msg.contains('PGRST204'))) {
           usedDeptId = false;
           var q = _supabase
               .from('classes')
@@ -218,7 +224,10 @@ class UseClasses {
         });
       } catch (e) {
         final msg = e.toString();
-        if (msg.contains('does not exist') && msg.contains('department_id')) {
+        if (msg.contains('department_id') &&
+            (msg.contains('does not exist') ||
+                msg.contains('Could not find') ||
+                msg.contains('PGRST204'))) {
           await _supabase.from('classes').insert({
             'class_name': schoolClass.name,
             'department': schoolClass.department,
@@ -266,7 +275,10 @@ class UseClasses {
         await query;
       } catch (e) {
         final msg = e.toString();
-        if (msg.contains('does not exist') && msg.contains('department_id')) {
+        if (msg.contains('department_id') &&
+            (msg.contains('does not exist') ||
+                msg.contains('Could not find') ||
+                msg.contains('PGRST204'))) {
           // Retry using legacy `department` column name
           final altPayload = {
             'department': schoolClass.department,
