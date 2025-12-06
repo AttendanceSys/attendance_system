@@ -253,6 +253,7 @@ class _StudentsPageState extends State<StudentsPage> {
         'gender': s.gender,
         'department_ref': s.departmentRef ?? '',
         'class_ref': s.classRef ?? '',
+        'className': _classNames[s.classRef ?? ''] ?? '',
         'faculty_ref': facultyForStudentField ?? '',
         'created_at': FieldValue.serverTimestamp(),
       };
@@ -349,6 +350,7 @@ class _StudentsPageState extends State<StudentsPage> {
         'gender': newS.gender,
         'department_ref': newS.departmentRef ?? '',
         'class_ref': newS.classRef ?? '',
+        'className': _classNames[newS.classRef ?? ''] ?? '',
         'faculty_ref': facultyForStudentField ?? '',
         'created_at': FieldValue.serverTimestamp(),
       });

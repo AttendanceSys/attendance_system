@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "firebase deploy --only firestore:indexes": "attendancesystem-9350f"
+  },
+  "targets": {},
+  "etags": {}
+}

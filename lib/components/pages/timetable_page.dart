@@ -8,6 +8,7 @@
 
 import 'dart:convert';
 
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -89,7 +90,7 @@ class _TimetablePageState extends State<TimetablePage> {
   void initState() {
     super.initState();
     // Load departments and teachers. Teachers will be filtered by session faculty
-    // when a faculty is set in `Session.facultyRef`.
+    // when a faculty is set in Session.facultyRef.
     _loadDepartments();
     _loadTeachers();
   }
@@ -1044,8 +1045,21 @@ class _TimetablePageState extends State<TimetablePage> {
         );
 
     final gridAsMaps = <Map<String, dynamic>>[];
+    final gridMetaAsMaps = <Map<String, dynamic>>[];
     for (int r = 0; r < grid.length; r++) {
-      gridAsMaps.add({'r': r, 'cells': List<String>.from(grid[r])});
+      final rowCells = List<String>.from(grid[r]);
+      gridAsMaps.add({'r': r, 'cells': rowCells});
+
+      // Build per-cell meta so courses and lecturers are stored separately
+      final metaCells = rowCells.map((c) {
+        final parts = c.toString().split('\n');
+        final course = parts.isNotEmpty ? parts[0].trim() : '';
+        final lecturer = parts.length > 1
+            ? parts.sublist(1).join(' ').trim()
+            : '';
+        return {'course': course, 'lecturer': lecturer};
+      }).toList();
+      gridMetaAsMaps.add({'r': r, 'cells': metaCells});
     }
 
     final computedSpans =
@@ -1061,6 +1075,8 @@ class _TimetablePageState extends State<TimetablePage> {
           .map((m) => {'start': m['start'] ?? 0, 'end': m['end'] ?? 0})
           .toList(),
       'grid': gridAsMaps,
+      // grid_meta contains structured cell data: {r:..., cells:[{course,lecturer}, ...]}
+      'grid_meta': gridMetaAsMaps,
       'updated_at': FieldValue.serverTimestamp(),
       'created_at': FieldValue.serverTimestamp(),
     };
@@ -1233,8 +1249,20 @@ class _TimetablePageState extends State<TimetablePage> {
         }
 
         final gridAsMaps = <Map<String, dynamic>>[];
+        final gridMetaAsMaps = <Map<String, dynamic>>[];
         for (int r = 0; r < grid.length; r++) {
-          gridAsMaps.add({'r': r, 'cells': List<String>.from(grid[r])});
+          final rowCells = List<String>.from(grid[r]);
+          gridAsMaps.add({'r': r, 'cells': rowCells});
+
+          final metaCells = rowCells.map((c) {
+            final parts = c.toString().split('\n');
+            final course = parts.isNotEmpty ? parts[0].trim() : '';
+            final lecturer = parts.length > 1
+                ? parts.sublist(1).join(' ').trim()
+                : '';
+            return {'course': course, 'lecturer': lecturer};
+          }).toList();
+          gridMetaAsMaps.add({'r': r, 'cells': metaCells});
         }
 
         final parts = entry.key.split('_');
@@ -1252,6 +1280,7 @@ class _TimetablePageState extends State<TimetablePage> {
               .map((m) => {'start': m['start'], 'end': m['end']})
               .toList(),
           'grid': gridAsMaps,
+          'grid_meta': gridMetaAsMaps,
           'updated_at': FieldValue.serverTimestamp(),
           'created_at': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
@@ -1722,6 +1751,10 @@ class _TimetablePageState extends State<TimetablePage> {
             days.length,
             (index) => {'r': index, 'cells': []},
           ),
+          'grid_meta': List.generate(
+            days.length,
+            (index) => {'r': index, 'cells': []},
+          ),
           'updated_at': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
         debugPrint('Cleared all cells in timetable: $docId');
@@ -1788,7 +1821,7 @@ class _TimetablePageState extends State<TimetablePage> {
             s.periodLabel.toLowerCase().contains(q);
       }).toList();
     }
-    final daysOrder = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+   final daysOrder = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     list.sort((a, b) {
       final ai = daysOrder.indexOf(a.day);
       final bi = daysOrder.indexOf(b.day);
@@ -2290,7 +2323,7 @@ class _TimetablePageState extends State<TimetablePage> {
     await Printing.layoutPdf(
       onLayout: (format) async => pdf.save(),
       name:
-          'timetable_${depKey}_${classKey}_${dateStr.replaceAll(':', '-')}.pdf',
+          'timetable_${depKey}${classKey}${dateStr.replaceAll(':', '-')}.pdf',
     );
   }
 

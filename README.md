@@ -43,3 +43,12 @@ git commit -m "waxa aad qabatay kuso qor inta"
 
 # 3. Push branch-kaaga cusub GitHub
 git push -u origin magac-branch-kaaga
+
+### Cloud Functions
+
+#### Cleanup Expired Sessions
+This function marks sessions as inactive when their `expires_at` or `period_ends_at` timestamps are in the past. It ensures that stale sessions do not block new QR code generation.
+
+**Deployment:**
+1. Ensure Firebase CLI is installed and authenticated.
+2. Run `firebase deploy --only functions` to deploy the function.
