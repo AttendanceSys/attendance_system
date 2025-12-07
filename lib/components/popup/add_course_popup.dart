@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/course.dart';
+import '../../hooks/use_classes.dart';
 
 class AddCoursePopup extends StatefulWidget {
   final Course? course;
@@ -7,6 +8,8 @@ class AddCoursePopup extends StatefulWidget {
   final List<String> classes;
   // departments: list of maps with keys 'id' and 'name'
   final List<Map<String, String>> departments;
+  // optional faculty id to scope class lookup (helps when admin faculty is known)
+  final String? facultyId;
 
   const AddCoursePopup({
     super.key,
@@ -14,6 +17,7 @@ class AddCoursePopup extends StatefulWidget {
     required this.teachers,
     required this.classes,
     required this.departments,
+    this.facultyId,
   });
 
   @override
@@ -22,6 +26,11 @@ class AddCoursePopup extends StatefulWidget {
 
 class _AddCoursePopupState extends State<AddCoursePopup> {
   final _formKey = GlobalKey<FormState>();
+
+  final UseClasses _classesHook = UseClasses();
+
+  List<String> _localClasses = [];
+  bool _isLoadingClasses = false;
 
   String? _code;
   String? _name;
@@ -46,6 +55,45 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
         ? initialDept
         : null;
     _semester = widget.course?.semester;
+
+    // initialize local classes list from provided classes; if editing and
+    // an initial department id is present, fetch classes for that
+    // department so the class dropdown only shows relevant options.
+    _localClasses = widget.classes.toList();
+    final currentDept = _department;
+    if (currentDept != null && currentDept.isNotEmpty) {
+      _fetchClassesForDepartment(currentDept);
+    }
+  }
+
+  Future<void> _fetchClassesForDepartment(String deptId) async {
+    setState(() => _isLoadingClasses = true);
+    try {
+      final rows = await _classesHook.fetchClassesByDepartmentId(
+        deptId,
+        facultyId: widget.facultyId,
+      );
+      final names = rows
+          .map((r) => r.name)
+          .where((s) => s.trim().isNotEmpty)
+          .toList();
+      setState(() {
+        _localClasses = names;
+        // If current selected class is not in the new list, clear it so
+        // the validator forces a selection.
+        if (_className == null || !_localClasses.contains(_className)) {
+          _className = null;
+        }
+      });
+    } catch (e) {
+      // on error keep existing list (fallback) and clear selection
+      setState(() {
+        _localClasses = widget.classes.toList();
+        _className = null;
+      });
+    } finally {
+      setState(() => _isLoadingClasses = false);
+    }
   }
 
   @override
@@ -146,7 +194,20 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                               ),
                             )
                             .toList(),
-                        onChanged: (val) => setState(() => _department = val),
+                        onChanged: (val) async {
+                          // when department changes, fetch classes for that
+                          // department and update the class dropdown items.
+                          setState(() => _department = val);
+                          if (val != null && val.trim().isNotEmpty) {
+                            await _fetchClassesForDepartment(val);
+                          } else {
+                            // if no department selected, revert to provided
+                            // classes list
+                            setState(
+                              () => _localClasses = widget.classes.toList(),
+                            );
+                          }
+                        },
                         validator: (val) => val == null || val.isEmpty
                             ? "Select department"
                             : null,
@@ -188,7 +249,25 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   // --- Class ---
                   Builder(
                     builder: (context) {
-                      final classItems = widget.classes
+                      if (_isLoadingClasses) {
+                        return DropdownButtonFormField<String>(
+                          value: null,
+                          decoration: const InputDecoration(
+                            hintText: "Loading classes...",
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem(
+                              value: null,
+                              child: Text('Loading classes...'),
+                            ),
+                          ],
+                          onChanged: null,
+                          validator: (val) => null,
+                        );
+                      }
+
+                      final classItems = _localClasses
                           .where((c) => c.trim().isNotEmpty)
                           .toSet()
                           .toList();

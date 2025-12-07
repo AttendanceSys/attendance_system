@@ -51,7 +51,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
 
   String? _selectedLecturerId; // optional if we load teachers by id
   String? _selectedLecturerName;
-  bool _useCustomLecturer = false;
+  // manual lecturer override removed — lecturer is auto-assigned from course
   final TextEditingController _customLecturerCtrl = TextEditingController();
 
   // loaded lists (id + display)
@@ -99,13 +99,9 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       );
       if (match >= 0) {
         _selectedLecturerId = _lecturers[match]['id'];
-        _useCustomLecturer = false;
       } else {
-        _useCustomLecturer = true;
         _customLecturerCtrl.text = _selectedLecturerName!;
       }
-    } else if (_lecturers.isEmpty) {
-      _useCustomLecturer = true;
     }
 
     // If a classId is provided, fetch courses (and optionally lecturers later) from the Supabase-backed service.
@@ -149,98 +145,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   }
 
   // Fetch lecturers for a course id using UseTimetable. Returns list of maps {id,name}.
-  Future<List<Map<String, String>>> _fetchLecturersForCourseDoc(
-    String courseDocId,
-  ) async {
-    try {
-      // Ensure teachers cache is loaded
-      if (_svc.teachers.isEmpty) await _svc.loadTeachers();
-
-      // Try to find the course in the cached courses
-      Map<String, dynamic>? course;
-      for (final c in _svc.courses) {
-        try {
-          if (c['id'].toString() == courseDocId) {
-            course = c;
-            break;
-          }
-        } catch (_) {}
-      }
-      if (course != null && course.isNotEmpty) {
-        final raw = course['raw'] as Map<String, dynamic>? ?? {};
-
-        // 1) teacher_assigned string id
-        if (raw.containsKey('teacher_assigned') &&
-            raw['teacher_assigned'] is String) {
-          final tid = (raw['teacher_assigned'] ?? '').toString();
-          if (tid.isNotEmpty) {
-            Map<String, dynamic>? found;
-            for (final t in _svc.teachers) {
-              try {
-                if (t['id'].toString() == tid) {
-                  found = t;
-                  break;
-                }
-              } catch (_) {}
-            }
-            if (found != null && found.isNotEmpty) {
-              return [
-                {'id': tid, 'name': (found['name'] ?? tid).toString()},
-              ];
-            }
-          }
-        }
-
-        // 2) embedded teacher map
-        if (raw.containsKey('teacher') && raw['teacher'] is Map) {
-          final t = raw['teacher'] as Map<String, dynamic>;
-          final tid = (t['id'] ?? t['teacher_id'] ?? '').toString();
-          final tname = (t['name'] ?? t['full_name'] ?? '').toString();
-          if (tname.isNotEmpty)
-            return [
-              {'id': tid, 'name': tname},
-            ];
-        }
-
-        // 3) teachers array of ids or maps
-        if (raw.containsKey('teachers') && raw['teachers'] is List) {
-          final list = raw['teachers'] as List;
-          for (final item in list) {
-            try {
-              if (item is String) {
-                Map<String, dynamic>? found;
-                for (final t in _svc.teachers) {
-                  try {
-                    if (t['id'].toString() == item) {
-                      found = t;
-                      break;
-                    }
-                  } catch (_) {}
-                }
-                if (found != null && found.isNotEmpty)
-                  return [
-                    {'id': item, 'name': (found['name'] ?? item).toString()},
-                  ];
-              } else if (item is Map) {
-                final tid = (item['id'] ?? item['teacher_id'] ?? '').toString();
-                final tname = (item['name'] ?? item['full_name'] ?? '')
-                    .toString();
-                if (tname.isNotEmpty)
-                  return [
-                    {'id': tid, 'name': tname},
-                  ];
-              }
-            } catch (_) {}
-          }
-        }
-      }
-
-      return [];
-    } catch (e, st) {
-      debugPrint('fetchLecturersForCourseDoc (supabase) error: $e\n$st');
-      return [];
-    }
-  }
+  // Note: lecturers are now auto-assigned from course via UseTimetable.autoAssignTeacher
 
   // ---------- UI actions ----------
 
@@ -289,37 +194,42 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       _lecturers = [];
       _selectedLecturerId = null;
       _selectedLecturerName = null;
-      _useCustomLecturer = false;
       _customLecturerCtrl.clear();
     });
     if (courseId == null || courseId.trim().isEmpty) {
       setState(() => _loadingLecturers = false);
       return;
     }
-    final lecturers = await _fetchLecturersForCourseDoc(courseId);
-    setState(() {
-      _lecturers = lecturers;
-      if (widget.initialLecturer != null) {
-        final match = _lecturers.indexWhere(
-          (t) =>
-              (t['name'] ?? '').toLowerCase() ==
-              widget.initialLecturer!.toLowerCase(),
-        );
-        if (match >= 0) {
-          _selectedLecturerId = _lecturers[match]['id'];
-          _selectedLecturerName = _lecturers[match]['name'];
-          _useCustomLecturer = false;
-        }
-      } else if (_lecturers.isNotEmpty) {
-        // Auto-select the first lecturer if available (this picks teacher_assigned)
-        _selectedLecturerId = _lecturers.first['id'];
-        _selectedLecturerName = _lecturers.first['name'];
-        _useCustomLecturer = false;
+
+    // Use service autoAssignTeacher to strictly obtain assigned teacher.
+    try {
+      final auto = await _svc.autoAssignTeacher(courseId);
+      if (auto != null && auto['id'] != null) {
+        setState(() {
+          _selectedLecturerId = auto['id'];
+          _selectedLecturerName = auto['name'] ?? auto['id'];
+          _lecturers = [
+            {
+              'id': _selectedLecturerId ?? '',
+              'name': _selectedLecturerName ?? '',
+            },
+          ];
+
+          _loadingLecturers = false;
+        });
+      } else {
+        // No assigned teacher found — keep empty and let save show error
+        setState(() {
+          _lecturers = [];
+          _selectedLecturerId = null;
+          _selectedLecturerName = null;
+          _loadingLecturers = false;
+        });
       }
-      if (_lecturers.isEmpty && widget.lecturers.isEmpty)
-        _useCustomLecturer = true;
-      _loadingLecturers = false;
-    });
+    } catch (e, st) {
+      debugPrint('autoAssignTeacher fetch error: $e\\n$st');
+      setState(() => _loadingLecturers = false);
+    }
   }
 
   void _onCoursePickedByUser(Map<String, String>? course) {
@@ -344,24 +254,25 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   // ---------- Save / Clear ----------
 
   void _save() {
-    final course = _useCustomCourse
-        ? _courseCustomCtrl.text.trim()
-        : (_selectedCourseName ?? '').trim();
-    final lecturer = _useCustomLecturer
-        ? _customLecturerCtrl.text.trim()
-        : (_selectedLecturerName ?? '').trim();
-
-    if (course.isEmpty && lecturer.isEmpty) {
+    // Require a selected course with an assigned teacher (no manual lecturer selection)
+    if (_useCustomCourse ||
+        _selectedCourseId == null ||
+        _selectedCourseId!.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please enter a course or lecturer, or press Clear to remove the cell.',
-          ),
-        ),
+        const SnackBar(content: Text('Please select a course from the list')),
       );
       return;
     }
 
+    if (_selectedLecturerId == null || _selectedLecturerId!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Course has no teacher assigned')),
+      );
+      return;
+    }
+
+    final course = (_selectedCourseName ?? '').trim();
+    final lecturer = (_selectedLecturerName ?? '').trim();
     final cellText = course.isEmpty
         ? lecturer
         : (lecturer.isEmpty ? course : '$course\n$lecturer');
@@ -391,9 +302,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
     final courseEntries = _courses
         .map((c) => MapEntry(c['id'] ?? '', c['name'] ?? ''))
         .toList();
-    final lecturerEntries = _lecturers
-        .map((t) => MapEntry(t['id'] ?? '', t['name'] ?? ''))
-        .toList();
+    // lecturerEntries intentionally not used — lecturer is readonly/auto-assigned
 
     return AlertDialog(
       title: const Text('Edit Timetable Cell'),
@@ -457,7 +366,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
               ],
             ),
             const SizedBox(height: 12),
-            // Lecturer field
+            // Lecturer field — readonly (auto-assigned). No manual selection.
             Row(
               children: [
                 Expanded(
@@ -467,69 +376,17 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
-                    child: _useCustomLecturer
-                        ? TextFormField(
-                            controller: _customLecturerCtrl,
-                            decoration: const InputDecoration(
-                              hintText: 'Enter lecturer name',
-                              border: InputBorder.none,
-                              isDense: true,
-                            ),
-                          )
-                        : _loadingLecturers
+                    child: _loadingLecturers
                         ? const SizedBox(
                             height: 40,
                             child: Center(
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           )
-                        : DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              isExpanded: true,
-                              value:
-                                  (_selectedLecturerId != null &&
-                                      _selectedLecturerId!.isNotEmpty)
-                                  ? _selectedLecturerId
-                                  : null,
-                              hint: Text(
-                                _selectedLecturerName ?? 'Select lecturer',
-                              ),
-                              items: lecturerEntries
-                                  .map(
-                                    (e) => DropdownMenuItem<String>(
-                                      value: e.key,
-                                      child: Text(e.value),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged:
-                                  (_selectedCourseId != null &&
-                                      _selectedCourseId!.isNotEmpty)
-                                  ? (id) {
-                                      Map<String, String>? picked;
-                                      for (final t in _lecturers) {
-                                        try {
-                                          if (t['id'] == id) {
-                                            picked = t;
-                                            break;
-                                          }
-                                        } catch (_) {}
-                                      }
-                                      picked ??= {
-                                        'id': id ?? '',
-                                        'name': id ?? '',
-                                      };
-                                      final pid = picked['id'] ?? '';
-                                      final pname = picked['name'] ?? '';
-                                      setState(() {
-                                        _selectedLecturerId = pid;
-                                        _selectedLecturerName = pname;
-                                        _useCustomLecturer = false;
-                                        _customLecturerCtrl.clear();
-                                      });
-                                    }
-                                  : null,
-                            ),
+                        : Text(
+                            _selectedLecturerName ??
+                                'Course has no teacher assigned',
+                            style: const TextStyle(fontSize: 14),
                           ),
                   ),
                 ),

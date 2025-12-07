@@ -186,7 +186,7 @@ class UseCourses {
       if (classIds.isNotEmpty) {
         final cResp = await _supabase
             .from('classes')
-            .select('id, class_name')
+            .select('id, class_name, department_id(department_name, department_code)')
             .filter('id', 'in', classIds.toList());
         for (final c in cResp as List) {
           try {
@@ -284,7 +284,11 @@ class UseCourses {
         classId = resolved;
       }
 
-      // resolve faculty scope when not provided by caller
+      // resolve faculty scope when not provided by caller. We will try to
+      // derive an "effective" faculty id from the class row itself and only
+      // apply faculty scoping when we have a concrete id. This prevents the
+      // admin's faculty from hiding courses that belong to a class attached
+      // to another faculty.
       String? resolvedFacultyId = facultyId;
       if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
         try {
@@ -293,21 +297,51 @@ class UseCourses {
           resolvedFacultyId = null;
         }
       }
-      if (resolvedFacultyId == null || resolvedFacultyId.isEmpty) {
+
+      // Try to fetch the class row so we can prefer its faculty_id when
+      // present. If the class row has a faculty_id, use that to scope the
+      // course query. If neither the class row nor the admin scope provide a
+      // faculty id, return empty to avoid un-scoped queries.
+      String? classFacultyId;
+      try {
+        final classRow = await _supabase
+            .from('classes')
+            .select('id, faculty_id')
+            .eq('id', classId)
+            .maybeSingle();
+        if (classRow != null && classRow['faculty_id'] != null) {
+          classFacultyId = (classRow['faculty_id'] ?? '').toString();
+        }
+      } catch (_) {
+        // ignore errors fetching class metadata; we'll fall back to
+        // resolvedFacultyId below.
+      }
+
+      final String? effectiveFacultyId =
+          (classFacultyId != null && classFacultyId.isNotEmpty)
+          ? classFacultyId
+          : (resolvedFacultyId != null && resolvedFacultyId.isNotEmpty)
+          ? resolvedFacultyId
+          : null;
+
+      if (effectiveFacultyId == null || effectiveFacultyId.isEmpty) {
+        // If we don't have any faculty id to scope by, bail out to avoid
+        // returning courses across all faculties.
         return <Course>[];
       }
 
       // ignore: avoid_print
       print(
-        '[UseCourses.fetchCoursesByClass] querying courses for classId=$classId faculty_id=$resolvedFacultyId limit=$limit page=$page',
+        '[UseCourses.fetchCoursesByClass] querying courses for classId=$classId effective_faculty_id=$effectiveFacultyId limit=$limit page=$page',
       );
+
       dynamic query = _supabase
           .from('courses')
           .select(
             'id, course_code, course_name, teacher_assigned, class, department_id, semester, created_at, faculty_id, faculty:faculties(id,faculty_name), teacher_assigned:teachers(id, teacher_name, username), class:classes(id, class_name), department:departments(id, department_name, department_code)',
           )
           .eq('class', classId)
-          .eq('faculty_id', resolvedFacultyId)
+          .eq('faculty_id', effectiveFacultyId)
           .order('created_at', ascending: false);
 
       if (limit != null) {

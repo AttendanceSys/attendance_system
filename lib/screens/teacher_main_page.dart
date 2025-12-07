@@ -17,10 +17,16 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
   int selectedIndex = 0;
   bool collapsed = true;
 
-  final List<Widget> pages = const [
-    TeacherQRGenerationPage(),
-    TeacherAttendancePage(),
-  ];
+  late final List<Widget> pages;
+
+  @override
+  void initState() {
+    super.initState();
+    pages = [
+      TeacherQRGenerationPage(displayName: widget.displayName),
+      const TeacherAttendancePage(),
+    ];
+  }
 
   void onSidebarItemSelected(int index) {
     setState(() {

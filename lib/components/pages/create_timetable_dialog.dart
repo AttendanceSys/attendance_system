@@ -4,7 +4,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:convert';
 
 import '../../hooks/use_timetable.dart';
 
@@ -16,6 +15,7 @@ class CreateTimetableTimeResult {
   final int startMinutes;
   final int endMinutes;
   final String cellText;
+  final String? teacherId; // optional teacher uuid (auto-assigned)
 
   CreateTimetableTimeResult({
     required this.department,
@@ -24,6 +24,7 @@ class CreateTimetableTimeResult {
     required this.startMinutes,
     required this.endMinutes,
     required this.cellText,
+    this.teacherId,
   });
 }
 
@@ -72,8 +73,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   String? _classKey; // display name shown in dropdown (class name)
   String?
   _classIdForSave; // class document id used for loading courses (not used in payload)
-  String? _lecturer;
-  bool _useCustomLecturer = false;
+  String? _lecturer; // lecturer display name (auto-assigned)
+  String? _lecturerId; // lecturer uuid (auto-assigned)
   final TextEditingController _lecturerCustomCtrl = TextEditingController();
   String? _course;
 
@@ -95,6 +96,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
             .toList()
       : [];
 
+  // Lecturers are auto-assigned from the course's `teacher_assigned` field.
   bool get _configured =>
       _labels.isNotEmpty &&
       _spans.length == _labels.length &&
@@ -292,10 +294,11 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
       setState(() {
         _loadedCourses = courses;
-        if (_loadedCourses.isNotEmpty)
+        if (_loadedCourses.isNotEmpty) {
           _course =
               _loadedCourses.first['course_name']?.toString() ??
               _loadedCourses.first['id']?.toString();
+        }
       });
     } catch (e, st) {
       debugPrint('CreateDialog loadCourses error: $e\n$st');
@@ -433,7 +436,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       _spans = result.spans;
       _teachingIndices = result.teachingIndices;
       _recomputeTeachingIndices();
-      for (final s in _sessions) s.periodDropdownIndex = null;
+      for (final s in _sessions) {
+        s.periodDropdownIndex = null;
+      }
     });
   }
 
@@ -467,7 +472,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     if (!ok) return;
 
     int insertAt = 0;
-    while (insertAt < _spans.length && _spans[insertAt].$1 < start) insertAt++;
+    while (insertAt < _spans.length && _spans[insertAt].$1 < start) {
+      insertAt++;
+    }
 
     setState(() {
       _spans.insert(insertAt, (start, end));
@@ -515,7 +522,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       _spans.clear();
       _teachingIndices.clear();
       _inferredPeriodMinutes = null;
-      for (final s in _sessions) s.periodDropdownIndex = null;
+      for (final s in _sessions) {
+        s.periodDropdownIndex = null;
+      }
     });
   }
 
@@ -540,9 +549,12 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       return;
     }
 
-    final lecturerName = _useCustomLecturer
-        ? _lecturerCustomCtrl.text.trim()
-        : (_lecturer ?? '').trim();
+    // Ensure course has an assigned teacher (auto-assigned). Manual selection disabled.
+    if (_lecturerId == null || _lecturerId!.trim().isEmpty) {
+      _snack('Course has no teacher assigned');
+      return;
+    }
+    final lecturerName = (_lecturer ?? '').trim();
     final cellText = lecturerName.isEmpty
         ? _course!.trim()
         : '${_course!.trim()}\n$lecturerName';
@@ -597,6 +609,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
           startMinutes: span.$1,
           endMinutes: span.$2,
           cellText: cellText,
+          teacherId: _lecturerId,
         ),
       );
     }
@@ -636,24 +649,37 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       '${minutes ~/ 60}:${(minutes % 60).toString().padLeft(2, '0')}';
 
   void _snack(String msg) {
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 
   void _assertIntegrity() {
-    if (_labels.length != _spans.length) {
-      _labels.clear();
-      _spans.clear();
-      _teachingIndices.clear();
-      _inferredPeriodMinutes = null;
+    if (_labels.length == _spans.length) return;
+    // Attempt to repair mismatched lengths instead of wiping all data.
+    final minLen = (_labels.length < _spans.length)
+        ? _labels.length
+        : _spans.length;
+    if (minLen > 0) {
+      _labels = _labels.sublist(0, minLen);
+      _spans = _spans.sublist(0, minLen);
+    } else {
+      // nothing sensible to keep — reset to empty but keep user informed
+      _labels = [];
+      _spans = [];
     }
+    _teachingIndices.clear();
+    _inferredPeriodMinutes = null;
+    // Recompute teaching indices based on repaired labels/spans
+    _recomputeTeachingIndices();
   }
 
   List<String> _classesForDepartmentKey(String? dept) {
     if (dept == null || dept.trim().isEmpty) return [];
     final lower = dept.toLowerCase();
-    if (widget.departmentClasses.containsKey(dept))
+    if (widget.departmentClasses.containsKey(dept)) {
       return widget.departmentClasses[dept]!;
+    }
     final matchKey = widget.departmentClasses.keys.firstWhere(
       (k) => k.toLowerCase() == lower,
       orElse: () => '',
@@ -663,10 +689,11 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   }
 
   List<String> get _classesForDepartment {
-    if (_loadedClasses.isNotEmpty)
+    if (_loadedClasses.isNotEmpty) {
       return _loadedClasses
           .map((c) => c['name']?.toString() ?? c['id'].toString())
           .toList();
+    }
     final list = _classesForDepartmentKey(_department);
     if (list.isNotEmpty) return list;
     return widget.departmentClasses.values.expand((e) => e).toList();
@@ -849,32 +876,33 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
                   // Lecturer / Course
                   _wrapFields([
-                    !_useCustomLecturer
-                        ? _dropdownBox<String>(
-                            hint: 'Lecturer',
-                            value: _lecturer,
-                            // Prefer the live teacher list from the service when available
-                            items: (_svc.teachers.isNotEmpty)
-                                ? _svc.teachers
-                                      .map((t) => t['name']?.toString() ?? '')
-                                      .toList()
-                                : widget.lecturers,
-                            onChanged: (v) => setState(() => _lecturer = v),
-                          )
-                        : TextFormField(
-                            controller: _lecturerCustomCtrl,
-                            decoration: const InputDecoration(
-                              hintText: 'Lecturer',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              filled: true,
-                              fillColor: Colors.white,
+                    // Lecturer is auto-assigned from the selected course.
+                    // Disable manual selection — show readonly field with assigned teacher.
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        hintText: 'Lecturer',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _lecturer ?? 'Auto-assigned from course',
+                              style: const TextStyle(fontSize: 14),
                             ),
                           ),
+                          const SizedBox(width: 8),
+                        ],
+                      ),
+                    ),
                     _dropdownBox<String>(
                       hint: _loadingCourses ? 'Loading courses...' : 'Course',
                       value: _course,
@@ -897,200 +925,52 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                           } catch (_) {}
                         }
                         // If not found in loaded records, create a minimal picked map
-                        if (picked.isEmpty)
+                        if (picked.isEmpty) {
                           picked = {'id': v ?? '', 'course_name': v ?? ''};
-
+                        }
                         // Update course selection state
                         setState(() {
                           _course =
                               picked['course_name']?.toString() ?? (v ?? '');
+                          _lecturer = null;
+                          _lecturerId = null;
                         });
 
-                        // Try to auto-select lecturer based on course.raw
+                        // Use service to auto-assign teacher based on course id
                         try {
-                          // course.raw in DB can be a Map or a JSON string; handle both
-                          final dynamic rawVal = picked['raw'];
-                          Map<String, dynamic> raw = {};
-                          if (rawVal is Map<String, dynamic>) {
-                            raw = rawVal;
-                          } else if (rawVal is String &&
-                              rawVal.trim().isNotEmpty) {
-                            try {
-                              final decoded = json.decode(rawVal);
-                              if (decoded is Map<String, dynamic>)
-                                raw = decoded;
-                            } catch (_) {
-                              // ignore decode errors
-                            }
-                          }
-
-                          debugPrint(
-                            'CreateDialog: picked course id=${picked['id']} name=${picked['course_name']} rawType=${rawVal.runtimeType} rawKeys=${raw.keys.toList()}',
-                          );
-
-                          String? teacherName;
-
-                          // Ensure teacher cache is loaded if we need to lookup by id
-                          if (_svc.teachers.isEmpty) await _svc.loadTeachers();
-
-                          // 1) teacher_assigned may be at top-level of the course row
-                          //    or inside raw. Try top-level first, then raw.
-                          dynamic tidVal;
-                          if (picked.containsKey('teacher_assigned'))
-                            tidVal = picked['teacher_assigned'];
-                          if ((tidVal == null ||
-                                  (tidVal is String && tidVal.isEmpty)) &&
-                              raw.containsKey('teacher_assigned')) {
-                            tidVal = raw['teacher_assigned'];
-                          }
-                          if (tidVal is String && tidVal.isNotEmpty) {
-                            final tid = tidVal.toString();
-                            for (final t in _svc.teachers) {
-                              try {
-                                if (t['id'].toString() == tid) {
-                                  teacherName =
-                                      (t['teacher_name'] ??
-                                              t['name'] ??
-                                              t['full_name'] ??
-                                              '')
-                                          .toString();
-                                  break;
-                                }
-                              } catch (_) {}
-                            }
-                          }
-
-                          // 2) embedded teacher map (may be top-level or in raw)
-                          if ((teacherName == null || teacherName.isEmpty)) {
-                            dynamic emb = picked['teacher'];
-                            if (emb == null && raw.containsKey('teacher'))
-                              emb = raw['teacher'];
-                            if (emb is Map) {
-                              teacherName =
-                                  (emb['teacher_name'] ??
-                                          emb['name'] ??
-                                          emb['full_name'] ??
-                                          '')
-                                      .toString();
-                            }
-                          }
-
-                          // 3) teachers array: try first entry (top-level or raw)
-                          if ((teacherName == null || teacherName.isEmpty)) {
-                            dynamic listVal = picked['teachers'];
-                            if (listVal == null && raw.containsKey('teachers'))
-                              listVal = raw['teachers'];
-                            if (listVal is List) {
-                              final list = listVal;
-                              for (final item in list) {
-                                try {
-                                  if (item is String) {
-                                    for (final t in _svc.teachers) {
-                                      try {
-                                        if (t['id'].toString() == item) {
-                                          teacherName =
-                                              (t['teacher_name'] ??
-                                                      t['name'] ??
-                                                      t['full_name'] ??
-                                                      '')
-                                                  .toString();
-                                          break;
-                                        }
-                                      } catch (_) {}
-                                    }
-                                    if (teacherName != null &&
-                                        teacherName.isNotEmpty)
-                                      break;
-                                  } else if (item is Map) {
-                                    teacherName =
-                                        (item['teacher_name'] ??
-                                                item['name'] ??
-                                                item['full_name'] ??
-                                                '')
-                                            .toString();
-                                    if (teacherName.isNotEmpty) break;
-                                  }
-                                } catch (_) {}
-                              }
-                            }
-                          }
-
-                          debugPrint(
-                            'CreateDialog: resolved teacherName=$teacherName',
-                          );
-
-                          // Apply lecturer selection: prefer matching an entry in widget.lecturers
-                          if (teacherName != null && teacherName.isNotEmpty) {
-                            // Prefer matching against live teacher cache when available
-                            bool matched = false;
-                            if (_svc.teachers.isNotEmpty) {
-                              for (final t in _svc.teachers) {
-                                try {
-                                  final tname = (t['name'] ?? '').toString();
-                                  if (tname.toLowerCase() ==
-                                      teacherName.toLowerCase()) {
-                                    setState(() {
-                                      _lecturer = tname;
-                                      _useCustomLecturer = false;
-                                      _lecturerCustomCtrl.clear();
-                                    });
-                                    matched = true;
-                                    break;
-                                  }
-                                } catch (_) {}
-                              }
-                            }
-                            if (!matched) {
-                              // fallback to static widget.lecturers list
-                              for (final l in widget.lecturers) {
-                                try {
-                                  if (l.toLowerCase() ==
-                                      teacherName.toLowerCase()) {
-                                    setState(() {
-                                      _lecturer = l;
-                                      _useCustomLecturer = false;
-                                      _lecturerCustomCtrl.clear();
-                                    });
-                                    matched = true;
-                                    break;
-                                  }
-                                } catch (_) {}
-                              }
-                            }
-                            if (!matched) {
-                              // not in any list — use custom lecturer field
+                          if ((picked['id'] ?? '')
+                              .toString()
+                              .trim()
+                              .isNotEmpty) {
+                            final auto = await _svc.autoAssignTeacher(
+                              picked['id'].toString(),
+                            );
+                            if (auto != null && auto['id'] != null) {
                               setState(() {
-                                _useCustomLecturer = true;
-                                _lecturerCustomCtrl.text = teacherName!;
-                                _lecturer = null;
+                                _lecturerId = auto['id'];
+                                _lecturer = auto['name'] ?? auto['id'];
                               });
+                            } else {
+                              // show error — course has no teacher assigned
+                              setState(() {
+                                _lecturer = null;
+                                _lecturerId = null;
+                              });
+                              _snack('Course has no teacher assigned');
                             }
                           } else {
-                            debugPrint(
-                              'CreateDialog: no teacher assignment found for course ${picked['id']}',
-                            );
+                            // custom course (no id) — cannot auto-assign
+                            _snack('Course has no teacher assigned');
                           }
                         } catch (e, st) {
-                          debugPrint(
-                            'CreateDialog auto-select lecturer error: $e\\n$st',
-                          );
+                          debugPrint('autoAssignTeacher error: $e\\n$st');
                         }
                       },
                     ),
                   ]),
 
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Switch(
-                        value: _useCustomLecturer,
-                        onChanged: (v) =>
-                            setState(() => _useCustomLecturer = v),
-                      ),
-                      const SizedBox(width: 6),
-                      const Text('Custom lecturer'),
-                    ],
-                  ),
+                  // Lecturer is auto-assigned from course; manual override disabled.
                   const SizedBox(height: 12),
 
                   // Schedule controls
@@ -1462,10 +1342,11 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                     context: context,
                     initialTime: _toTimeOfDay(_dayStart),
                   );
-                  if (picked != null)
+                  if (picked != null) {
                     setState(
                       () => _dayStart = picked.hour * 60 + picked.minute,
                     );
+                  }
                 },
                 child: InputDecorator(
                   decoration: const InputDecoration(
@@ -1563,11 +1444,12 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         ],
                         onChanged: (v) {
                           final n = int.tryParse(v.trim());
-                          if (n != null && n > 0)
+                          if (n != null && n > 0) {
                             setState(() {
                               _customDuration = n;
                               _periodMinutes = n;
                             });
+                          }
                         },
                       ),
                     ),
@@ -1588,8 +1470,9 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       onChanged: (v) {
                         final n = int.tryParse(v.trim());
-                        if (n != null && n >= 1 && n <= 40)
+                        if (n != null && n >= 1 && n <= 40) {
                           setState(() => _periodCount = n);
+                        }
                       },
                     ),
                   ),
@@ -1670,8 +1553,9 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         if (i > 0)
                           IconButton(
                             onPressed: () {
-                              if (_breaks.length > 1)
+                              if (_breaks.length > 1) {
                                 setState(() => _breaks.removeAt(i));
+                              }
                             },
                             icon: const Icon(
                               Icons.close,
@@ -1748,7 +1632,6 @@ class _AddPeriodDialog extends StatefulWidget {
   final int? periodMinutes;
 
   const _AddPeriodDialog({
-    super.key,
     required this.existingSpans,
     required this.existingLabels,
     required this.periodMinutes,
@@ -1796,11 +1679,12 @@ class _AddPeriodDialogState extends State<_AddPeriodDialog> {
                   context: context,
                   initialTime: initial,
                 );
-                if (picked != null)
+                if (picked != null) {
                   setState(() {
                     startPicker = picked;
                     error = null;
                   });
+                }
               },
               child: InputDecorator(
                 decoration: const InputDecoration(

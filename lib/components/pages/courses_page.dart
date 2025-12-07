@@ -236,6 +236,7 @@ class _CoursesPageState extends State<CoursesPage> {
         departments: _deptNameById.entries
             .map((e) => {'id': e.key, 'name': e.value})
             .toList(),
+        facultyId: _facultyId,
       ),
     );
     if (result != null) {
@@ -292,6 +293,7 @@ class _CoursesPageState extends State<CoursesPage> {
         departments: _deptNameById.entries
             .map((e) => {'id': e.key, 'name': e.value})
             .toList(),
+        facultyId: _facultyId,
       ),
     );
     if (result != null) {
