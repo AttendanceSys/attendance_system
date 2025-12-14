@@ -19,10 +19,12 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
   String? _lecturerId;
   String? _classId;
   String? _semester;
+  bool _editingClassInactive = false;
 
   List<Map<String, String>> _teachers = [];
   List<Map<String, String>> _classes = []; // each entry: {id,name,department}
   List<Map<String, String>> _departments = [];
+  String? _conflictMessage;
 
   @override
   void initState() {
@@ -35,20 +37,6 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
       _semester = widget.course!.semester;
     }
     _fetchLookups();
-  }
-
-  String _extractId(dynamic cand) {
-    if (cand == null) return '';
-    if (cand is DocumentReference) return cand.id;
-    if (cand is String) {
-      final s = cand;
-      if (s.contains('/')) {
-        final parts = s.split('/').where((p) => p.isNotEmpty).toList();
-        return parts.isNotEmpty ? parts.last : s;
-      }
-      return s;
-    }
-    return cand.toString();
   }
 
   bool _docMatchesSessionFaculty(Map<String, dynamic> data) {
@@ -133,6 +121,12 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
         final allowedDepartments = dSnap.docs
             .map((d) => MapEntry(d.id, d.data() as Map<String, dynamic>? ?? {}))
             .where((entry) => _docMatchesSessionFaculty(entry.value))
+            .where((entry) {
+              final status = entry.value['status'];
+              if (status is bool) return status;
+              if (status is String) return status.toLowerCase() == 'active';
+              return true;
+            })
             .map(
               (entry) => {
                 'id': entry.key,
@@ -155,9 +149,19 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
         }).toList();
 
         // Classes: include only classes that either declare the same faculty or belong to an allowed department
+        bool editingClassInactive = false;
         _classes = cSnap.docs
             .map((d) {
               final data = d.data() as Map<String, dynamic>? ?? {};
+              final status = data['status'];
+              final isActive = () {
+                if (status is bool) return status;
+                if (status is String) {
+                  final lowered = status.toLowerCase();
+                  return lowered == 'true' || lowered == 'active';
+                }
+                return true;
+              }();
               final name = (data['class_name'] ?? data['name'] ?? '') as String;
               final depRaw = data['department_ref'] is DocumentReference
                   ? (data['department_ref'] as DocumentReference).id
@@ -166,25 +170,82 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   ? depRaw.split('/').where((p) => p.isNotEmpty).toList().last
                   : depRaw;
               final classMatchesFaculty = _docMatchesSessionFaculty(data);
+              final isEditingExistingClass =
+                  widget.course?.classRef != null &&
+                  widget.course!.classRef == d.id;
               if (!classMatchesFaculty && !allowedDeptIds.contains(depId))
                 return null;
+              if (!isActive && !isEditingExistingClass) return null;
+              if (isEditingExistingClass && !isActive) {
+                editingClassInactive = true;
+              }
               return {'id': d.id, 'name': name, 'department': depId};
             })
             .whereType<Map<String, String>>()
             .toList();
 
+        // If editing, preselect department based on the existing class
+        if (widget.course != null &&
+            _departmentId == null &&
+            _classId != null) {
+          final match = _classes.firstWhere(
+            (c) => c['id'] == _classId,
+            orElse: () => {},
+          );
+          if (match.isNotEmpty) _departmentId = match['department'];
+        }
+
         _departments = allowedDepartments;
+        _editingClassInactive = editingClassInactive;
+        if (_editingClassInactive) {
+          // If the existing class is inactive, clear department selection
+          // so the dropdown starts empty and shows only active departments.
+          if (_departmentId != null &&
+              _departments.every((d) => d['id'] != _departmentId)) {
+            _departmentId = null;
+          }
+        } else {
+          // Also clear if preselected department is not among active ones.
+          if (_departmentId != null &&
+              _departments.every((d) => d['id'] != _departmentId)) {
+            _departmentId = null;
+          }
+        }
       });
     } catch (e) {
       print('Error fetching course lookups: $e');
     }
   }
 
-  void _save() {
+  Future<void> _save() async {
+    setState(() => _conflictMessage = null);
     if (!_formKey.currentState!.validate()) return;
+
+    final normalizedCode = _courseCode!.trim().toUpperCase();
+    final classId = _classId ?? '';
+    if (classId.isNotEmpty) {
+      try {
+        final q = await FirebaseFirestore.instance
+            .collection('courses')
+            .where('course_code', isEqualTo: normalizedCode)
+            .where('class', isEqualTo: classId)
+            .get();
+        final hasConflict = q.docs.any((d) => d.id != (widget.course?.id));
+        if (hasConflict) {
+          setState(() {
+            _conflictMessage =
+                'A lecturer is already assigned to this class for the same course code.';
+          });
+          return;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
     final course = Course(
       id: widget.course?.id,
-      courseCode: _courseCode!.trim(),
+      courseCode: normalizedCode,
       courseName: _courseName!.trim(),
       teacherRef: _lecturerId,
       classRef: _classId,
@@ -222,190 +283,215 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.course == null ? 'Add Course' : 'Edit Course',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                TextFormField(
-                  initialValue: _courseCode,
-                  decoration: const InputDecoration(
-                    hintText: 'Course code (e.g. MTH101)',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (v) => setState(() => _courseCode = v),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'Enter course code'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  initialValue: _courseName,
-                  decoration: const InputDecoration(
-                    hintText: 'Course name',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (v) => setState(() => _courseName = v),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'Enter course name'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                // Department dropdown (replaces faculty)
-                DropdownButtonFormField<String>(
-                  value: _departmentId,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'Department',
-                  ),
-                  items: _departments
-                      .map(
-                        (d) => DropdownMenuItem(
-                          value: d['id'],
-                          child: Text(d['name'] ?? ''),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() {
-                    _departmentId = v;
-                    // reset class selection when department changes
-                    _classId = null;
-                  }),
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Select department' : null,
-                ),
-                const SizedBox(height: 16),
-                // Lecturer (was Teacher)
-                _teachers.isEmpty
-                    ? DropdownButtonFormField<String>(
-                        value: null,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'Lecturer',
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                            value: '',
-                            enabled: false,
-                            child: Text(
-                              Session.facultyRef == null
-                                  ? 'No teachers available'
-                                  : 'No lecturers found for your faculty',
-                            ),
-                          ),
-                        ],
-                        onChanged: null,
-                      )
-                    : DropdownButtonFormField<String>(
-                        value: _lecturerId,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'Lecturer',
-                        ),
-                        items: _teachers
-                            .map(
-                              (t) => DropdownMenuItem(
-                                value: t['id'],
-                                child: Text(t['name'] ?? ''),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) => setState(() => _lecturerId = v),
-                      ),
-                const SizedBox(height: 16),
-                // Class dropdown - filtered by selected department
-                DropdownButtonFormField<String>(
-                  value: _classId,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'Class',
-                  ),
-                  items: _classes
-                      .where(
-                        (c) =>
-                            _departmentId == null ||
-                            (c['department'] ?? '') == _departmentId,
-                      )
-                      .map(
-                        (c) => DropdownMenuItem(
-                          value: c['id'],
-                          child: Text(c['name'] ?? ''),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _classId = v),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _semester,
-                  decoration: const InputDecoration(
-                    hintText: 'Semester',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: List.generate(15, (i) => (i + 1).toString())
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                      .toList(),
-                  onChanged: (v) => setState(() => _semester = v),
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Select semester' : null,
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    SizedBox(
-                      height: 40,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.black54),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          minimumSize: const Size(90, 40),
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.course == null ? 'Add Course' : 'Edit Course',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      height: 40,
-                      child: ElevatedButton(
-                        onPressed: _save,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[900],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          minimumSize: const Size(90, 40),
-                        ),
-                        child: const Text(
-                          'Save',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
+                  ),
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    initialValue: _courseCode,
+                    decoration: const InputDecoration(
+                      hintText: 'Course code (e.g. MTH101)',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) =>
+                        setState(() => _courseCode = v.toUpperCase()),
+                    validator: (v) {
+                      final value = v?.trim().toUpperCase() ?? '';
+                      if (value.isEmpty) return 'Enter course code';
+                      final regex = RegExp(r'^[A-Z0-9]{3,10}$');
+                      if (!regex.hasMatch(value)) {
+                        return 'Use 3-10 uppercase letters/numbers (no spaces)';
+                      }
+                      return null;
+                    },
+                  ),
+                  if (_conflictMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _conflictMessage!,
+                      style: const TextStyle(color: Colors.red),
                     ),
                   ],
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    initialValue: _courseName,
+                    decoration: const InputDecoration(
+                      hintText: 'Course name',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) => setState(() => _courseName = v),
+                    validator: (v) {
+                      final value = v?.trim() ?? '';
+                      if (value.isEmpty) return 'Enter course name';
+                      if (value.length < 3 || value.length > 100) {
+                        return 'Please enter a valid course name (letters only).';
+                      }
+                      final regex = RegExp(r"^[A-Za-z .&'-]+$");
+                      if (!regex.hasMatch(value)) {
+                        return 'Please enter a valid course name (letters only).';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Department dropdown (replaces faculty)
+                  DropdownButtonFormField<String>(
+                    value: _departmentId,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: 'Department',
+                    ),
+                    items: _departments
+                        .map(
+                          (d) => DropdownMenuItem(
+                            value: d['id'],
+                            child: Text(d['name'] ?? ''),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() {
+                      _departmentId = v;
+                      // reset class selection when department changes
+                      _classId = null;
+                    }),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Select department' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  // Lecturer (was Teacher)
+                  _teachers.isEmpty
+                      ? DropdownButtonFormField<String>(
+                          value: null,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            hintText: 'Lecturer',
+                          ),
+                          items: [
+                            DropdownMenuItem(
+                              value: '',
+                              enabled: false,
+                              child: Text(
+                                Session.facultyRef == null
+                                    ? 'No teachers available'
+                                    : 'No lecturers found for your faculty',
+                              ),
+                            ),
+                          ],
+                          onChanged: null,
+                        )
+                      : DropdownButtonFormField<String>(
+                          value: _lecturerId,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            hintText: 'Lecturer',
+                          ),
+                          items: _teachers
+                              .map(
+                                (t) => DropdownMenuItem(
+                                  value: t['id'],
+                                  child: Text(t['name'] ?? ''),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() => _lecturerId = v),
+                        ),
+                  const SizedBox(height: 16),
+                  // Class dropdown - filtered by selected department
+                  DropdownButtonFormField<String>(
+                    value: _classId,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: 'Class',
+                    ),
+                    items: _classes
+                        .where(
+                          (c) =>
+                              _departmentId == null ||
+                              (c['department'] ?? '') == _departmentId,
+                        )
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c['id'],
+                            child: Text(c['name'] ?? ''),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _classId = v),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _semester,
+                    decoration: const InputDecoration(
+                      hintText: 'Semester',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: List.generate(15, (i) => (i + 1).toString())
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _semester = v),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Select semester' : null,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      SizedBox(
+                        height: 40,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.black54),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            minimumSize: const Size(90, 40),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 40,
+                        child: ElevatedButton(
+                          onPressed: _save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue[900],
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            minimumSize: const Size(90, 40),
+                          ),
+                          child: const Text(
+                            'Save',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../services/session.dart';
+import '../popup/success_popup.dart';
 import 'student_view_attendance_page.dart';
 import 'student_profile_page.dart';
 
@@ -358,12 +359,19 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
 
     await firestore.collection('attendance_records').add(attendanceData);
 
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Attendance recorded')));
-    }
     debugPrint('Attendance written: user=$username session=${sessionDoc.id}');
+    // Show success popup with subject, date and time
+    if (mounted) {
+      final now = DateTime.now();
+      final date = '${now.day}/${now.month}/${now.year}';
+      final time =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      showDialog(
+        context: context,
+        builder: (ctx) =>
+            SuccessPopup(subject: subject, date: date, time: time),
+      );
+    }
   }
 
   Future<void> _handleMarkAttendance(String rawCode) async {

@@ -38,12 +38,12 @@ class FacultyAdminPage extends StatelessWidget {
         ),
         // 1: Departments
         DepartmentsPage(),
-        // 2: Students
-        StudentsPage(),
-        // 3: Subjects
-        // 4: Classes
-        CoursesPage(),
+        // 2: Classes
         ClassesPage(),
+        // 3: Students
+        StudentsPage(),
+        // 4: Courses
+        CoursesPage(),
         // 5: Attendance
         AttendanceUnifiedPage(),
         // 6: TimeTable

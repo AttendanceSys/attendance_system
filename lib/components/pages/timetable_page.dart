@@ -8,6 +8,15 @@
 
 import 'dart:convert';
 
+// TimetablePage — full updated implementation
+// - Reads/writes timetables using "<department display name>_<class display name>" document ids.
+// - Resolves display names from department/class caches or fetches docs as fallback.
+// - Loads classes and class courses similar to CreateTimetableDialog.
+// - Robust lookup of in-memory cache under multiple aliases so UI selection (ids or names) finds loaded data.
+// - Safe cell editing that avoids null-derefs and persists edits to Firestore.
+// - Replace your existing lib/components/pages/timetable_page.dart with this file.
+
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,7 +37,7 @@ class TimetableSlot {
   final String department;
   final String lecturer;
 
-  TimetableSlot({
+  const TimetableSlot({
     required this.day,
     required this.periodLabel,
     required this.course,
@@ -52,6 +61,7 @@ class _TimetablePageState extends State<TimetablePage> {
   String? selectedDepartment;
   String? selectedClass;
   String? selectedLecturer;
+  String? selectedCourse;
 
   bool editingEnabled = false;
   _UndoState? _lastUndo;
@@ -98,6 +108,16 @@ class _TimetablePageState extends State<TimetablePage> {
   // -------------------- Helpers --------------------
 
   // Sanitize display name into doc id segment (lowercase, spaces->underscore, strip unsafe)
+  bool _isDepartmentActive(Map<String, dynamic> data) {
+    final status = data['status'];
+    if (status is bool) return status;
+    if (status is String) {
+      final s = status.toLowerCase();
+      return s == 'active' || s == 'true';
+    }
+    return true;
+  }
+
   String _sanitizeForId(String input) {
     var s = input.trim().toLowerCase();
     s = s.replaceAll(RegExp(r'\s+'), '_');
@@ -216,17 +236,21 @@ class _TimetablePageState extends State<TimetablePage> {
         depQuery = depQuery.where('faculty_ref', isEqualTo: Session.facultyRef);
       }
       final snap = await depQuery.get();
-      _departments = snap.docs.map((d) {
-        final data = d.data() as Map<String, dynamic>;
-        final name =
-            (data['name'] ??
-                    data['department_name'] ??
-                    data['displayName'] ??
-                    data['title'] ??
-                    '')
-                .toString();
-        return {'id': d.id, 'name': name, 'ref': d.reference};
-      }).toList();
+      _departments = snap.docs
+          .map((d) {
+            final data = d.data() as Map<String, dynamic>;
+            if (!_isDepartmentActive(data)) return null;
+            final name =
+                (data['name'] ??
+                        data['department_name'] ??
+                        data['displayName'] ??
+                        data['title'] ??
+                        '')
+                    .toString();
+            return {'id': d.id, 'name': name, 'ref': d.reference};
+          })
+          .whereType<Map<String, dynamic>>()
+          .toList();
       _departments.sort(
         (a, b) => a['name'].toString().compareTo(b['name'].toString()),
       );
@@ -276,9 +300,8 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<void> _loadTeachers() async {
-    // If department or class is not selected we intentionally keep the
-    // lecturer list empty. Teachers should only appear when both are chosen.
-    if (selectedDepartment == null || selectedClass == null) {
+    // Populate lecturers from timetables of the selected department.
+    if (selectedDepartment == null) {
       setState(() {
         _teachers = [];
         _loadingTeachers = false;
@@ -288,297 +311,93 @@ class _TimetablePageState extends State<TimetablePage> {
 
     setState(() => _loadingTeachers = true);
     try {
-      final teachersCol = _firestore.collection('teachers');
+      final depId = selectedDepartment!.trim();
+      final depDisplay = _displayNameForDeptCached(depId);
+      final Set<String> names = {};
 
-      // Helper to normalize a teacher id from various stored shapes
-      String _normalizeId(dynamic cand) {
-        if (cand == null) return '';
-        if (cand is DocumentReference) return cand.id;
-        if (cand is String) {
-          final s = cand;
-          if (s.contains('/')) {
-            final parts = s.split('/').where((p) => p.isNotEmpty).toList();
-            return parts.isNotEmpty ? parts.last : s;
-          }
-          return s;
-        }
-        return cand.toString();
-      }
-
-      // Resolve selected department ref/id if available from cache
-      dynamic selectedDeptRef;
-      String? selectedDeptId;
-      if (selectedDepartment != null) {
-        try {
-          final found = _departments.firstWhere(
-            (d) => d['id'] == selectedDepartment,
-            orElse: () => <String, dynamic>{},
-          );
-          if (found is Map && found.isNotEmpty) {
-            selectedDeptRef = found['ref'];
-            selectedDeptId = (found['id']?.toString() ?? selectedDepartment);
-          } else {
-            selectedDeptId = selectedDepartment;
-          }
-        } catch (_) {
-          selectedDeptId = selectedDepartment;
-        }
-      }
-
-      // If a class is selected, collect teacher ids assigned to that class via courses
-      // and from the class document itself. Try both String ids and DocumentReference
-      // shapes when querying courses (some docs store refs as strings or refs).
-      final Set<String> teacherIdsForClass = {};
-      if (selectedClass != null) {
-        try {
-          final coursesCol = _firestore.collection('courses');
-          final classRef = _firestore.collection('classes').doc(selectedClass);
-
-          // try both shapes for queries
-          QuerySnapshot snap = await coursesCol
-              .where('class', isEqualTo: selectedClass)
-              .get();
-          if (snap.docs.isEmpty)
-            snap = await coursesCol.where('class', isEqualTo: classRef).get();
-          if (snap.docs.isEmpty)
-            snap = await coursesCol
-                .where('class_id', isEqualTo: selectedClass)
-                .get();
-          if (snap.docs.isEmpty)
-            snap = await coursesCol
-                .where('class_ref', isEqualTo: classRef)
-                .get();
-          if (snap.docs.isEmpty)
-            snap = await coursesCol
-                .where('class_ref', isEqualTo: selectedClass)
-                .get();
-          if (snap.docs.isEmpty)
-            snap = await coursesCol
-                .where('className', isEqualTo: selectedClass)
-                .get();
-
-          for (final d in snap.docs) {
-            final data = d.data() as Map<String, dynamic>? ?? {};
-            final teacherCandidates = [
-              'teacher_assigned',
-              'teacher_ref',
-              'teacher',
-              'teacherRef',
-              'teacher_id',
-              'lecturer',
-              'lecturer_id',
-            ];
-            for (final k in teacherCandidates) {
-              if (!data.containsKey(k) || data[k] == null) continue;
-              final id = _normalizeId(data[k]);
-              if (id.isNotEmpty) teacherIdsForClass.add(id);
-            }
-          }
-
-          // Also inspect the class document for assigned teacher fields
-          try {
-            final clsDoc = await classRef.get();
-            if (clsDoc.exists) {
-              final cdata = clsDoc.data() as Map<String, dynamic>? ?? {};
-              final classTeacherKeys = [
-                'teacher',
-                'teacher_assigned',
-                'teacher_id',
-                'teacher_ref',
-                'assigned_teacher',
-                'lecturer',
-              ];
-              for (final k in classTeacherKeys) {
-                if (!cdata.containsKey(k) || cdata[k] == null) continue;
-                final id = _normalizeId(cdata[k]);
-                if (id.isNotEmpty) teacherIdsForClass.add(id);
-              }
-            }
-          } catch (_) {}
-        } catch (e, st) {
-          debugPrint(
-            'Error fetching courses for class when loading teachers: $e\n$st',
-          );
-        }
-      }
-
-      // Helper to fetch teacher docs by ids (supports >10 by batching)
-      Future<List<Map<String, dynamic>>> _fetchTeachersByIds(
-        List<String> ids,
-      ) async {
-        final out = <Map<String, dynamic>>[];
-        if (ids.isEmpty) return out;
-        try {
-          // Firestore whereIn limit is 10; batch if necessary
-          if (ids.length <= 10) {
-            final snap = await teachersCol
-                .where(FieldPath.documentId, whereIn: ids)
-                .get();
-            for (final d in snap.docs) out.add({'id': d.id, 'data': d.data()});
-          } else {
-            final batches = <List<String>>[];
-            for (var i = 0; i < ids.length; i += 10) {
-              batches.add(
-                ids.sublist(i, i + 10 > ids.length ? ids.length : i + 10),
-              );
-            }
-            for (final b in batches) {
-              final snap = await teachersCol
-                  .where(FieldPath.documentId, whereIn: b)
-                  .get();
-              for (final d in snap.docs)
-                out.add({'id': d.id, 'data': d.data()});
-            }
-          }
-        } catch (e, st) {
-          debugPrint('Error fetching teachers by ids: $e\n$st');
-        }
-        return out;
-      }
-
-      List<Map<String, dynamic>> fetched = [];
-
-      // If we discovered teacher ids for the selected class, prefer those.
-      // Do NOT further filter them by department — if a teacher is assigned to
-      // the class we want to show them regardless of department fields.
-      if (teacherIdsForClass.isNotEmpty) {
-        final ids = teacherIdsForClass.toList();
-        fetched = await _fetchTeachersByIds(ids);
-      }
-
-      // If we didn't get any teachers from class assignment (or none matched department),
-      // fall back to department-level server queries, then faculty scoping, then all teachers.
-      if (fetched.isEmpty) {
-        List<QueryDocumentSnapshot> docs = [];
-
-        Future<List<QueryDocumentSnapshot>> tryQuery(
-          Query q,
-          String tag,
-        ) async {
-          try {
-            final snap = await q.get();
-            debugPrint(
-              'teachers query [$tag] returned ${snap.docs.length} docs',
-            );
-            return snap.docs;
-          } catch (e, st) {
-            debugPrint('teachers query [$tag] failed: $e\n$st');
-            return <QueryDocumentSnapshot>[];
-          }
-        }
-
-        // If department selected, try to server-filter by department using many
-        // possible stored shapes: DocumentReference, id string, and path strings
-        if (selectedDeptRef != null ||
-            (selectedDeptId != null && selectedDeptId.isNotEmpty)) {
-          final List<dynamic> deptVariants = [];
-          if (selectedDeptRef is DocumentReference)
-            deptVariants.add(selectedDeptRef);
-          if (selectedDeptId != null) {
-            deptVariants.add(selectedDeptId);
-            deptVariants.add('departments/${selectedDeptId}');
-            deptVariants.add('/departments/${selectedDeptId}');
-          }
-
-          for (final v in deptVariants) {
-            if (docs.isNotEmpty) break;
-            try {
-              docs = await tryQuery(
-                teachersCol.where('department_ref', isEqualTo: v),
-                'department_ref==${v.toString()}',
-              );
-            } catch (_) {}
-            if (docs.isNotEmpty) break;
-            try {
-              docs = await tryQuery(
-                teachersCol.where('department_id', isEqualTo: v),
-                'department_id==${v.toString()}',
-              );
-            } catch (_) {}
-            if (docs.isNotEmpty) break;
-            try {
-              docs = await tryQuery(
-                teachersCol.where('department', isEqualTo: v),
-                'department==${v.toString()}',
-              );
-            } catch (_) {}
-          }
-        }
-
-        // If still empty, try faculty scoping like before
-        if (docs.isEmpty && Session.facultyRef != null) {
-          docs = await tryQuery(
-            teachersCol.where('faculty_ref', isEqualTo: Session.facultyRef),
-            'faculty_ref==DocumentReference',
-          );
-          if (docs.isEmpty) {
-            try {
-              final fid = Session.facultyRef!.id;
-              docs = await tryQuery(
-                teachersCol.where('faculty_id', isEqualTo: fid),
-                'faculty_id==String',
-              );
-            } catch (_) {}
-          }
-          if (docs.isEmpty) {
-            try {
-              final fid = Session.facultyRef!.id;
-              docs = await tryQuery(
-                teachersCol.where('faculty', isEqualTo: fid),
-                'faculty==String',
-              );
-            } catch (_) {}
-          }
-        }
-
+      List<QueryDocumentSnapshot> docs = [];
+      try {
+        QuerySnapshot snap = await timetablesCollection
+            .where('department', isEqualTo: depDisplay)
+            .get();
+        docs = snap.docs;
         if (docs.isEmpty) {
-          final snap = await teachersCol.get();
+          snap = await timetablesCollection
+              .where('department_id', isEqualTo: depId)
+              .get();
           docs = snap.docs;
         }
+      } catch (_) {}
 
-        fetched = docs.map((d) => {'id': d.id, 'data': d.data()}).toList();
+      // Fallback to all timetables then client-filter if needed.
+      if (docs.isEmpty) {
+        try {
+          final snap = await timetablesCollection.get();
+          docs = snap.docs;
+        } catch (_) {}
+      }
 
-        // If a department was selected but server queries didn't filter, perform client-side filter
-        if (selectedDeptRef != null ||
-            (selectedDeptId != null && selectedDeptId!.isNotEmpty)) {
-          fetched = fetched.where((d) {
-            final data = (d['data'] as Map<String, dynamic>?) ?? {};
-            final deptCand =
-                data['department_ref'] ??
-                data['department_id'] ??
-                data['department'];
-            final candId = _normalizeId(deptCand);
-            if (candId.isEmpty) return false;
-            if (selectedDeptRef is DocumentReference) {
-              try {
-                return candId == (selectedDeptRef as DocumentReference).id ||
-                    candId == selectedDeptRef.path ||
-                    candId == '/${selectedDeptRef.path}';
-              } catch (_) {}
+      for (final d in docs) {
+        final data = d.data() as Map<String, dynamic>? ?? {};
+        final depCand = (data['department'] ?? data['department_id'] ?? '')
+            .toString()
+            .trim()
+            .toLowerCase();
+
+        bool matchesDep;
+        if (depCand.isEmpty) {
+          matchesDep = true;
+        } else {
+          final depDisplaySan = depDisplay.toLowerCase().replaceAll(' ', '');
+          final depIdSan = depId.toLowerCase().replaceAll(' ', '');
+          final depCandSan = depCand.replaceAll(' ', '');
+          matchesDep =
+              depCand == depDisplay.toLowerCase() ||
+              depCand == depId.toLowerCase() ||
+              depCandSan == depDisplaySan ||
+              depCandSan == depIdSan ||
+              depCandSan.contains(depDisplaySan) ||
+              depDisplaySan.contains(depCandSan);
+        }
+        if (!matchesDep) continue;
+
+        final gridMeta = data['grid_meta'];
+        final gridRaw = data['grid'];
+
+        if (gridMeta is List && gridMeta.isNotEmpty) {
+          for (final rowObj in gridMeta) {
+            if (rowObj is Map && rowObj['cells'] is List) {
+              for (final cell in (rowObj['cells'] as List)) {
+                if (cell is Map && cell['lecturer'] != null) {
+                  final name = cell['lecturer'].toString().trim();
+                  if (name.isNotEmpty) names.add(name);
+                }
+              }
             }
-            if (selectedDeptId != null)
-              return candId == selectedDeptId || candId == '/${selectedDeptId}';
-            return true;
-          }).toList();
+          }
+        } else if (gridRaw is List && gridRaw.isNotEmpty) {
+          for (final rowObj in gridRaw) {
+            List<dynamic> cells = [];
+            if (rowObj is Map && rowObj['cells'] is List) {
+              cells = rowObj['cells'] as List;
+            } else if (rowObj is List) {
+              cells = rowObj;
+            }
+            for (final cell in cells) {
+              final raw = cell?.toString() ?? '';
+              if (raw.isEmpty) continue;
+              final parts = raw.split('\n');
+              if (parts.length > 1) {
+                final lect = parts.sublist(1).join(' ').trim();
+                if (lect.isNotEmpty) names.add(lect);
+              }
+            }
+          }
         }
       }
 
-      // Map to dropdown structure
-      _teachers = fetched.map((d) {
-        final data = (d['data'] as Map<String, dynamic>?) ?? {};
-        final name =
-            (data['teacher_name'] ??
-                    data['name'] ??
-                    data['full_name'] ??
-                    data['username'] ??
-                    d['id'])
-                .toString();
-        return {'id': d['id'] as String, 'name': name};
-      }).toList();
-
-      _teachers.sort(
-        (a, b) => a['name'].toString().compareTo(b['name'].toString()),
-      );
+      final list = names.toList()..sort((a, b) => a.compareTo(b));
+      _teachers = list.map((n) => {'id': n, 'name': n}).toList();
     } catch (e, st) {
       debugPrint('loadTeachers error: $e\n$st');
       setState(() => _teachers = []);
@@ -587,128 +406,150 @@ class _TimetablePageState extends State<TimetablePage> {
     }
   }
 
-  Future<void> _loadClassesForDepartment(dynamic depIdOrRef) async {
-    setState(() => _loadingClasses = true);
+  Future<void> _loadClassesForDepartment(dynamic depArg) async {
+    if (!mounted) return;
+    setState(() {
+      _loadingClasses = true;
+      _classes = [];
+      _coursesForSelectedClass = [];
+      selectedClass = null;
+    });
+
     try {
-      if (depIdOrRef == null) {
-        setState(() => _classes = []);
-        return;
+      Query query = _firestore.collection('classes');
+      final String? depIdStr = depArg == null ? null : depArg.toString();
+      final String? depRefId = depArg is DocumentReference ? depArg.id : null;
+      final String? depRefPath = depArg is DocumentReference
+          ? depArg.path
+          : null;
+      if (depArg is DocumentReference) {
+        query = query.where('department', isEqualTo: depArg);
+      } else if (depIdStr != null) {
+        query = query.where('department_id', isEqualTo: depIdStr);
       }
 
-      final classesCol = _firestore.collection('classes');
+      QuerySnapshot snap;
+      try {
+        snap = await query.get();
+      } catch (_) {
+        snap = await _firestore.collection('classes').get();
+      }
 
-      Future<List<QueryDocumentSnapshot>> tryQuery(Query q, String tag) async {
+      List<QueryDocumentSnapshot> docs = snap.docs;
+
+      // If nothing matched by server-side filters, pull all and client-filter with relaxed matching.
+      if (docs.isEmpty && depIdStr != null) {
         try {
-          final snap = await q.get();
-          debugPrint('classes query [$tag] returned ${snap.docs.length} docs');
-          if (snap.docs.isNotEmpty)
-            debugPrint(
-              'classes query [$tag] first doc data: ${snap.docs.first.data()}',
-            );
-          return snap.docs;
-        } catch (e, st) {
-          debugPrint('classes query [$tag] failed: $e\n$st');
-          return <QueryDocumentSnapshot>[];
+          final allSnap = await _firestore.collection('classes').get();
+          docs = allSnap.docs;
+        } catch (_) {}
+      }
+
+      final depDisplay = depIdStr != null
+          ? _displayNameForDeptCached(depIdStr)
+          : '';
+
+      String norm(String v) =>
+          v.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      bool matchesDep(Map<String, dynamic> data) {
+        if (depIdStr == null) return true;
+        final targets = <String>{
+          norm(depIdStr),
+          norm(depDisplay),
+          norm(_sanitizeForId(depIdStr)),
+          norm(_sanitizeForId(depDisplay)),
+          if (depRefId != null) norm(depRefId),
+          if (depRefPath != null) norm(depRefPath),
+        }..removeWhere((e) => e.isEmpty);
+
+        final candidates = <String>{};
+        for (final key in [
+          'department',
+          'department_id',
+          'department_ref',
+          'departmentName',
+          'department_name',
+          'dept',
+          'dept_id',
+          'dep_id',
+          'dep_ref',
+        ]) {
+          final v = data[key];
+          if (v == null) continue;
+          candidates.add(v.toString());
         }
+
+        for (final c in candidates) {
+          final n = norm(c);
+          if (targets.contains(n)) return true;
+          for (final t in targets) {
+            if (n.contains(t) || t.contains(n)) return true;
+          }
+        }
+        return targets.isEmpty;
       }
 
-      List<QueryDocumentSnapshot> docs = [];
-
-      if (depIdOrRef is DocumentReference) {
-        docs = await tryQuery(
-          classesCol.where('department_ref', isEqualTo: depIdOrRef),
-          'department_ref==DocumentReference',
-        );
-        if (docs.isEmpty)
-          docs = await tryQuery(
-            classesCol.where(
-              'department_ref',
-              isEqualTo: (depIdOrRef as DocumentReference).id,
-            ),
-            'department_ref==DocumentReference.id',
-          );
-      } else if (depIdOrRef is String) {
-        docs = await tryQuery(
-          classesCol.where('department_ref', isEqualTo: depIdOrRef),
-          'department_ref==String',
-        );
-        if (docs.isEmpty)
-          docs = await tryQuery(
-            classesCol.where('department_id', isEqualTo: depIdOrRef),
-            'department_id==String',
-          );
-        if (docs.isEmpty)
-          docs = await tryQuery(
-            classesCol.where('department', isEqualTo: depIdOrRef),
-            'department==String',
-          );
-        if (docs.isEmpty)
-          docs = await tryQuery(
-            classesCol.where('department_name', isEqualTo: depIdOrRef),
-            'department_name==String',
-          );
-      }
-
-      final classes = docs.map((d) {
-        final data = d.data() as Map<String, dynamic>;
-        final name = (data['class_name'] ?? data['name'] ?? d.id).toString();
-        final section = (data['section'] ?? '').toString();
-        return {
-          'id': d.id,
-          'name': name,
-          'section': section,
-          'raw': data,
-          'ref': d.reference,
-        };
-      }).toList();
+      final classes = docs
+          .map((d) {
+            final data = d.data() as Map<String, dynamic>? ?? {};
+            if (!matchesDep(data)) return null;
+            final name = (data['class_name'] ?? data['name'] ?? d.id)
+                .toString()
+                .trim();
+            return {
+              'id': d.id,
+              'name': name.isNotEmpty ? name : d.id,
+              'raw': data,
+              'ref': d.reference,
+            };
+          })
+          .whereType<Map<String, dynamic>>()
+          .toList();
 
       classes.sort(
         (a, b) => a['name'].toString().compareTo(b['name'].toString()),
       );
 
-      setState(() => _classes = classes);
+      if (mounted) setState(() => _classes = classes);
     } catch (e, st) {
       debugPrint('loadClassesForDepartment error: $e\n$st');
-      setState(() => _classes = []);
+      if (mounted) setState(() => _classes = []);
     } finally {
-      setState(() => _loadingClasses = false);
+      if (mounted) setState(() => _loadingClasses = false);
     }
   }
 
-  Future<void> _loadCoursesForClass(dynamic classIdOrName) async {
-    if (classIdOrName == null) {
-      setState(() => _coursesForSelectedClass = []);
-      return;
-    }
-    setState(() => _loadingCourses = true);
+  Future<void> _loadCoursesForClass(dynamic classArg) async {
+    if (!mounted) return;
+    setState(() {
+      _loadingCourses = true;
+      _coursesForSelectedClass = [];
+    });
+
     try {
-      final coursesCol = _firestore.collection('courses');
-
-      Future<QuerySnapshot> tryQ(String field) =>
-          coursesCol.where(field, isEqualTo: classIdOrName).get();
-
-      QuerySnapshot snap = await tryQ('class');
-      if (snap.docs.isEmpty) snap = await tryQ('class_id');
-      if (snap.docs.isEmpty) snap = await tryQ('class_ref');
-      if (snap.docs.isEmpty) snap = await tryQ('class_name');
-
-      if (snap.docs.isEmpty) {
-        debugPrint('CreateDialog: no courses found for classId=$classIdOrName');
-        setState(() => _coursesForSelectedClass = []);
-        return;
+      Query query = _firestore.collection('courses');
+      if (classArg is DocumentReference) {
+        query = query.where('class', isEqualTo: classArg);
+      } else if (classArg != null) {
+        final clsId = classArg.toString();
+        query = query.where('class_id', isEqualTo: clsId);
       }
 
-      final courses = snap.docs.map((d) {
-        final data = d.data() as Map<String, dynamic>;
-        final name =
-            (data['course_name'] ??
-                    data['title'] ??
-                    data['course_code'] ??
-                    d.id)
-                .toString();
+      QuerySnapshot snap;
+      try {
+        snap = await query.get();
+      } catch (_) {
+        snap = await _firestore.collection('courses').get();
+      }
+
+      var courses = snap.docs.map((d) {
+        final data = d.data() as Map<String, dynamic>? ?? {};
+        final name = (data['course_name'] ?? data['name'] ?? d.id)
+            .toString()
+            .trim();
         return {
           'id': d.id,
-          'course_name': name,
+          'course_name': name.isNotEmpty ? name : d.id,
           'raw': data,
           'ref': d.reference,
         };
@@ -719,48 +560,35 @@ class _TimetablePageState extends State<TimetablePage> {
             a['course_name'].toString().compareTo(b['course_name'].toString()),
       );
 
-      setState(() {
-        _coursesForSelectedClass = courses;
-      });
+      if (mounted) setState(() => _coursesForSelectedClass = courses);
     } catch (e, st) {
       debugPrint('loadCoursesForClass error: $e\n$st');
-      setState(() => _coursesForSelectedClass = []);
+      if (mounted) setState(() => _coursesForSelectedClass = []);
     } finally {
-      setState(() => _loadingCourses = false);
+      if (mounted) setState(() => _loadingCourses = false);
     }
   }
 
-  // -------------------- Timetable read/write --------------------
-
   Future<void> _loadTimetableDoc() async {
     if (selectedDepartment == null || selectedClass == null) return;
+
     final depId = selectedDepartment!.trim();
     final clsId = selectedClass!.trim();
-
     final docId = await _docIdFromSelected(depId, clsId);
     final deptDisplay = await _resolveDepartmentDisplayName(depId);
     final classDisplay = await _resolveClassDisplayName(clsId);
 
-    debugPrint(
-      'Loading timetable for docId="$docId" (deptDisplay="$deptDisplay" classDisplay="$classDisplay", depId="$depId" classId="$clsId")',
-    );
-
-    final docRef = timetablesCollection.doc(docId);
-
     try {
-      final snap = await docRef.get();
-      if (snap.exists && snap.data() != null) {
-        debugPrint('Found timetable document by id: $docId');
+      final docRef = timetablesCollection.doc(docId);
+      final doc = await docRef.get();
+
+      if (doc.exists && doc.data() != null) {
         await _applyTimetableDataFromSnapshot(
-          snap.data()! as Map<String, dynamic>,
+          doc.data() as Map<String, dynamic>,
           deptDisplay,
           classDisplay,
         );
       } else {
-        debugPrint(
-          'Doc $docId not found by id — querying timetables collection for matching document',
-        );
-
         Query query = timetablesCollection
             .where('department', isEqualTo: deptDisplay)
             .where('className', isEqualTo: classDisplay)
@@ -801,11 +629,88 @@ class _TimetablePageState extends State<TimetablePage> {
             classFromDoc,
           );
         } else {
-          // nothing found — show message only
-          debugPrint('No timetable found in timetables for $docId');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No timetable found in this class')),
-          );
+          // Fallback: scan all timetables with relaxed matching so class selection still loads.
+          DocumentSnapshot? matchedDoc;
+          try {
+            final allSnap = await timetablesCollection.get();
+            String norm(String v) =>
+                v.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+            bool matchesAny(Set<String> targets, String candidate) {
+              final c = norm(candidate);
+              if (c.isEmpty) return false;
+              for (final t in targets) {
+                if (c == t) return true;
+                if (c.contains(t) || t.contains(c)) return true;
+              }
+              return false;
+            }
+
+            final depTargets = <String>{
+              norm(depId),
+              norm(deptDisplay),
+              norm(_sanitizeForId(depId)),
+              norm(_sanitizeForId(deptDisplay)),
+            }..removeWhere((e) => e.isEmpty);
+
+            final classTargets = <String>{
+              norm(clsId),
+              norm(classDisplay),
+              norm(_sanitizeForId(clsId)),
+              norm(_sanitizeForId(classDisplay)),
+            }..removeWhere((e) => e.isEmpty);
+
+            for (final d in allSnap.docs) {
+              final data = d.data() as Map<String, dynamic>? ?? {};
+              final depCand =
+                  (data['department'] ?? data['department_id'] ?? '')
+                      .toString();
+              if (depTargets.isNotEmpty &&
+                  depCand.toString().trim().isNotEmpty &&
+                  !matchesAny(depTargets, depCand)) {
+                continue;
+              }
+
+              final classCand = (data['className'] ?? data['classKey'] ?? '')
+                  .toString();
+              final idParts = d.id.split('_');
+              final altClass = idParts.length >= 2
+                  ? idParts.sublist(1).join('_')
+                  : '';
+              final classCandidates = <String>{classCand, altClass}
+                ..removeWhere((e) => e.trim().isEmpty);
+
+              bool classMatch = false;
+              for (final c in classCandidates) {
+                if (matchesAny(classTargets, c)) {
+                  classMatch = true;
+                  break;
+                }
+              }
+              if (!classMatch) continue;
+
+              matchedDoc = d;
+              break;
+            }
+          } catch (_) {}
+
+          if (matchedDoc != null && matchedDoc.data() != null) {
+            debugPrint('Found timetable via relaxed match: ${matchedDoc.id}');
+            final data = matchedDoc.data() as Map<String, dynamic>;
+            final depFromDoc = (data['department'] as String?) ?? deptDisplay;
+            final classFromDoc = (data['className'] as String?) ?? classDisplay;
+            await _applyTimetableDataFromSnapshot(
+              data,
+              depFromDoc,
+              classFromDoc,
+            );
+          } else {
+            // nothing found — show message only
+            debugPrint('No timetable found in timetables for $docId');
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No timetable found in this class')),
+            );
+          }
         }
       }
     } catch (e, st) {
@@ -1342,6 +1247,38 @@ class _TimetablePageState extends State<TimetablePage> {
     return slots;
   }
 
+  List<PrefilledSession> _prefillSessionsFromCurrent() {
+    final grid = currentTimetable;
+    if (grid == null) return [];
+    final periods = currentPeriods;
+    final List<PrefilledSession> out = [];
+    for (int d = 0; d < days.length; d++) {
+      final row = d < grid.length
+          ? grid[d]
+          : List<String>.filled(periods.length, '', growable: true);
+      for (int p = 0; p < periods.length; p++) {
+        if (p >= row.length) continue;
+        final cell = row[p].trim();
+        if (cell.isEmpty) continue;
+        if (cell.toLowerCase().contains('break')) continue;
+        final parts = cell.split('\n');
+        final course = parts.isNotEmpty ? parts[0].trim() : '';
+        final lecturer = parts.length > 1
+            ? parts.sublist(1).join(' ').trim()
+            : '';
+        out.add(
+          PrefilledSession(
+            dayIndex: d,
+            periodLabel: periods[p],
+            course: course.isNotEmpty ? course : null,
+            lecturer: lecturer.isNotEmpty ? lecturer : null,
+          ),
+        );
+      }
+    }
+    return out;
+  }
+
   // Robust currentTimetable: try aliases and inspect existing keys
   List<List<String>>? get currentTimetable {
     debugPrint(
@@ -1720,15 +1657,65 @@ class _TimetablePageState extends State<TimetablePage> {
 
     final depDisplay = await _resolveDepartmentDisplayName(selectedDepartment!);
     final classDisplay = await _resolveClassDisplayName(selectedClass!);
+    final depId = selectedDepartment!;
+    final classId = selectedClass!;
 
-    // Check for existing document
-    final query = timetablesCollection
-        .where('department', isEqualTo: depDisplay)
-        .where('className', isEqualTo: classDisplay)
-        .limit(1);
-    final querySnapshot = await query.get();
+    Future<bool> _deleteDocById(String docId) async {
+      try {
+        final ref = timetablesCollection.doc(docId);
+        final snap = await ref.get();
+        if (!snap.exists) return false;
+        await ref.delete();
+        debugPrint('Deleted timetable docId=$docId');
+        return true;
+      } catch (e, st) {
+        debugPrint('Delete docId=$docId failed: $e\n$st');
+        return false;
+      }
+    }
 
-    if (querySnapshot.docs.isEmpty) {
+    bool deleted = false;
+
+    // 1) Try preferred doc id from display names
+    final preferredId = _docIdFromDisplayNames(depDisplay, classDisplay);
+    deleted = await _deleteDocById(preferredId);
+
+    // 2) If not found, try a query with multiple field combinations
+    if (!deleted) {
+      final queries = <Query>[
+        timetablesCollection
+            .where('department', isEqualTo: depDisplay)
+            .where('className', isEqualTo: classDisplay)
+            .limit(1),
+        timetablesCollection
+            .where('department_id', isEqualTo: depId)
+            .where('classKey', isEqualTo: classId)
+            .limit(1),
+        timetablesCollection
+            .where('department_id', isEqualTo: depId)
+            .where('className', isEqualTo: classDisplay)
+            .limit(1),
+        timetablesCollection
+            .where('department', isEqualTo: depDisplay)
+            .where('classKey', isEqualTo: classId)
+            .limit(1),
+      ];
+
+      for (final q in queries) {
+        if (deleted) break;
+        try {
+          final snap = await q.get();
+          if (snap.docs.isNotEmpty) {
+            final id = snap.docs.first.id;
+            deleted = await _deleteDocById(id);
+          }
+        } catch (e, st) {
+          debugPrint('delete query failed: $e\n$st');
+        }
+      }
+    }
+
+    if (!deleted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No timetable found for the selected class'),
@@ -1737,43 +1724,31 @@ class _TimetablePageState extends State<TimetablePage> {
       return;
     }
 
-    final docId = querySnapshot.docs.first.id; // Use existing document ID
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Timetable deleted successfully')),
+    );
 
-    try {
-      if (deleteEntireClass) {
-        // Delete the entire class document from Firestore
-        await timetablesCollection.doc(docId).delete();
-        debugPrint('Deleted entire class timetable: $docId');
-      } else {
-        // Clear all cells in the timetable grid
-        await timetablesCollection.doc(docId).set({
-          'grid': List.generate(
-            days.length,
-            (index) => {'r': index, 'cells': []},
-          ),
-          'grid_meta': List.generate(
-            days.length,
-            (index) => {'r': index, 'cells': []},
-          ),
-          'updated_at': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        debugPrint('Cleared all cells in timetable: $docId');
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Timetable updated successfully')),
-      );
-      setState(() {
-        timetableData.remove(depDisplay);
-        classPeriods.remove(depDisplay);
-        spans.remove(depDisplay);
-      });
-    } catch (e, st) {
-      debugPrint('Error deleting timetable: $e\n$st');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error deleting timetable: $e')));
+    void _clearCacheKey(String depKey, String classKey) {
+      timetableData[depKey]?.remove(classKey);
+      if (timetableData[depKey]?.isEmpty == true) timetableData.remove(depKey);
+      classPeriods[depKey]?.remove(classKey);
+      if (classPeriods[depKey]?.isEmpty == true) classPeriods.remove(depKey);
+      spans[depKey]?.remove(classKey);
+      if (spans[depKey]?.isEmpty == true) spans.remove(depKey);
     }
+
+    final depSan = _sanitizeForId(depDisplay);
+    final classSan = _sanitizeForId(classDisplay);
+
+    setState(() {
+      _clearCacheKey(depDisplay, classDisplay);
+      _clearCacheKey(depDisplay, classId);
+      _clearCacheKey(depId, classDisplay);
+      _clearCacheKey(depId, classId);
+      _clearCacheKey(depSan, classSan);
+
+      editingEnabled = false;
+    });
   }
 
   // -------------------- Utilities --------------------
@@ -1795,6 +1770,214 @@ class _TimetablePageState extends State<TimetablePage> {
       }
     }
     return out;
+  }
+
+  // Collect sessions for the selected lecturer across all classes in the selected department.
+  Future<List<TimetableSlot>> _collectLecturerSessionsAcrossDepartment() async {
+    if (selectedDepartment == null ||
+        selectedLecturer == null ||
+        selectedLecturer!.trim().isEmpty) {
+      return [];
+    }
+
+    final lecturerKey = selectedLecturer!.trim().toLowerCase();
+    final depId = selectedDepartment!.trim();
+    final depDisplay = _displayNameForDeptCached(depId);
+
+    // Fetch timetables scoped to the department by common field names.
+    List<QueryDocumentSnapshot> docs = [];
+    try {
+      QuerySnapshot snap = await timetablesCollection
+          .where('department', isEqualTo: depDisplay)
+          .get();
+      docs = snap.docs;
+      if (docs.isEmpty) {
+        snap = await timetablesCollection
+            .where('department_id', isEqualTo: depId)
+            .get();
+        docs = snap.docs;
+      }
+    } catch (_) {}
+
+    // Fallback: pull all docs and client-filter if server filters missed.
+    if (docs.isEmpty) {
+      try {
+        final snap = await timetablesCollection.get();
+        docs = snap.docs;
+      } catch (_) {}
+    }
+
+    String norm(String v) =>
+        v.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final depTargets = <String>{
+      norm(depId),
+      norm(depDisplay),
+      norm(_sanitizeForId(depId)),
+      norm(_sanitizeForId(depDisplay)),
+    }..removeWhere((e) => e.isEmpty);
+
+    final results = <TimetableSlot>[];
+    for (final d in docs) {
+      final data = d.data() as Map<String, dynamic>? ?? {};
+
+      // Relaxed client-side department check to catch variants/refs.
+      bool depMatch = depTargets.isEmpty;
+      final depCandidates = <String>{
+        (data['department'] ?? '').toString(),
+        (data['department_id'] ?? '').toString(),
+        (data['department_ref'] ?? '').toString(),
+        (data['dep_ref'] ?? '').toString(),
+      }..removeWhere((e) => e.trim().isEmpty);
+
+      for (final c in depCandidates) {
+        final nc = norm(c);
+        if (depTargets.contains(nc)) {
+          depMatch = true;
+          break;
+        }
+        for (final t in depTargets) {
+          if (nc.contains(t) || t.contains(nc)) {
+            depMatch = true;
+            break;
+          }
+        }
+        if (depMatch) break;
+      }
+
+      if (!depMatch) continue;
+
+      // Determine class display.
+      String classDisplay = (data['className'] ?? data['classKey'] ?? '')
+          .toString()
+          .trim();
+      if (classDisplay.isEmpty) {
+        final parts = d.id.split('_');
+        if (parts.length >= 2) classDisplay = parts.sublist(1).join('_');
+      }
+
+      // Periods.
+      List<String> periods;
+      try {
+        final rawPeriods = data['periods'];
+        if (rawPeriods is List) {
+          periods = rawPeriods.map((e) => e?.toString() ?? '').toList();
+        } else {
+          periods = List<String>.from(seedPeriods);
+        }
+      } catch (_) {
+        periods = List<String>.from(seedPeriods);
+      }
+
+      // Prefer grid_meta if present.
+      final gridMeta = data['grid_meta'];
+      List<List<String>> gridStrings = [];
+      List<List<Map<String, String>>> gridStruct = [];
+
+      if (gridMeta is List && gridMeta.isNotEmpty) {
+        for (final rowObj in gridMeta) {
+          if (rowObj is Map && rowObj['cells'] is List) {
+            final cells = (rowObj['cells'] as List).map<Map<String, String>>((
+              c,
+            ) {
+              if (c is Map) {
+                return {
+                  'course': (c['course'] ?? '').toString(),
+                  'lecturer': (c['lecturer'] ?? '').toString(),
+                };
+              }
+              return {'course': '', 'lecturer': ''};
+            }).toList();
+            gridStruct.add(cells);
+          }
+        }
+      } else {
+        final gridRaw = data['grid'];
+        if (gridRaw is List) {
+          gridStrings = gridRaw.map<List<String>>((rowObj) {
+            if (rowObj is Map && rowObj['cells'] is List) {
+              return (rowObj['cells'] as List)
+                  .map((c) => c?.toString() ?? '')
+                  .toList();
+            }
+            if (rowObj is List) {
+              return rowObj.map((c) => c?.toString() ?? '').toList();
+            }
+            return <String>[];
+          }).toList();
+        }
+      }
+
+      for (int dIndex = 0; dIndex < days.length; dIndex++) {
+        for (int pIndex = 0; pIndex < periods.length; pIndex++) {
+          final label = periods[pIndex];
+          if (label.toLowerCase().contains('break')) continue;
+
+          String course = '';
+          String lecturer = '';
+
+          if (gridStruct.isNotEmpty && dIndex < gridStruct.length) {
+            final row = gridStruct[dIndex];
+            if (pIndex < row.length) {
+              course = row[pIndex]['course']?.toString() ?? '';
+              lecturer = row[pIndex]['lecturer']?.toString() ?? '';
+            }
+          } else if (gridStrings.isNotEmpty && dIndex < gridStrings.length) {
+            final row = gridStrings[dIndex];
+            if (pIndex < row.length) {
+              final raw = row[pIndex].toString();
+              final parts = raw.split('\n');
+              course = parts.isNotEmpty ? parts[0].trim() : '';
+              lecturer = parts.length > 1
+                  ? parts.sublist(1).join(' ').trim()
+                  : '';
+            }
+          }
+
+          if (course.isEmpty && lecturer.isEmpty) continue;
+          final lectKey = lecturer.trim().toLowerCase();
+          if (lectKey.isEmpty) continue;
+          if (!lectKey.contains(lecturerKey)) continue;
+
+          results.add(
+            TimetableSlot(
+              day: days[dIndex],
+              periodLabel: label,
+              course: course,
+              className: classDisplay,
+              department: depDisplay,
+              lecturer: lecturer,
+            ),
+          );
+        }
+      }
+    }
+
+    // Sort by day then period index based on periods list ordering.
+    final dayOrder = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    results.sort((a, b) {
+      final ai = dayOrder.indexOf(a.day);
+      final bi = dayOrder.indexOf(b.day);
+      if (ai != bi) return ai.compareTo(bi);
+      // Period ordering: compare by start index within the original periods lists if possible.
+      // Fallback to string compare.
+      return a.periodLabel.compareTo(b.periodLabel);
+    });
+
+    // Apply search filter if present.
+    if (searchText.trim().isNotEmpty) {
+      final q = searchText.trim().toLowerCase();
+      return results
+          .where(
+            (s) =>
+                s.course.toLowerCase().contains(q) ||
+                s.className.toLowerCase().contains(q) ||
+                s.periodLabel.toLowerCase().contains(q) ||
+                s.day.toLowerCase().contains(q),
+          )
+          .toList();
+    }
+
+    return results;
   }
 
   List<TimetableSlot> getFilteredSlotsFromGrid() {
@@ -1821,7 +2004,7 @@ class _TimetablePageState extends State<TimetablePage> {
             s.periodLabel.toLowerCase().contains(q);
       }).toList();
     }
-   final daysOrder = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    final daysOrder = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     list.sort((a, b) {
       final ai = daysOrder.indexOf(a.day);
       final bi = daysOrder.indexOf(b.day);
@@ -1842,11 +2025,14 @@ class _TimetablePageState extends State<TimetablePage> {
   Widget build(BuildContext context) {
     final grid = currentTimetable;
     final periodsForClass = currentPeriods;
-    final canEdit = grid != null;
-    final canDelete =
+    final showLecturerList =
         selectedDepartment != null &&
-        selectedClass != null &&
-        timetableData[selectedDepartment]?[selectedClass]?.isNotEmpty == true;
+        selectedClass == null &&
+        selectedLecturer != null &&
+        selectedLecturer!.trim().isNotEmpty;
+    final canEdit = grid != null;
+    final canDelete = grid != null;
+    final canExport = canDelete || showLecturerList;
 
     return Scaffold(
       appBar: AppBar(
@@ -1894,7 +2080,7 @@ class _TimetablePageState extends State<TimetablePage> {
                             (d) => d['id'] == selectedDepartment,
                             orElse: () => <String, dynamic>{},
                           );
-                          if (depMap is Map && depMap.isNotEmpty) {
+                          if (depMap.isNotEmpty) {
                             initialDepName = (depMap['name'] as String?)
                                 ?.toString();
                             depArg = depMap['ref'] is DocumentReference
@@ -1912,7 +2098,7 @@ class _TimetablePageState extends State<TimetablePage> {
                             (c) => c['id'] == selectedClass,
                             orElse: () => <String, dynamic>{},
                           );
-                          if (classMap is Map && classMap.isNotEmpty)
+                          if (classMap.isNotEmpty)
                             initialClassName = (classMap['name'] as String?)
                                 ?.toString();
                         } catch (_) {
@@ -1920,14 +2106,12 @@ class _TimetablePageState extends State<TimetablePage> {
                         }
                       }
 
-                      final existingLabels =
-                          (selectedDepartment != null &&
-                              selectedClass != null &&
-                              classPeriods[selectedDepartment!] != null &&
-                              classPeriods[selectedDepartment!]![selectedClass!] !=
-                                  null)
-                          ? classPeriods[selectedDepartment!]![selectedClass!]
-                          : null;
+                      // Keep period labels and pass existing sessions so the dialog can filter them per course.
+                      List<String>? existingLabels;
+                      if (currentTimetable != null) {
+                        existingLabels = List<String>.from(currentPeriods);
+                      }
+                      final prefilledSessions = _prefillSessionsFromCurrent();
 
                       final payload =
                           await showDialog<CreateTimetableTimePayload>(
@@ -1945,6 +2129,7 @@ class _TimetablePageState extends State<TimetablePage> {
                               initialDepartment: initialDepName,
                               initialClass: initialClassName,
                               preconfiguredLabels: existingLabels,
+                              prefilledSessions: prefilledSessions,
                               departmentArg: depArg,
                             ),
                           );
@@ -1955,6 +2140,42 @@ class _TimetablePageState extends State<TimetablePage> {
                   ),
                   Row(
                     children: [
+                      SizedBox(
+                        height: 36,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(
+                            Icons.refresh,
+                            size: 18,
+                            color: Colors.purple,
+                          ),
+                          label: const Text(
+                            'Reload',
+                            style: TextStyle(color: Colors.purple),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.purple),
+                            foregroundColor: Colors.purple,
+                          ),
+                          onPressed: () async {
+                            setState(() {
+                              selectedDepartment = null;
+                              selectedClass = null;
+                              selectedLecturer = null;
+                              selectedCourse = null;
+                              _classes = [];
+                              _teachers = [];
+                              _coursesForSelectedClass = [];
+                              timetableData.clear();
+                              classPeriods.clear();
+                              spans.clear();
+                              editingEnabled = false;
+                            });
+                            await _loadDepartments();
+                            // teachers/courses reload after re-selection
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       SizedBox(
                         width:
                             100, // Adjusted width for consistency with the delete button
@@ -2028,7 +2249,7 @@ class _TimetablePageState extends State<TimetablePage> {
                       const SizedBox(width: 8),
                       IconButton(
                         tooltip: 'Export PDF',
-                        onPressed: canDelete ? _exportPdfFlow : null,
+                        onPressed: canExport ? _exportPdfFlow : null,
                         icon: const Icon(Icons.picture_as_pdf_outlined),
                       ),
                     ],
@@ -2223,13 +2444,39 @@ class _TimetablePageState extends State<TimetablePage> {
                     ],
                   ),
                   child: (grid == null)
-                      ? Center(
-                          child: Text(
-                            'Please select Department and Class to view the timetable.',
-                            style: TextStyle(color: Colors.grey.shade600),
-                            textAlign: TextAlign.center,
-                          ),
-                        )
+                      ? (showLecturerList
+                            ? FutureBuilder<List<TimetableSlot>>(
+                                future:
+                                    _collectLecturerSessionsAcrossDepartment(),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.waiting) {
+                                    return const Center(
+                                      child: CircularProgressIndicator(),
+                                    );
+                                  }
+                                  final slots = snapshot.data ?? [];
+                                  if (slots.isEmpty) {
+                                    return Center(
+                                      child: Text(
+                                        'No sessions found for this lecturer in the selected department.',
+                                        style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    );
+                                  }
+                                  return _LecturerListView(slots: slots);
+                                },
+                              )
+                            : Center(
+                                child: Text(
+                                  'Please select Department and Class to view the timetable.',
+                                  style: TextStyle(color: Colors.grey.shade600),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ))
                       : _TimetableGrid(
                           days: days,
                           periods: periodsForClass,
@@ -2250,7 +2497,32 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<void> _exportPdfFlow() async {
-    // Validate selection first
+    // If we are in lecturer list mode (dept + lecturer, no class), export combined list.
+    final showLecturerList =
+        selectedDepartment != null &&
+        selectedClass == null &&
+        selectedLecturer != null &&
+        selectedLecturer!.trim().isNotEmpty;
+
+    if (showLecturerList) {
+      try {
+        final slots = await _collectLecturerSessionsAcrossDepartment();
+        if (slots.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No sessions to export for lecturer')),
+          );
+          return;
+        }
+        await _exportLecturerListPdf(slots);
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
+      }
+      return;
+    }
+
+    // Class timetable export path
     if (selectedDepartment == null || selectedClass == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Select Department and Class first')),
@@ -2258,7 +2530,6 @@ class _TimetablePageState extends State<TimetablePage> {
       return;
     }
 
-    // Directly export the entire class timetable (no dialog)
     await _generatePdf(_ExportChoice.entireClass);
   }
 
@@ -2271,7 +2542,7 @@ class _TimetablePageState extends State<TimetablePage> {
         : '';
     final depKey = depDisplay;
     final classKey = classDisplay;
-    if (depKey.isEmpty || classKey.isEmpty) {
+    if (depKey.isEmpty || classKey.isEmpty || currentTimetable == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Class not found')));
@@ -2281,13 +2552,37 @@ class _TimetablePageState extends State<TimetablePage> {
     final pdf = pw.Document();
     final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
-    final periods = (classPeriods[depKey]?[classKey] ?? <String>[]);
+    final periods = (classPeriods[depKey]?[classKey] ?? currentPeriods);
     final grid =
-        timetableData[depKey]?[classKey] ??
+        currentTimetable ??
         List.generate(
           days.length,
           (_) => List<String>.filled(periods.length, ''),
         );
+
+    // If a lecturer is selected, filter cells to only show that lecturer
+    List<List<String>> exportGrid = grid
+        .map((row) => List<String>.from(row, growable: true))
+        .toList(growable: true);
+    if (selectedLecturer != null && selectedLecturer!.trim().isNotEmpty) {
+      final key = selectedLecturer!.toLowerCase().trim();
+      for (int d = 0; d < exportGrid.length; d++) {
+        for (int p = 0; p < exportGrid[d].length; p++) {
+          final raw = exportGrid[d][p].trim();
+          if (raw.isEmpty) continue;
+          if (raw.toLowerCase() == 'break' ||
+              periods[p].toLowerCase().contains('break'))
+            continue;
+          final parts = raw.split('\n');
+          final lecturer = parts.length > 1
+              ? parts.sublist(1).join(' ').trim().toLowerCase()
+              : '';
+          if (!lecturer.contains(key)) {
+            exportGrid[d][p] = '';
+          }
+        }
+      }
+    }
 
     pdf.addPage(
       pw.MultiPage(
@@ -2306,7 +2601,7 @@ class _TimetablePageState extends State<TimetablePage> {
               'No period structure configured.',
               style: pw.TextStyle(color: PdfColors.grey600),
             ),
-          if (grid == null || periods.isEmpty)
+          if (periods.isEmpty)
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 16),
               child: pw.Text(
@@ -2314,16 +2609,27 @@ class _TimetablePageState extends State<TimetablePage> {
                 style: pw.TextStyle(fontSize: 14),
               ),
             )
+          else if (selectedLecturer != null &&
+              selectedLecturer!.trim().isNotEmpty)
+            _pdfLecturerSchedule(
+              periods: periods,
+              grid: exportGrid,
+              lecturer: selectedLecturer!.trim(),
+            )
           else
-            _pdfGridTable(periods: periods, grid: grid),
+            _pdfGridTable(periods: periods, grid: exportGrid),
         ],
       ),
     );
 
+    final lecturerSuffix =
+        (selectedLecturer != null && selectedLecturer!.trim().isNotEmpty)
+        ? '_${selectedLecturer!.trim().replaceAll(' ', '_')}'
+        : '';
     await Printing.layoutPdf(
       onLayout: (format) async => pdf.save(),
       name:
-          'timetable_${depKey}${classKey}${dateStr.replaceAll(':', '-')}.pdf',
+          'timetable_${depKey}${classKey}${lecturerSuffix}${dateStr.replaceAll(':', '-')}.pdf',
     );
   }
 
@@ -2417,9 +2723,290 @@ class _TimetablePageState extends State<TimetablePage> {
       ],
     );
   }
+
+  // Compact schedule view for a specific lecturer
+  pw.Widget _pdfLecturerSchedule({
+    required List<String> periods,
+    required List<List<String>> grid,
+    required String lecturer,
+  }) {
+    final rows = <List<pw.Widget>>[];
+    for (int d = 0; d < days.length; d++) {
+      final row = grid.length > d
+          ? grid[d]
+          : List<String>.filled(periods.length, '');
+      for (int p = 0; p < periods.length; p++) {
+        final label = periods[p];
+        if (label.toLowerCase().contains('break')) continue;
+        final raw = p < row.length ? row[p].trim() : '';
+        if (raw.isEmpty) continue;
+        final parts = raw.split('\n');
+        final course = parts.isNotEmpty ? parts[0].trim() : '';
+        final lect = parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
+        if (lect.isEmpty) continue;
+        if (lect.toLowerCase().contains(lecturer.toLowerCase())) {
+          rows.add([
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text(
+                days[d],
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text(label, style: const pw.TextStyle(fontSize: 10)),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text(course, style: const pw.TextStyle(fontSize: 10)),
+            ),
+          ]);
+        }
+      }
+    }
+
+    if (rows.isEmpty) {
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'Lecturer: $lecturer',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Text(
+            'No sessions found for the selected lecturer.',
+            style: pw.TextStyle(color: PdfColors.grey600),
+          ),
+        ],
+      );
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'Lecturer: $lecturer',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 8),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.grey500, width: 0.5),
+          defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+          columnWidths: const {
+            0: pw.FlexColumnWidth(1),
+            1: pw.FlexColumnWidth(2),
+            2: pw.FlexColumnWidth(3),
+          },
+          children: [
+            pw.TableRow(
+              decoration: pw.BoxDecoration(color: PdfColors.grey200),
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(4),
+                  child: pw.Text(
+                    'Day',
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(4),
+                  child: pw.Text(
+                    'Time',
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(4),
+                  child: pw.Text(
+                    'Course',
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            ...rows.map((cells) => pw.TableRow(children: cells)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // Export combined lecturer sessions list (when only department + lecturer are selected).
+  Future<void> _exportLecturerListPdf(List<TimetableSlot> slots) async {
+    final depDisplay = selectedDepartment != null
+        ? _displayNameForDeptCached(selectedDepartment!)
+        : '';
+    final lecturerName = selectedLecturer ?? '';
+    final pdf = pw.Document();
+    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageTheme: pw.PageTheme(
+          margin: const pw.EdgeInsets.all(24),
+          theme: pw.ThemeData.withFont(
+            base: pw.Font.helvetica(),
+            bold: pw.Font.helveticaBold(),
+          ),
+        ),
+        build: (ctx) {
+          return [
+            pw.Text(
+              'Lecturer Schedule',
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text('Department: $depDisplay'),
+            pw.Text('Lecturer: $lecturerName'),
+            pw.Text('Exported: $dateStr'),
+            pw.SizedBox(height: 12),
+            _pdfLecturerTable(slots),
+          ];
+        },
+      ),
+    );
+
+    final safeLect = lecturerName.trim().replaceAll(' ', '_');
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+      name:
+          'lecturer_schedule_${depDisplay.replaceAll(' ', '_')}_$safeLect.pdf',
+    );
+  }
+
+  pw.Widget _pdfLecturerTable(List<TimetableSlot> slots) {
+    final headers = ['Day', 'Time', 'Class', 'Course'];
+    final rows = slots
+        .map((s) => [s.day, s.periodLabel, s.className, s.course])
+        .toList();
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey500, width: 0.5),
+      defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+      columnWidths: const {
+        0: pw.FlexColumnWidth(1),
+        1: pw.FlexColumnWidth(2),
+        2: pw.FlexColumnWidth(2),
+        3: pw.FlexColumnWidth(3),
+      },
+      children: [
+        pw.TableRow(
+          decoration: pw.BoxDecoration(color: PdfColors.grey200),
+          children: headers
+              .map(
+                (h) => pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 6,
+                  ),
+                  child: pw.Text(
+                    h,
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+        ...rows.map(
+          (r) => pw.TableRow(
+            children: r
+                .map(
+                  (c) => pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: 6,
+                    ),
+                    child: pw.Text(c),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ------- Small UI helper widgets -------
+
+class _LecturerListView extends StatelessWidget {
+  final List<TimetableSlot> slots;
+
+  const _LecturerListView({required this.slots});
+
+  @override
+  Widget build(BuildContext context) {
+    final headerStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
+      fontWeight: FontWeight.bold,
+      color: Colors.grey[700],
+    );
+    final cellStyle = Theme.of(context).textTheme.bodyMedium;
+
+    return Column(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: const [
+              Expanded(flex: 1, child: Text('Day')),
+              Expanded(flex: 2, child: Text('Time')),
+              Expanded(flex: 2, child: Text('Class')),
+              Expanded(flex: 3, child: Text('Course')),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Expanded(
+          child: ListView.separated(
+            itemCount: slots.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final s = slots[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(flex: 1, child: Text(s.day, style: cellStyle)),
+                    Expanded(
+                      flex: 2,
+                      child: Text(s.periodLabel, style: cellStyle),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(s.className, style: cellStyle),
+                    ),
+                    Expanded(flex: 3, child: Text(s.course, style: cellStyle)),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _TimetableGrid extends StatelessWidget {
   final List<String> days;
@@ -2431,7 +3018,6 @@ class _TimetableGrid extends StatelessWidget {
   final void Function(int dayIndex, int periodIndex)? onCellTap;
 
   const _TimetableGrid({
-    super.key,
     required this.days,
     required this.periods,
     required this.timetable,
@@ -2464,7 +3050,80 @@ class _TimetableGrid extends StatelessWidget {
         final periodColWidth = _periodWidthFor(constraints);
         final dayColWidth = periodColWidth * 0.5;
 
-        final totalWidth = dayColWidth + periodColWidth * periods.length;
+        // Build trimmed view when a lecturer filter is active: remove empty cols/rows
+        List<String> displayPeriods = List<String>.from(periods);
+        List<List<String>> displayGrid = timetable
+            .map((r) => List<String>.from(r, growable: true))
+            .toList(growable: true);
+        final bool filterByLecturer =
+            selectedLecturer != null &&
+            selectedLecturer!.trim().isNotEmpty &&
+            selectedLecturer != 'NONE' &&
+            selectedLecturer != 'All lecturers';
+        if (filterByLecturer) {
+          final key = selectedLecturer!.toLowerCase().trim();
+          // Blank non-matching cells first
+          for (int d = 0; d < displayGrid.length; d++) {
+            for (int p = 0; p < displayGrid[d].length; p++) {
+              final label = p < displayPeriods.length ? displayPeriods[p] : '';
+              if (label.toLowerCase().contains('break')) continue;
+              final raw = displayGrid[d][p].trim();
+              if (raw.isEmpty) continue;
+              if (raw.toLowerCase() == 'break') continue;
+              final parts = raw.split('\n');
+              final lect = parts.length > 1
+                  ? parts.sublist(1).join(' ').trim().toLowerCase()
+                  : '';
+              if (!lect.contains(key)) displayGrid[d][p] = '';
+            }
+          }
+
+          // Determine non-empty columns
+          final keepCols = <int>{};
+          for (int p = 0; p < displayPeriods.length; p++) {
+            final lbl = displayPeriods[p].toLowerCase();
+            if (lbl.contains('break')) continue;
+            bool any = false;
+            for (int d = 0; d < displayGrid.length; d++) {
+              final raw = (p < displayGrid[d].length) ? displayGrid[d][p] : '';
+              if (raw.trim().isNotEmpty && raw.toLowerCase() != 'break') {
+                any = true;
+                break;
+              }
+            }
+            if (any) keepCols.add(p);
+          }
+
+          // Rebuild periods and grid keeping only non-empty columns
+          final newPeriods = <String>[];
+          for (int p = 0; p < displayPeriods.length; p++) {
+            if (keepCols.contains(p)) newPeriods.add(displayPeriods[p]);
+          }
+          final newGrid = <List<String>>[];
+          for (int d = 0; d < displayGrid.length; d++) {
+            final row = <String>[];
+            for (int p = 0; p < displayPeriods.length; p++) {
+              if (keepCols.contains(p)) {
+                row.add(p < displayGrid[d].length ? displayGrid[d][p] : '');
+              }
+            }
+            newGrid.add(row);
+          }
+
+          // Remove rows that are completely empty
+          final filteredGrid = <List<String>>[];
+          for (final row in newGrid) {
+            final any = row.any(
+              (c) => c.trim().isNotEmpty && c.toLowerCase() != 'break',
+            );
+            if (any) filteredGrid.add(row);
+          }
+
+          displayPeriods = newPeriods;
+          displayGrid = filteredGrid.isNotEmpty ? filteredGrid : newGrid;
+        }
+
+        final totalWidth = dayColWidth + periodColWidth * displayPeriods.length;
         final childWidth = totalWidth > constraints.maxWidth
             ? totalWidth
             : constraints.maxWidth;
@@ -2491,7 +3150,7 @@ class _TimetableGrid extends StatelessWidget {
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
-                    ...periods.map((p) {
+                    ...displayPeriods.map((p) {
                       final isBreak = p.toLowerCase().contains('break');
                       return Container(
                         width: periodColWidth,
@@ -2522,15 +3181,9 @@ class _TimetableGrid extends StatelessWidget {
                 SizedBox(
                   height: rowsAreaHeight,
                   child: ListView.builder(
-                    itemCount: days.length,
+                    itemCount: displayGrid.length,
                     itemBuilder: (context, rowIdx) {
-                      final row = rowIdx < timetable.length
-                          ? timetable[rowIdx]
-                          : List<String>.filled(
-                              periods.length,
-                              '',
-                              growable: true,
-                            );
+                      final row = displayGrid[rowIdx];
                       return Column(
                         children: [
                           Row(
@@ -2543,7 +3196,7 @@ class _TimetableGrid extends StatelessWidget {
                                   vertical: 12,
                                 ),
                                 child: Text(
-                                  days[rowIdx],
+                                  days[rowIdx % days.length],
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -2551,11 +3204,11 @@ class _TimetableGrid extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              ...List.generate(periods.length, (colIdx) {
+                              ...List.generate(displayPeriods.length, (colIdx) {
                                 final cell = (colIdx < row.length)
                                     ? row[colIdx]
                                     : '';
-                                final isBreak = periods[colIdx]
+                                final isBreak = displayPeriods[colIdx]
                                     .toLowerCase()
                                     .contains('break');
                                 final tappable =

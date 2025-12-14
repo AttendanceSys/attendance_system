@@ -54,12 +54,22 @@ class _AddClassPopupState extends State<AddClassPopup> {
       }
       final snapshot = await q.get();
       setState(() {
-        _departments = snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>?;
-          final name =
-              (data?['department_name'] ?? data?['name'] ?? '') as String;
-          return {'id': doc.id, 'name': name};
-        }).toList();
+        _departments = snapshot.docs
+            .map((doc) {
+              final data = doc.data() as Map<String, dynamic>?;
+              final status = data?['status'];
+              final isActive = status is bool
+                  ? status
+                  : status is String
+                  ? status.toLowerCase() == 'active'
+                  : true;
+              if (!isActive) return null;
+              final name =
+                  (data?['department_name'] ?? data?['name'] ?? '') as String;
+              return {'id': doc.id, 'name': name};
+            })
+            .whereType<Map<String, String>>()
+            .toList();
         // Try to resolve existing department value (if editing)
         if (widget.schoolClass != null && _department != null) {
           final exists = _departments.any((d) => d['id'] == _department);
@@ -134,10 +144,26 @@ class _AddClassPopupState extends State<AddClassPopup> {
                     hintText: "Base Class Name (e.g. B3SC)",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => setState(() => _baseName = val),
-                  validator: (val) => val == null || val.isEmpty
-                      ? "Enter base class name"
-                      : null,
+                  onChanged: (val) {
+                    final upper = val.toUpperCase();
+                    setState(() => _baseName = upper);
+                  },
+                  validator: (val) {
+                    final value = (val ?? '').trim();
+                    if (value.isEmpty) return "Enter base class name";
+                    final sectionSuffix =
+                        (_section != null &&
+                            _section!.isNotEmpty &&
+                            _section != 'NONE')
+                        ? " ${_section!}"
+                        : '';
+                    final combined = value.toUpperCase() + sectionSuffix;
+                    final regex = RegExp(r'^[A-Z0-9]{3,10}( [A-Z])?$');
+                    if (!regex.hasMatch(combined)) {
+                      return "Invalid class name. Use uppercase and numbers only.";
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(

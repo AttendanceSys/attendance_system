@@ -62,8 +62,15 @@ class _EditUserPopupState extends State<EditUserPopup> {
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                   ),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter username" : null,
+                  validator: (val) {
+                    final value = val?.trim() ?? '';
+                    if (value.isEmpty) return "Enter username";
+                    final regex = RegExp(r'^[a-zA-Z0-9]{3,20}$');
+                    if (!regex.hasMatch(value)) {
+                      return "min 3 characters, no spaces";
+                    }
+                    return null;
+                  },
                   onChanged: (val) => _username = val,
                 ),
                 const SizedBox(height: 16),
@@ -72,8 +79,12 @@ class _EditUserPopupState extends State<EditUserPopup> {
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                   ),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter password" : null,
+                  validator: (val) {
+                    final value = val ?? '';
+                    if (value.isEmpty) return "Enter password";
+                    if (value.length < 6) return "min password 6 characters";
+                    return null;
+                  },
                   obscureText: true,
                   onChanged: (val) => _password = val,
                 ),
@@ -144,4 +155,3 @@ class _EditUserPopupState extends State<EditUserPopup> {
     );
   }
 }
-

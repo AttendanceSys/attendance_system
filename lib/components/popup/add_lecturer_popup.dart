@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/lecturer.dart';
 
 class AddTeacherPopup extends StatefulWidget {
@@ -13,10 +14,15 @@ class AddTeacherPopup extends StatefulWidget {
 
 class _AddTeacherPopupState extends State<AddTeacherPopup> {
   final _formKey = GlobalKey<FormState>();
+  final CollectionReference _usersCollection = FirebaseFirestore.instance
+      .collection('users');
   String? _teacherName;
   String? _username;
   String? _password;
   String? _facultyId;
+  bool _showPassword = false;
+  String? _usernameError;
+  String? _nameError;
 
   @override
   void initState() {
@@ -72,21 +78,55 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                     hintText: "Username",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _username = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter username" : null,
+                  onChanged: (val) {
+                    setState(() => _usernameError = null);
+                    _username = val.trim();
+                  },
+                  validator: (val) {
+                    final value = val?.trim() ?? '';
+                    if (value.isEmpty) return "Enter username";
+                    final regex = RegExp(r'^[a-zA-Z0-9]{3,20}$');
+                    if (!regex.hasMatch(value)) {
+                      return "min 3 characters, no spaces";
+                    }
+                    return null;
+                  },
                 ),
+                if (_usernameError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _usernameError!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _teacherName,
                   decoration: const InputDecoration(
-                    hintText: "Teacher Name",
+                    hintText: "Lecturer Name",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _teacherName = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter teacher name" : null,
+                  onChanged: (val) {
+                    setState(() => _nameError = null);
+                    _teacherName = val.trim();
+                  },
+                  validator: (val) {
+                    final value = val?.trim() ?? '';
+                    if (value.isEmpty) return "Enter lecturer name";
+                    if (value.length < 3 || value.length > 100) {
+                      return "Please enter a valid lecturer name (letters only).";
+                    }
+                    final regex = RegExp(r'^[A-Za-z ]+$');
+                    if (!regex.hasMatch(value)) {
+                      return "Please enter a valid lecturer name (letters only).";
+                    }
+                    return null;
+                  },
                 ),
+                if (_nameError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_nameError!, style: const TextStyle(color: Colors.red)),
+                ],
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _facultyId,
@@ -107,14 +147,25 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _password,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Password",
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _showPassword ? Icons.visibility : Icons.visibility_off,
+                      ),
+                      onPressed: () => setState(() {
+                        _showPassword = !_showPassword;
+                      }),
+                    ),
                   ),
-                  obscureText: true,
+                  obscureText: !_showPassword,
                   onChanged: (val) => _password = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter password" : null,
+                  validator: (val) {
+                    if (val == null || val.isEmpty) return "Enter password";
+                    if (val.length < 6) return "min password 6 characters";
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -145,20 +196,38 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                     SizedBox(
                       height: 40,
                       child: ElevatedButton(
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop(
-                              Teacher(
-                                id: widget.teacher?.id ?? '',
-                                teacherName: _teacherName!,
-                                username: _username!,
-                                password: _password!,
-                                facultyId: _facultyId!,
-                                createdAt:
-                                    widget.teacher?.createdAt ?? DateTime.now(),
-                              ),
-                            );
+                        onPressed: () async {
+                          if (!_formKey.currentState!.validate()) return;
+
+                          final newUsername = _username!.trim();
+                          final oldUsername = widget.teacher?.username;
+
+                          if (oldUsername != newUsername) {
+                            final existing = await _usersCollection
+                                .where('username', isEqualTo: newUsername)
+                                .limit(1)
+                                .get();
+                            if (existing.docs.isNotEmpty) {
+                              setState(
+                                () =>
+                                    _usernameError = 'Username already exists',
+                              );
+                              return;
+                            }
                           }
+
+                          setState(() => _usernameError = null);
+                          Navigator.of(context).pop(
+                            Teacher(
+                              id: widget.teacher?.id ?? '',
+                              teacherName: _teacherName!,
+                              username: newUsername,
+                              password: _password!,
+                              facultyId: _facultyId!,
+                              createdAt:
+                                  widget.teacher?.createdAt ?? DateTime.now(),
+                            ),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[900],

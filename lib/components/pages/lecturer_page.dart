@@ -24,6 +24,27 @@ class _TeachersPageState extends State<TeachersPage> {
   String _searchText = '';
   int? _selectedIndex;
 
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.blueGrey.shade800,
+      ),
+    );
+  }
+
+  List<Teacher> get _filteredTeachers {
+    final query = _searchText.trim().toLowerCase();
+    if (query.isEmpty) return _teachers;
+    return _teachers
+        .where(
+          (teacher) =>
+              teacher.username.toLowerCase().startsWith(query) ||
+              teacher.teacherName.toLowerCase().startsWith(query),
+        )
+        .toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -106,6 +127,7 @@ class _TeachersPageState extends State<TeachersPage> {
     await usersCollection.add(userData);
 
     _fetchTeachers();
+    _showSnack('Lecturer added successfully');
   }
 
   Future<void> _updateTeacher(Teacher teacher) async {
@@ -122,6 +144,7 @@ class _TeachersPageState extends State<TeachersPage> {
     final userData = {
       'username': teacher.username,
       'password': teacher.password,
+      'role': 'teacher',
       'faculty_id': FirebaseFirestore.instance.doc(
         '/faculties/${teacher.facultyId}',
       ),
@@ -150,6 +173,7 @@ class _TeachersPageState extends State<TeachersPage> {
         });
 
     _fetchTeachers();
+    _showSnack('Lecturer updated successfully');
   }
 
   Future<void> _deleteTeacher(Teacher teacher) async {
@@ -159,6 +183,7 @@ class _TeachersPageState extends State<TeachersPage> {
     // Delete from users collection
     await usersCollection
         .where('username', isEqualTo: teacher.username)
+        .where('role', isEqualTo: 'teacher')
         .get()
         .then((snapshot) {
           for (var doc in snapshot.docs) {
@@ -167,6 +192,7 @@ class _TeachersPageState extends State<TeachersPage> {
         });
 
     _fetchTeachers();
+    _showSnack('Lecturer deleted successfully');
   }
 
   Future<void> _showAddTeacherPopup() async {
@@ -181,7 +207,7 @@ class _TeachersPageState extends State<TeachersPage> {
 
   Future<void> _showEditTeacherPopup() async {
     if (_selectedIndex == null) return;
-    final teacher = _teachers[_selectedIndex!];
+    final teacher = _filteredTeachers[_selectedIndex!];
     final result = await showDialog<Teacher>(
       context: context,
       builder: (context) =>
@@ -194,11 +220,11 @@ class _TeachersPageState extends State<TeachersPage> {
 
   Future<void> _confirmDeleteTeacher() async {
     if (_selectedIndex == null) return;
-    final teacher = _teachers[_selectedIndex!];
+    final teacher = _filteredTeachers[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Delete Teacher"),
+        title: const Text("Delete Lecturer"),
         content: Text(
           "Are you sure you want to delete '${teacher.teacherName}'?",
         ),
@@ -238,7 +264,7 @@ class _TeachersPageState extends State<TeachersPage> {
         children: [
           const SizedBox(height: 8),
           const Text(
-            "Teachers",
+            "Lecturers",
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -254,8 +280,8 @@ class _TeachersPageState extends State<TeachersPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SearchAddBar(
-                      hintText: "Search Teacher...",
-                      buttonText: "Add Teacher",
+                      hintText: "Search Lecturer...",
+                      buttonText: "Add Lecturer",
                       onAddPressed: _showAddTeacherPopup,
                       onChanged: (value) {
                         setState(() {
@@ -350,49 +376,55 @@ class _TeachersPageState extends State<TeachersPage> {
   }
 
   Widget _buildDesktopTable() {
-    return Table(
-      columnWidths: const {
-        0: FixedColumnWidth(64), // No
-        1: FixedColumnWidth(140), // Username
-        2: FixedColumnWidth(140), // Teacher Name
-        3: FixedColumnWidth(120), // Faculty
-      },
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell("No"),
-            _tableHeaderCell("Username"),
-            _tableHeaderCell("Teacher Name"),
-            _tableHeaderCell("Faculty"),
-          ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.vertical,
+      child: Table(
+        columnWidths: const {
+          0: FixedColumnWidth(64), // No
+          1: FixedColumnWidth(140), // Username
+          2: FixedColumnWidth(140), // Lecturer Name
+          3: FixedColumnWidth(120), // Faculty
+        },
+        border: TableBorder(
+          horizontalInside: BorderSide(color: Colors.grey.shade300),
         ),
-        for (int index = 0; index < _teachers.length; index++)
+        children: [
           TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
-            ),
             children: [
-              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(
-                _teachers[index].username,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                _teachers[index].teacherName,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                _teachers[index].facultyId,
-                onTap: () => _handleRowTap(index),
-              ),
+              _tableHeaderCell("No"),
+              _tableHeaderCell("Username"),
+              _tableHeaderCell("Lecturer Name"),
+              _tableHeaderCell("Faculty"),
             ],
           ),
-      ],
+          for (int index = 0; index < _filteredTeachers.length; index++)
+            TableRow(
+              decoration: BoxDecoration(
+                color: _selectedIndex == index
+                    ? Colors.blue.shade50
+                    : Colors.transparent,
+              ),
+              children: [
+                _tableBodyCell(
+                  '${index + 1}',
+                  onTap: () => _handleRowTap(index),
+                ),
+                _tableBodyCell(
+                  _filteredTeachers[index].username,
+                  onTap: () => _handleRowTap(index),
+                ),
+                _tableBodyCell(
+                  _filteredTeachers[index].teacherName,
+                  onTap: () => _handleRowTap(index),
+                ),
+                _tableBodyCell(
+                  _filteredTeachers[index].facultyId,
+                  onTap: () => _handleRowTap(index),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 
@@ -407,11 +439,11 @@ class _TeachersPageState extends State<TeachersPage> {
           children: [
             _tableHeaderCell("No"),
             _tableHeaderCell("Username"),
-            _tableHeaderCell("Teacher Name"),
+            _tableHeaderCell("Lecturer Name"),
             _tableHeaderCell("Faculty"),
           ],
         ),
-        for (int index = 0; index < _teachers.length; index++)
+        for (int index = 0; index < _filteredTeachers.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index
@@ -421,15 +453,15 @@ class _TeachersPageState extends State<TeachersPage> {
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                _teachers[index].username,
+                _filteredTeachers[index].username,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                _teachers[index].teacherName,
+                _filteredTeachers[index].teacherName,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                _teachers[index].facultyId,
+                _filteredTeachers[index].facultyId,
                 onTap: () => _handleRowTap(index),
               ),
             ],

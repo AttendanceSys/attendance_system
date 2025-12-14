@@ -14,131 +14,173 @@ class DashboardStatsGrid extends StatelessWidget {
       final snapshot = await q.get();
       return snapshot.size;
     } catch (e) {
-      print('Error fetching $collectionName count: $e');
+      debugPrint('Error fetching $collectionName count: $e');
       return 0;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    double aspectRatio = screenWidth < 500 ? 1.4 : 2.4;
+    return Expanded(
+      child: FutureBuilder<List<int>>(
+        future: Future.wait([
+          _fetchCount('departments'),
+          _fetchCount('courses'),
+          _fetchCount('classes'),
+          _fetchCount('students'),
+        ]),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-    return FutureBuilder<List<int>>(
-      future: Future.wait([
-        _fetchCount('departments'),
-        _fetchCount('courses'),
-        _fetchCount('classes'),
-        _fetchCount('students'),
-      ]),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              // RESPONSIVE BREAKPOINTS
+              final width = constraints.maxWidth;
 
-        final deptCount = snapshot.data![0];
-        final courseCount = snapshot.data![1];
-        final classCount = snapshot.data![2];
-        final studentCount = snapshot.data![3];
+              int crossAxis;
+              if (width < 550) {
+                crossAxis = 1; // Mobile
+              } else if (width < 900) {
+                crossAxis = 2; // Tablet Portrait
+              } else if (width < 1300) {
+                crossAxis = 3; // Tablet Landscape
+              } else {
+                crossAxis = 4; // Desktop
+              }
 
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: aspectRatio,
-          children: [
-            _StatsCard(
-              icon: Icons.account_tree_outlined,
-              label: 'Departments',
-              value: deptCount.toString(),
-              color: const Color(0xFFD23CA7),
-            ),
-            _StatsCard(
-              icon: Icons.menu_book,
-              label: 'Courses',
-              value: courseCount.toString(),
-              color: const Color(0xFFF7B345),
-            ),
-            _StatsCard(
-              icon: Icons.groups,
-              label: 'Classes',
-              value: classCount.toString(),
-              color: const Color(0xFF31B9C1),
-            ),
-            _StatsCard(
-              icon: Icons.people,
-              label: 'Students',
-              value: studentCount.toString(),
-              color: const Color(0xFFB9EEB6),
-            ),
-          ],
-        );
-      },
+              return GridView.builder(
+                padding: const EdgeInsets.all(20),
+                itemCount: 4,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxis,
+                  crossAxisSpacing: 22,
+                  mainAxisSpacing: 22,
+                  childAspectRatio: 1.4,
+                ),
+                itemBuilder: (context, index) {
+                  final labels = [
+                    "Departments",
+                    "Courses",
+                    "Classes",
+                    "Students",
+                  ];
+                  final icons = [
+                    Icons.account_tree_outlined,
+                    Icons.menu_book_outlined,
+                    Icons.groups_2_outlined,
+                    Icons.people_alt_outlined,
+                  ];
+                  final colors = [
+                    Colors.blue,
+                    Colors.indigo,
+                    Colors.teal,
+                    Colors.orange,
+                  ];
+
+                  return _StatsCard(
+                    label: labels[index],
+                    value: snapshot.data![index].toString(),
+                    icon: icons[index],
+                    color: colors[index],
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
 
 class _StatsCard extends StatelessWidget {
-  final IconData icon;
   final String label;
   final String value;
+  final IconData icon;
   final Color color;
 
   const _StatsCard({
-    Key? key,
-    required this.icon,
     required this.label,
     required this.value,
+    required this.icon,
     required this.color,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    double labelFont = screenWidth < 500 ? 20 : 29;
-    double numberFont = screenWidth < 500 ? 36 : 50;
+    return LayoutBuilder(
+      builder: (context, size) {
+        final scale = (size.maxHeight / 180).clamp(0.75, 1.0);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 50),
-              const SizedBox(width: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: labelFont,
-                  fontWeight: FontWeight.w600,
+        return ClipRect(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20 * scale),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: Center(
-              child: Text(
-                value,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: numberFont,
-                  fontWeight: FontWeight.bold,
-                ),
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(16 * scale),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ICON BADGE
+                  Container(
+                    padding: EdgeInsets.all(12 * scale),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, size: 30 * scale, color: color),
+                  ),
+
+                  SizedBox(height: 14 * scale),
+
+                  // LABEL
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16 * scale,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+
+                  SizedBox(height: 10 * scale),
+
+                  // VALUE — FittedBox prevents overflow
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          value,
+                          style: TextStyle(
+                            fontSize: 38 * scale,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

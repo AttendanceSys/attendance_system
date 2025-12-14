@@ -1,10 +1,3 @@
-// TeacherAttendancePage — require an active in-window session to load roster
-// Fixes:
-// - Do NOT pick the first active session by default. Only pick a session if its period window
-//   includes the current time (period_starts_at <= now < period_ends_at).
-// - Use timestamp comparisons consistently (compare DateTime values returned by Timestamp.toDate()).
-// - If no in-window session is found, show "No active QR session" and do NOT fetch students.
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../services/session.dart';
@@ -235,7 +228,8 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       _prefillAppliedForCurrentSelection = false;
       currentSessionId = null;
       currentSessionCode = null;
-      _noActiveSessionMessage = null;
+      _noActive_session_message_reset() {}
+      ;
     });
     try {
       final qs = await _firestore
@@ -612,7 +606,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
   }
 
   // --------------------------
-  // Submit (session-aware)
+  // Submit (session-aware) with final active-session re-check
   // --------------------------
   Future<void> _submitAttendance() async {
     if (department == null || className == null || subject == null) {
@@ -623,21 +617,144 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       );
       return;
     }
-    if (currentSessionId == null) {
+
+    // Re-check: ensure there is an active in-window session for the selected department/class/subject
+    try {
+      DocumentSnapshot<Map<String, dynamic>>? sessionDoc;
+
+      // If we already have currentSessionId, verify the doc is still active and in-window
+      if (currentSessionId != null) {
+        final docSnap = await _firestore
+            .collection('qr_generation')
+            .doc(currentSessionId)
+            .get();
+        if (docSnap.exists) {
+          final data = docSnap.data();
+          if (data != null) {
+            final activeFlag = data['active'] == true;
+            final startTs = _parseTimestampField(data['period_starts_at']);
+            final endTs = _parseTimestampField(data['period_ends_at']);
+            final nowUtc = DateTime.now().toUtc();
+            DateTime? startUtc = startTs?.toDate().toUtc();
+            DateTime? endUtc = endTs?.toDate().toUtc();
+
+            // also try ISO fields if timestamps missing
+            if (startUtc == null) {
+              final sIso = _stringFrom(
+                data['period_starts_at'] ?? data['created_at_iso'],
+              );
+              if (sIso != null) {
+                try {
+                  startUtc = DateTime.parse(sIso).toUtc();
+                } catch (_) {}
+              }
+            }
+            if (endUtc == null) {
+              final eIso = _stringFrom(
+                data['period_ends_at'] ??
+                    data['expires_at'] ??
+                    data['period_ends_at_iso'],
+              );
+              if (eIso != null) {
+                try {
+                  endUtc = DateTime.parse(eIso).toUtc();
+                } catch (_) {}
+              }
+            }
+
+            if (activeFlag &&
+                startUtc != null &&
+                endUtc != null &&
+                !nowUtc.isBefore(startUtc) &&
+                nowUtc.isBefore(endUtc)) {
+              sessionDoc = docSnap;
+            } else {
+              // session invalid or ended
+              sessionDoc = null;
+            }
+          }
+        } else {
+          sessionDoc = null;
+        }
+      }
+
+      // If no valid session found by id, attempt to find any currently in-window session for the selection
+      if (sessionDoc == null) {
+        final sQ = await _firestore
+            .collection('qr_generation')
+            .where('subject', isEqualTo: subject)
+            .where('className', isEqualTo: className)
+            .where('department', isEqualTo: department)
+            .where('active', isEqualTo: true)
+            .get();
+
+        final nowUtc = DateTime.now().toUtc();
+        for (final sd in sQ.docs) {
+          final data = sd.data();
+          DateTime? startUtc;
+          DateTime? endUtc;
+          final startTs = _parseTimestampField(data['period_starts_at']);
+          final endTs = _parseTimestampField(data['period_ends_at']);
+          if (startTs != null) startUtc = startTs.toDate().toUtc();
+          if (endTs != null) endUtc = endTs.toDate().toUtc();
+
+          // fallback to ISO strings
+          if (startUtc == null) {
+            final sIso = _stringFrom(
+              data['period_starts_at'] ?? data['created_at_iso'],
+            );
+            if (sIso != null) {
+              try {
+                startUtc = DateTime.parse(sIso).toUtc();
+              } catch (_) {}
+            }
+          }
+          if (endUtc == null) {
+            final eIso = _stringFrom(
+              data['period_ends_at'] ??
+                  data['expires_at'] ??
+                  data['period_ends_at_iso'],
+            );
+            if (eIso != null) {
+              try {
+                endUtc = DateTime.parse(eIso).toUtc();
+              } catch (_) {}
+            }
+          }
+
+          if (startUtc != null &&
+              endUtc != null &&
+              !nowUtc.isBefore(startUtc) &&
+              nowUtc.isBefore(endUtc)) {
+            sessionDoc = sd;
+            break;
+          }
+        }
+      }
+
+      if (sessionDoc == null) {
+        // No in-window session: block submit
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No active QR session for the selected class/subject (or session has ended). Submission blocked.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      // If we reach here, we have a valid in-window session — ensure currentSessionId/code reflect it
+      currentSessionId = sessionDoc.id;
+      currentSessionCode = _stringFrom(sessionDoc.data()?['code']);
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No active session — cannot submit.')),
-      );
-      return;
-    }
-    if (students.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No students loaded for the selected class.'),
-        ),
+        SnackBar(content: Text('Failed to validate active session: $e')),
       );
       return;
     }
 
+    // Proceed to confirmation dialog (same as before)
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

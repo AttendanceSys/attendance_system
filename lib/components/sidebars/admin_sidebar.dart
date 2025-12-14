@@ -125,7 +125,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
                 ),
                 SidebarItem(
                   icon: Icons.school_outlined,
-                  title: "Teachers",
+                  title: "Lecturers",
                   isSelected: selectedIndex == 2,
                   onTap: () => onItemSelected(2),
                   collapsed: collapsed,

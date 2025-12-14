@@ -12,17 +12,58 @@ class FacultiesPage extends StatefulWidget {
 }
 
 class _FacultiesPageState extends State<FacultiesPage> {
-  final CollectionReference facultiesCollection =
-      FirebaseFirestore.instance.collection('faculties');
+  final CollectionReference facultiesCollection = FirebaseFirestore.instance
+      .collection('faculties');
 
   List<Faculty> _faculties = [];
   String _searchText = '';
   int? _selectedIndex;
 
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.blueGrey.shade800,
+      ),
+    );
+  }
+
+  List<Faculty> get _filteredFaculties {
+    final query = _searchText.trim().toLowerCase();
+    if (query.isEmpty) return _faculties;
+    return _faculties
+        .where(
+          (faculty) =>
+              faculty.name.toLowerCase().startsWith(query) ||
+              faculty.code.toLowerCase().startsWith(query),
+        )
+        .toList();
+  }
+
   @override
   void initState() {
     super.initState();
     _fetchFaculties();
+  }
+
+  Future<bool> _facultyExists({
+    required String code,
+    required String name,
+    String? excludeId,
+  }) async {
+    final trimmedCode = code.trim();
+    final trimmedName = name.trim();
+
+    final codeSnap = await facultiesCollection
+        .where('faculty_code', isEqualTo: trimmedCode)
+        .get();
+    final nameSnap = await facultiesCollection
+        .where('faculty_name', isEqualTo: trimmedName)
+        .get();
+
+    final hasCode = codeSnap.docs.any((d) => d.id != excludeId);
+    final hasName = nameSnap.docs.any((d) => d.id != excludeId);
+    return hasCode || hasName;
   }
 
   Future<void> _fetchFaculties() async {
@@ -42,8 +83,11 @@ class _FacultiesPageState extends State<FacultiesPage> {
             id: doc.id,
             code: data['faculty_code'] ?? 'N/A',
             name: data['faculty_name'] ?? 'N/A',
-            createdAt: (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
-            establishmentDate: DateTime.parse(data['establishment_date'] ?? DateTime.now().toIso8601String()),
+            createdAt:
+                (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            establishmentDate: DateTime.parse(
+              data['establishment_date'] ?? DateTime.now().toIso8601String(),
+            ),
           );
         }).toList();
       });
@@ -53,28 +97,53 @@ class _FacultiesPageState extends State<FacultiesPage> {
   }
 
   Future<void> _addFaculty(Faculty faculty) async {
+    final code = faculty.code.trim();
+    final name = faculty.name.trim();
+
+    final exists = await _facultyExists(code: code, name: name);
+    if (exists) {
+      _showSnack('Faculty code or name already exists');
+      return;
+    }
+
     await facultiesCollection.add({
-      'faculty_code': faculty.code,
-      'faculty_name': faculty.name,
+      'faculty_code': code,
+      'faculty_name': name,
       'created_at': FieldValue.serverTimestamp(),
       'establishment_date': faculty.establishmentDate.toIso8601String(),
     });
     _fetchFaculties();
+    _showSnack('Faculty added successfully');
   }
 
   Future<void> _updateFaculty(Faculty faculty) async {
+    final code = faculty.code.trim();
+    final name = faculty.name.trim();
+
+    final exists = await _facultyExists(
+      code: code,
+      name: name,
+      excludeId: faculty.id,
+    );
+    if (exists) {
+      _showSnack('Faculty code or name already exists');
+      return;
+    }
+
     await facultiesCollection.doc(faculty.id).update({
-      'faculty_code': faculty.code,
-      'faculty_name': faculty.name,
+      'faculty_code': code,
+      'faculty_name': name,
       'created_at': FieldValue.serverTimestamp(),
       'establishment_date': faculty.establishmentDate.toIso8601String(),
     });
     _fetchFaculties();
+    _showSnack('Faculty updated successfully');
   }
 
   Future<void> _deleteFaculty(Faculty faculty) async {
     await facultiesCollection.doc(faculty.id).delete();
     _fetchFaculties();
+    _showSnack('Faculty deleted successfully');
   }
 
   Future<void> _showAddFacultyPopup() async {
@@ -89,7 +158,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
 
   Future<void> _showEditFacultyPopup() async {
     if (_selectedIndex == null) return;
-    final faculty = _faculties[_selectedIndex!];
+    final faculty = _filteredFaculties[_selectedIndex!];
     final result = await showDialog<Faculty>(
       context: context,
       builder: (context) => AddFacultyPopup(faculty: faculty),
@@ -101,7 +170,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
 
   Future<void> _confirmDeleteFaculty() async {
     if (_selectedIndex == null) return;
-    final faculty = _faculties[_selectedIndex!];
+    final faculty = _filteredFaculties[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -176,12 +245,20 @@ class _FacultiesPageState extends State<FacultiesPage> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _showEditFacultyPopup,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _showEditFacultyPopup,
                             child: const Text(
                               "Edit",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -195,12 +272,20 @@ class _FacultiesPageState extends State<FacultiesPage> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 0),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
                             ),
-                            onPressed: _selectedIndex == null ? null : _confirmDeleteFaculty,
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _confirmDeleteFaculty,
                             child: const Text(
                               "Delete",
-                              style: TextStyle(fontSize: 15, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -217,7 +302,10 @@ class _FacultiesPageState extends State<FacultiesPage> {
               width: double.infinity,
               color: Colors.transparent,
               child: isDesktop
-                  ? _buildDesktopTable()
+                  ? SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: _buildDesktopTable(),
+                    )
                   : SingleChildScrollView(
                       scrollDirection: Axis.vertical,
                       child: SingleChildScrollView(
@@ -235,10 +323,10 @@ class _FacultiesPageState extends State<FacultiesPage> {
   Widget _buildDesktopTable() {
     return Table(
       columnWidths: const {
-        0: FixedColumnWidth(64),   // No
-        1: FixedColumnWidth(120),  // Faculty Code
-        2: FixedColumnWidth(180),  // Faculty Name
-        3: FixedColumnWidth(130),  // Created At
+        0: FixedColumnWidth(64), // No
+        1: FixedColumnWidth(120), // Faculty Code
+        2: FixedColumnWidth(180), // Faculty Name
+        3: FixedColumnWidth(130), // Created At
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -249,22 +337,30 @@ class _FacultiesPageState extends State<FacultiesPage> {
             _tableHeaderCell("No"),
             _tableHeaderCell("Faculty Code"),
             _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Created At"),
+            _tableHeaderCell("Establishment Date"),
           ],
         ),
-        for (int index = 0; index < _faculties.length; index++)
+        for (int index = 0; index < _filteredFaculties.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_faculties[index].code, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_faculties[index].name, onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                "${_faculties[index].createdAt.day.toString().padLeft(2, '0')} "
-                "${_monthString(_faculties[index].createdAt.month)} "
-                "${_faculties[index].createdAt.year}",
+                _filteredFaculties[index].code,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _filteredFaculties[index].name,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                "${_filteredFaculties[index].establishmentDate.day.toString().padLeft(2, '0')} "
+                "${_monthString(_filteredFaculties[index].establishmentDate.month)} "
+                "${_filteredFaculties[index].establishmentDate.year}",
                 onTap: () => _handleRowTap(index),
               ),
             ],
@@ -288,19 +384,27 @@ class _FacultiesPageState extends State<FacultiesPage> {
             _tableHeaderCell("Created At"),
           ],
         ),
-        for (int index = 0; index < _faculties.length; index++)
+        for (int index = 0; index < _filteredFaculties.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index ? Colors.blue.shade50 : Colors.transparent,
+              color: _selectedIndex == index
+                  ? Colors.blue.shade50
+                  : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_faculties[index].code, onTap: () => _handleRowTap(index)),
-              _tableBodyCell(_faculties[index].name, onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                "${_faculties[index].createdAt.day.toString().padLeft(2, '0')} "
-                "${_monthString(_faculties[index].createdAt.month)} "
-                "${_faculties[index].createdAt.year}",
+                _filteredFaculties[index].code,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                _filteredFaculties[index].name,
+                onTap: () => _handleRowTap(index),
+              ),
+              _tableBodyCell(
+                "${_filteredFaculties[index].establishmentDate.day.toString().padLeft(2, '0')} "
+                "${_monthString(_filteredFaculties[index].establishmentDate.month)} "
+                "${_filteredFaculties[index].establishmentDate.year}",
                 onTap: () => _handleRowTap(index),
               ),
             ],
@@ -326,18 +430,25 @@ class _FacultiesPageState extends State<FacultiesPage> {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(
-          text,
-          overflow: TextOverflow.ellipsis,
-        ),
+        child: Text(text, overflow: TextOverflow.ellipsis),
       ),
     );
   }
 
   String _monthString(int month) {
     const months = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
     ];
     return months[month - 1];
   }

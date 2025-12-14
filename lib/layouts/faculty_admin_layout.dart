@@ -43,13 +43,13 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
               ],
             ),
           ),
-          Center(child: Text('Departments')),
-          Center(child: Text('Students')),
-          Center(child: Text('Subjects')),
-          Center(child: Text('Classes')),
-          Center(child: Text('Attendance')),
-          Center(child: Text('TimeTable')),
-          Center(child: Text('User Handling')),
+          const Center(child: Text('Departments')),
+          const Center(child: Text('Classes')),
+          const Center(child: Text('Students')),
+          const Center(child: Text('Courses')),
+          const Center(child: Text('Attendance')),
+          const Center(child: Text('TimeTable')),
+          const Center(child: Text('User Handling')),
         ];
   }
 

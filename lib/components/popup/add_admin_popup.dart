@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/admin.dart';
 
 class AddAdminPopup extends StatefulWidget {
@@ -13,10 +14,15 @@ class AddAdminPopup extends StatefulWidget {
 
 class _AddAdminPopupState extends State<AddAdminPopup> {
   final _formKey = GlobalKey<FormState>();
+  final CollectionReference _usersCollection = FirebaseFirestore.instance
+      .collection('users');
   String? _fullName;
   String? _facultyId;
   String? _password;
   String? _username;
+  bool _isPasswordHidden = true;
+  String? _usernameError;
+  String? _fullNameError;
 
   @override
   void initState() {
@@ -67,15 +73,63 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
+                  initialValue: _username,
+                  decoration: const InputDecoration(
+                    hintText: "Username",
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) {
+                    setState(() => _usernameError = null);
+                    _username = val.trim();
+                  },
+                  validator: (val) {
+                    final value = val?.trim() ?? '';
+                    if (value.isEmpty) return "Enter username";
+                    final regex = RegExp(r'^[a-zA-Z0-9]{3,20}$');
+                    if (!regex.hasMatch(value)) {
+                      return "min 3 characters, no spaces";
+                    }
+                    return null;
+                  },
+                ),
+                if (_usernameError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _usernameError!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                TextFormField(
                   initialValue: _fullName,
                   decoration: const InputDecoration(
                     hintText: "Full Name",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _fullName = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter full name" : null,
+                  onChanged: (val) {
+                    setState(() => _fullNameError = null);
+                    _fullName = val.trim();
+                  },
+                  validator: (val) {
+                    final value = val?.trim() ?? '';
+                    if (value.isEmpty) return "Enter full name";
+                    if (value.length < 3 || value.length > 100) {
+                      return "Please enter a valid admin name (letters only).";
+                    }
+                    final regex = RegExp(r'^[A-Za-z ]+$');
+                    if (!regex.hasMatch(value)) {
+                      return "Please enter a valid admin name (letters only).";
+                    }
+                    return null;
+                  },
                 ),
+                if (_fullNameError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _fullNameError!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _facultyId,
@@ -83,10 +137,12 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                     hintText: "Faculty Name",
                     border: OutlineInputBorder(),
                   ),
-                  items: widget.facultyNames.map(
-                    (name) =>
-                        DropdownMenuItem(value: name, child: Text(name)),
-                  ).toList(),
+                  items: widget.facultyNames
+                      .map(
+                        (name) =>
+                            DropdownMenuItem(value: name, child: Text(name)),
+                      )
+                      .toList(),
                   onChanged: (val) => setState(() => _facultyId = val),
                   validator: (val) =>
                       val == null || val.isEmpty ? "Select faculty name" : null,
@@ -94,25 +150,27 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _password,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Password",
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordHidden
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      onPressed: () => setState(
+                        () => _isPasswordHidden = !_isPasswordHidden,
+                      ),
+                    ),
                   ),
-                  obscureText: true,
+                  obscureText: _isPasswordHidden,
                   onChanged: (val) => _password = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter password" : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  initialValue: _username,
-                  decoration: const InputDecoration(
-                    hintText: "Username",
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) => _username = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter username" : null,
+                  validator: (val) {
+                    if (val == null || val.isEmpty) return "Enter password";
+                    if (val.length < 6) return "min password 6 characters";
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -143,19 +201,37 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                     SizedBox(
                       height: 40,
                       child: ElevatedButton(
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop(
-                              Admin(
-                                id: widget.admin?.id ?? '',
-                                fullName: _fullName!,
-                                facultyId: _facultyId!,
-                                password: _password!,
-                                username: _username!,
-                                createdAt: DateTime.now(),
-                              ),
-                            );
+                        onPressed: () async {
+                          if (!_formKey.currentState!.validate()) return;
+
+                          final newUsername = _username!.trim();
+                          final oldUsername = widget.admin?.username;
+
+                          if (oldUsername != newUsername) {
+                            final existing = await _usersCollection
+                                .where('username', isEqualTo: newUsername)
+                                .limit(1)
+                                .get();
+                            if (existing.docs.isNotEmpty) {
+                              setState(
+                                () =>
+                                    _usernameError = 'Username already exists',
+                              );
+                              return;
+                            }
                           }
+
+                          setState(() => _usernameError = null);
+                          Navigator.of(context).pop(
+                            Admin(
+                              id: widget.admin?.id ?? '',
+                              fullName: _fullName!,
+                              facultyId: _facultyId!,
+                              password: _password!,
+                              username: newUsername,
+                              createdAt: DateTime.now(),
+                            ),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[900],

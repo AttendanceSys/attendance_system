@@ -27,6 +27,7 @@ class _StudentsPageState extends State<StudentsPage> {
   List<Student> _students = [];
   Map<String, String> _departmentNames = {};
   Map<String, String> _classNames = {};
+  bool _loading = true;
 
   String _searchText = '';
   int? _selectedIndex;
@@ -43,8 +44,12 @@ class _StudentsPageState extends State<StudentsPage> {
   @override
   void initState() {
     super.initState();
-    _fetchLookups();
-    _fetchStudents();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await Future.wait([_fetchLookups(), _fetchStudents()]);
+    if (mounted) setState(() => _loading = false);
   }
 
   String _extractId(dynamic cand) {
@@ -59,18 +64,6 @@ class _StudentsPageState extends State<StudentsPage> {
       return s;
     }
     return cand.toString();
-  }
-
-  String _extractPath(dynamic cand) {
-    if (cand == null) return '';
-    if (cand is DocumentReference) return '/${cand.path}';
-    if (cand is String) {
-      final s = cand;
-      if (s.startsWith('/')) return s;
-      if (s.contains('/')) return '/$s';
-      return '/faculties/$s';
-    }
-    return '/${cand.toString()}';
   }
 
   bool _recordMatchesFaculty(Map<String, dynamic> data) {
@@ -137,43 +130,36 @@ class _StudentsPageState extends State<StudentsPage> {
     try {
       // Fetch all then client-filter to handle mixed DB shapes consistently.
       final snap = await studentsCollection.get();
-      final docs = snap.docs;
-      setState(() {
-        _students = docs
-            .map((d) {
-              final data = d.data() as Map<String, dynamic>;
-              return Student(
-                id: d.id,
-                fullname:
-                    (data['fullname'] ?? data['full_name'] ?? '') as String,
-                username: (data['username'] ?? '') as String,
-                password: (data['password'] ?? '') as String,
-                gender: (data['gender'] ?? 'Male') as String,
-                departmentRef: data['department_ref'] is DocumentReference
-                    ? (data['department_ref'] as DocumentReference).id
-                    : (data['department_ref']?.toString() ?? ''),
-                classRef: data['class_ref'] is DocumentReference
-                    ? (data['class_ref'] as DocumentReference).id
-                    : (data['class_ref']?.toString() ?? ''),
-                facultyRef: _extractId(
-                  data['faculty_ref'] ??
-                      data['faculty_id'] ??
-                      data['faculty'] ??
-                      data['facultyId'],
-                ),
-                createdAt: (data['created_at'] as Timestamp?)?.toDate(),
-              );
-            })
-            .where((s) {
-              // apply faculty scoping for faculty admins
-              if (Session.facultyRef == null) return true;
-              final raw =
-                  docs.firstWhere((d) => d.id == s.id).data()
-                      as Map<String, dynamic>;
-              return _recordMatchesFaculty(raw);
-            })
-            .toList();
-      });
+      final students = <Student>[];
+      for (final d in snap.docs) {
+        final data = d.data() as Map<String, dynamic>;
+        if (!_recordMatchesFaculty(data)) continue;
+        students.add(
+          Student(
+            id: d.id,
+            fullname: (data['fullname'] ?? data['full_name'] ?? '') as String,
+            username: (data['username'] ?? '') as String,
+            password: (data['password'] ?? '') as String,
+            gender: (data['gender'] ?? 'Male') as String,
+            departmentRef: _extractId(
+              data['department_ref'] ??
+                  data['department'] ??
+                  data['departmentId'],
+            ),
+            classRef: _extractId(
+              data['class_ref'] ?? data['class'] ?? data['classId'],
+            ),
+            facultyRef: _extractId(
+              data['faculty_ref'] ??
+                  data['faculty_id'] ??
+                  data['faculty'] ??
+                  data['facultyId'],
+            ),
+            createdAt: (data['created_at'] as Timestamp?)?.toDate(),
+          ),
+        );
+      }
+      setState(() => _students = students);
     } catch (e) {
       print('Error fetching students: $e');
     }
@@ -547,16 +533,18 @@ class _StudentsPageState extends State<StudentsPage> {
             ],
           ),
           Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _buildMobileTable(),
-                    ),
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : Container(
+                    width: double.infinity,
+                    color: Colors.transparent,
+                    child: isDesktop
+                        ? _buildDesktopTable()
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
+                  ),
           ),
           // bottom action row removed to match Classes page
         ],
@@ -571,7 +559,7 @@ class _StudentsPageState extends State<StudentsPage> {
         1: FixedColumnWidth(220),
         2: FixedColumnWidth(140),
         3: FixedColumnWidth(100),
-        4: FixedColumnWidth(140),
+        4: IntrinsicColumnWidth(),
         5: FixedColumnWidth(160),
       },
       border: TableBorder(
@@ -581,8 +569,8 @@ class _StudentsPageState extends State<StudentsPage> {
         TableRow(
           children: [
             _tableHeaderCell('No'),
-            _tableHeaderCell('Full name'),
             _tableHeaderCell('Username'),
+            _tableHeaderCell('Full name'),
             _tableHeaderCell('Gender'),
             _tableHeaderCell('Department'),
             _tableHeaderCell('Class'),
@@ -598,11 +586,11 @@ class _StudentsPageState extends State<StudentsPage> {
             children: [
               _tableBodyCell('${i + 1}', onTap: () => _handleRowTap(i)),
               _tableBodyCell(
-                _filteredStudents[i].fullname,
+                _filteredStudents[i].username,
                 onTap: () => _handleRowTap(i),
               ),
               _tableBodyCell(
-                _filteredStudents[i].username,
+                _filteredStudents[i].fullname,
                 onTap: () => _handleRowTap(i),
               ),
               _tableBodyCell(
@@ -634,8 +622,8 @@ class _StudentsPageState extends State<StudentsPage> {
         TableRow(
           children: [
             _tableHeaderCell('No'),
-            _tableHeaderCell('Full name'),
             _tableHeaderCell('Username'),
+            _tableHeaderCell('Full name'),
             _tableHeaderCell('Gender'),
             _tableHeaderCell('Department'),
             _tableHeaderCell('Class'),
@@ -651,11 +639,11 @@ class _StudentsPageState extends State<StudentsPage> {
             children: [
               _tableBodyCell('${i + 1}', onTap: () => _handleRowTap(i)),
               _tableBodyCell(
-                _filteredStudents[i].fullname,
+                _filteredStudents[i].username,
                 onTap: () => _handleRowTap(i),
               ),
               _tableBodyCell(
-                _filteredStudents[i].username,
+                _filteredStudents[i].fullname,
                 onTap: () => _handleRowTap(i),
               ),
               _tableBodyCell(
@@ -685,7 +673,7 @@ class _StudentsPageState extends State<StudentsPage> {
     onTap: onTap,
     child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      child: Text(text, overflow: TextOverflow.ellipsis),
+      child: Text(text, overflow: TextOverflow.visible, softWrap: true),
     ),
   );
 }

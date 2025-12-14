@@ -19,7 +19,8 @@ class TimetableCellEditDialog extends StatefulWidget {
   final String? initialLecturer; // display name
   final List<String> courses; // optional static fallback (display names)
   final List<String> lecturers; // optional static fallback (display names)
-  final String? classId; // optional: if provided, dialog will fetch courses for this class
+  final String?
+  classId; // optional: if provided, dialog will fetch courses for this class
 
   const TimetableCellEditDialog({
     super.key,
@@ -31,12 +32,14 @@ class TimetableCellEditDialog extends StatefulWidget {
   });
 
   @override
-  State<TimetableCellEditDialog> createState() => _TimetableCellEditDialogState();
+  State<TimetableCellEditDialog> createState() =>
+      _TimetableCellEditDialogState();
 }
 
 class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   // Selected/displayed values
-  String? _selectedCourseId; // the Firestore doc id of the selected course (if we loaded docs)
+  String?
+  _selectedCourseId; // the Firestore doc id of the selected course (if we loaded docs)
   String? _selectedCourseName; // display name shown in dropdown
   bool _useCustomCourse = false;
   final TextEditingController _courseCustomCtrl = TextEditingController();
@@ -64,10 +67,13 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
     _lecturers = widget.lecturers.map((t) => {'id': '', 'name': t}).toList();
 
     // Initialize selection values from initialCourse/initialLecturer
-    if (widget.initialCourse != null && widget.initialCourse!.trim().isNotEmpty) {
+    if (widget.initialCourse != null &&
+        widget.initialCourse!.trim().isNotEmpty) {
       _selectedCourseName = widget.initialCourse!.trim();
       // If this matches a static fallback, keep it; otherwise switch to custom entry
-      final match = _courses.indexWhere((c) => c['name']!.toLowerCase() == _selectedCourseName!.toLowerCase());
+      final match = _courses.indexWhere(
+        (c) => c['name']!.toLowerCase() == _selectedCourseName!.toLowerCase(),
+      );
       if (match >= 0) {
         _selectedCourseId = _courses[match]['id'];
         _useCustomCourse = false;
@@ -80,9 +86,12 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       _useCustomCourse = true;
     }
 
-    if (widget.initialLecturer != null && widget.initialLecturer!.trim().isNotEmpty) {
+    if (widget.initialLecturer != null &&
+        widget.initialLecturer!.trim().isNotEmpty) {
       _selectedLecturerName = widget.initialLecturer!.trim();
-      final match = _lecturers.indexWhere((t) => t['name']!.toLowerCase() == _selectedLecturerName!.toLowerCase());
+      final match = _lecturers.indexWhere(
+        (t) => t['name']!.toLowerCase() == _selectedLecturerName!.toLowerCase(),
+      );
       if (match >= 0) {
         _selectedLecturerId = _lecturers[match]['id'];
         _useCustomLecturer = false;
@@ -110,13 +119,17 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   // ---------- Firestore lookups (safe) ----------
 
   // Fetch course documents for a class id. Returns list of maps {id,name}.
-  Future<List<Map<String, String>>> _fetchCoursesForClass(String classId) async {
+  Future<List<Map<String, String>>> _fetchCoursesForClass(
+    String classId,
+  ) async {
     final col = _firestore.collection('courses');
     try {
       // Try multiple common fields
       QuerySnapshot snap = await col.where('class', isEqualTo: classId).get();
-      if (snap.docs.isEmpty) snap = await col.where('class_id', isEqualTo: classId).get();
-      if (snap.docs.isEmpty) snap = await col.where('classId', isEqualTo: classId).get();
+      if (snap.docs.isEmpty)
+        snap = await col.where('class_id', isEqualTo: classId).get();
+      if (snap.docs.isEmpty)
+        snap = await col.where('classId', isEqualTo: classId).get();
       if (snap.docs.isEmpty) {
         // try matching by DocumentReference if courses use refs
         try {
@@ -128,7 +141,12 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       final out = <Map<String, String>>[];
       for (final d in snap.docs) {
         final data = d.data() as Map<String, dynamic>;
-        final name = (data['course_name'] ?? data['title'] ?? data['course_code'] ?? d.id).toString();
+        final name =
+            (data['course_name'] ??
+                    data['title'] ??
+                    data['course_code'] ??
+                    d.id)
+                .toString();
         out.add({'id': d.id, 'name': name});
       }
       return out;
@@ -139,21 +157,37 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   }
 
   // Fetch lecturers for a course doc id. Returns list of maps {id,name}.
-  Future<List<Map<String, String>>> _fetchLecturersForCourseDoc(String courseDocId) async {
+  Future<List<Map<String, String>>> _fetchLecturersForCourseDoc(
+    String courseDocId,
+  ) async {
     try {
       final doc = await _firestore.collection('courses').doc(courseDocId).get();
       if (!doc.exists || doc.data() == null) return [];
 
       final data = doc.data() as Map<String, dynamic>;
       // Try 'teacher_assigned' field (string id)
-      if (data.containsKey('teacher_assigned') && (data['teacher_assigned'] is String)) {
+      if (data.containsKey('teacher_assigned') &&
+          (data['teacher_assigned'] is String)) {
         final teacherId = data['teacher_assigned'] as String;
         if (teacherId.trim().isNotEmpty) {
-          final tdoc = await _firestore.collection('teachers').doc(teacherId).get();
+          final tdoc = await _firestore
+              .collection('teachers')
+              .doc(teacherId)
+              .get();
           if (tdoc.exists && tdoc.data() != null) {
             final tdata = tdoc.data() as Map<String, dynamic>;
-            final tname = (tdata['name'] ?? tdata['full_name'] ?? tdata['username'] ?? teacherId).toString();
-            return [{'id': teacherId, 'name': tname}];
+            final tname =
+                (tdata['full_name'] ??
+                        tdata['fullName'] ??
+                        tdata['fullname'] ??
+                        tdata['teacher_name'] ??
+                        tdata['name'] ??
+                        tdata['username'] ??
+                        teacherId)
+                    .toString();
+            return [
+              {'id': teacherId, 'name': tname},
+            ];
           }
         }
       }
@@ -162,8 +196,19 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       if (data.containsKey('teacher') && data['teacher'] is Map) {
         final t = data['teacher'] as Map<String, dynamic>;
         final tid = (t['id'] ?? t['teacher_id'] ?? '').toString();
-        final tname = (t['name'] ?? t['full_name'] ?? '').toString();
-        if (tname.isNotEmpty) return [{'id': tid, 'name': tname}];
+        final tname =
+            (t['full_name'] ??
+                    t['fullName'] ??
+                    t['fullname'] ??
+                    t['teacher_name'] ??
+                    t['name'] ??
+                    t['username'] ??
+                    '')
+                .toString();
+        if (tname.isNotEmpty)
+          return [
+            {'id': tid, 'name': tname},
+          ];
       }
 
       // If course doc has 'teachers' array of refs or ids, try to fetch the first
@@ -175,16 +220,41 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
               final tdoc = await item.get();
               if (tdoc.exists && tdoc.data() != null) {
                 final tdata = tdoc.data() as Map<String, dynamic>;
-                final tname = (tdata['name'] ?? tdata['full_name'] ?? '').toString();
+                final tname =
+                    (tdata['full_name'] ??
+                            tdata['fullName'] ??
+                            tdata['fullname'] ??
+                            tdata['teacher_name'] ??
+                            tdata['name'] ??
+                            tdata['username'] ??
+                            '')
+                        .toString();
                 final tid = tdoc.id;
-                if (tname.isNotEmpty) return [{'id': tid, 'name': tname}];
+                if (tname.isNotEmpty)
+                  return [
+                    {'id': tid, 'name': tname},
+                  ];
               }
             } else if (item is String) {
-              final tdoc = await _firestore.collection('teachers').doc(item).get();
+              final tdoc = await _firestore
+                  .collection('teachers')
+                  .doc(item)
+                  .get();
               if (tdoc.exists && tdoc.data() != null) {
                 final tdata = tdoc.data() as Map<String, dynamic>;
-                final tname = (tdata['name'] ?? tdata['full_name'] ?? '').toString();
-                if (tname.isNotEmpty) return [{'id': item, 'name': tname}];
+                final tname =
+                    (tdata['full_name'] ??
+                            tdata['fullName'] ??
+                            tdata['fullname'] ??
+                            tdata['teacher_name'] ??
+                            tdata['name'] ??
+                            tdata['username'] ??
+                            '')
+                        .toString();
+                if (tname.isNotEmpty)
+                  return [
+                    {'id': item, 'name': tname},
+                  ];
               }
             }
           } catch (_) {}
@@ -216,7 +286,10 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       _courses = courses;
       // If widget.initialCourse matches one of these, pick it
       if (widget.initialCourse != null) {
-        final match = _courses.indexWhere((c) => c['name']!.toLowerCase() == widget.initialCourse!.toLowerCase());
+        final match = _courses.indexWhere(
+          (c) =>
+              c['name']!.toLowerCase() == widget.initialCourse!.toLowerCase(),
+        );
         if (match >= 0) {
           _selectedCourseId = _courses[match]['id'];
           _selectedCourseName = _courses[match]['name'];
@@ -245,14 +318,18 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
     setState(() {
       _lecturers = lecturers;
       if (widget.initialLecturer != null) {
-        final match = _lecturers.indexWhere((t) => t['name']!.toLowerCase() == widget.initialLecturer!.toLowerCase());
+        final match = _lecturers.indexWhere(
+          (t) =>
+              t['name']!.toLowerCase() == widget.initialLecturer!.toLowerCase(),
+        );
         if (match >= 0) {
           _selectedLecturerId = _lecturers[match]['id'];
           _selectedLecturerName = _lecturers[match]['name'];
           _useCustomLecturer = false;
         }
       }
-      if (_lecturers.isEmpty && widget.lecturers.isEmpty) _useCustomLecturer = true;
+      if (_lecturers.isEmpty && widget.lecturers.isEmpty)
+        _useCustomLecturer = true;
       _loadingLecturers = false;
     });
   }
@@ -279,15 +356,27 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   // ---------- Save / Clear ----------
 
   void _save() {
-    final course = _useCustomCourse ? _courseCustomCtrl.text.trim() : (_selectedCourseName ?? '').trim();
-    final lecturer = _useCustomLecturer ? _customLecturerCtrl.text.trim() : (_selectedLecturerName ?? '').trim();
+    final course = _useCustomCourse
+        ? _courseCustomCtrl.text.trim()
+        : (_selectedCourseName ?? '').trim();
+    final lecturer = _useCustomLecturer
+        ? _customLecturerCtrl.text.trim()
+        : (_selectedLecturerName ?? '').trim();
 
     if (course.isEmpty && lecturer.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a course or lecturer, or press Clear to remove the cell.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter a course or lecturer, or press Clear to remove the cell.',
+          ),
+        ),
+      );
       return;
     }
 
-    final cellText = course.isEmpty ? lecturer : (lecturer.isEmpty ? course : '$course\n$lecturer');
+    final cellText = course.isEmpty
+        ? lecturer
+        : (lecturer.isEmpty ? course : '$course\n$lecturer');
     Navigator.of(context).pop(TimetableCellEditResult(cellText: cellText));
   }
 
@@ -300,59 +389,127 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   @override
   Widget build(BuildContext context) {
     // prepare dropdown items: show name but use id as value when available
-    final courseEntries = _courses.map((c) => MapEntry(c['id'] ?? '', c['name'] ?? '')).toList();
-    final lecturerEntries = _lecturers.map((t) => MapEntry(t['id'] ?? '', t['name'] ?? '')).toList();
+    final courseEntries = _courses
+        .map((c) => MapEntry(c['id'] ?? '', c['name'] ?? ''))
+        .toList();
+    final lecturerEntries = _lecturers
+        .map((t) => MapEntry(t['id'] ?? '', t['name'] ?? ''))
+        .toList();
 
     return AlertDialog(
       title: const Text('Edit Timetable Cell'),
       content: SingleChildScrollView(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // Course field
-          Row(children: [
-            Expanded(
-              child: InputDecorator(
-                decoration: const InputDecoration(labelText: 'Course', border: OutlineInputBorder(), isDense: true),
-                child: _loadingCourses
-                    ? const SizedBox(height: 40, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
-                    : DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          value: (_selectedCourseId != null && _selectedCourseId!.isNotEmpty) ? _selectedCourseId : null,
-                          hint: Text(_selectedCourseName ?? 'Select course'),
-                          items: courseEntries.map((e) => DropdownMenuItem<String>(value: e.key, child: Text(e.value))).toList(),
-                          onChanged: (id) {
-                            final picked = _courses.firstWhere((c) => c['id'] == id, orElse: () => {'id': id ?? '', 'name': id ?? ''});
-                            _onCoursePickedByUser(picked);
-                          },
-                        ),
-                      ),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          // Lecturer field
-          Row(children: [
-            Expanded(
-              child: InputDecorator(
-                decoration: const InputDecoration(labelText: 'Lecturer', border: OutlineInputBorder(), isDense: true),
-                child: _useCustomLecturer
-                    ? TextFormField(
-                        controller: _customLecturerCtrl,
-                        decoration: const InputDecoration(hintText: 'Enter lecturer name', border: InputBorder.none, isDense: true),
-                      )
-                    : _loadingLecturers
-                        ? const SizedBox(height: 40, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Course field
+            Row(
+              children: [
+                Expanded(
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Course',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    child: _loadingCourses
+                        ? const SizedBox(
+                            height: 40,
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
                         : DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               isExpanded: true,
-                              value: (_selectedLecturerId != null && _selectedLecturerId!.isNotEmpty) ? _selectedLecturerId : null,
-                              hint: Text(_selectedLecturerName ?? 'Select lecturer'),
-                              items: lecturerEntries.map((e) => DropdownMenuItem<String>(value: e.key, child: Text(e.value))).toList(),
-                              onChanged: (_selectedCourseId != null && _selectedCourseId!.isNotEmpty)
+                              value:
+                                  (_selectedCourseId != null &&
+                                      _selectedCourseId!.isNotEmpty)
+                                  ? _selectedCourseId
+                                  : null,
+                              hint: Text(
+                                _selectedCourseName ?? 'Select course',
+                              ),
+                              items: courseEntries
+                                  .map(
+                                    (e) => DropdownMenuItem<String>(
+                                      value: e.key,
+                                      child: Text(e.value),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (id) {
+                                final picked = _courses.firstWhere(
+                                  (c) => c['id'] == id,
+                                  orElse: () => {
+                                    'id': id ?? '',
+                                    'name': id ?? '',
+                                  },
+                                );
+                                _onCoursePickedByUser(picked);
+                              },
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Lecturer field
+            Row(
+              children: [
+                Expanded(
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Lecturer',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    child: _useCustomLecturer
+                        ? TextFormField(
+                            controller: _customLecturerCtrl,
+                            decoration: const InputDecoration(
+                              hintText: 'Enter lecturer name',
+                              border: InputBorder.none,
+                              isDense: true,
+                            ),
+                          )
+                        : _loadingLecturers
+                        ? const SizedBox(
+                            height: 40,
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              isExpanded: true,
+                              value:
+                                  (_selectedLecturerId != null &&
+                                      _selectedLecturerId!.isNotEmpty)
+                                  ? _selectedLecturerId
+                                  : null,
+                              hint: Text(
+                                _selectedLecturerName ?? 'Select lecturer',
+                              ),
+                              items: lecturerEntries
+                                  .map(
+                                    (e) => DropdownMenuItem<String>(
+                                      value: e.key,
+                                      child: Text(e.value),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged:
+                                  (_selectedCourseId != null &&
+                                      _selectedCourseId!.isNotEmpty)
                                   ? (id) {
                                       final picked = _lecturers.firstWhere(
-                                          (t) => t['id'] == id,
-                                          orElse: () => {'id': id ?? '', 'name': id ?? ''},
+                                        (t) => t['id'] == id,
+                                        orElse: () => {
+                                          'id': id ?? '',
+                                          'name': id ?? '',
+                                        },
                                       );
                                       setState(() {
                                         _selectedLecturerId = picked['id'];
@@ -364,15 +521,26 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                                   : null,
                             ),
                           ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Save to set cell. Clear to empty the cell. Cancel to keep unchanged.',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
-          ]),
-          const SizedBox(height: 12),
-          Align(alignment: Alignment.centerLeft, child: Text('Save to set cell. Clear to empty the cell. Cancel to keep unchanged.', style: Theme.of(context).textTheme.bodySmall)),
-        ]),
+          ],
+        ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(null), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
         TextButton(onPressed: _clear, child: const Text('Clear')),
         ElevatedButton(onPressed: _save, child: const Text('Save')),
       ],

@@ -30,6 +30,7 @@ class _CoursesPageState extends State<CoursesPage> {
   Map<String, String> _classDeptId = {};
   Map<String, String> _departmentNames = {};
   Map<String, String> _facultyNames = {};
+  bool _loading = true;
   // Track pending teacher id fetches to avoid duplicate network calls
   final Set<String> _pendingTeacherFetch = {};
 
@@ -58,8 +59,9 @@ class _CoursesPageState extends State<CoursesPage> {
   }
 
   Future<void> _init() async {
-    await _fetchLookups();
-    await _fetchCourses();
+    await Future.wait([_fetchLookups(), _fetchCourses()]);
+    await _prefetchMissingTeachersFromCourses();
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _fetchLookups() async {
@@ -333,34 +335,6 @@ class _CoursesPageState extends State<CoursesPage> {
 
   Future<void> _addCourse(Course course) async {
     try {
-      // Ensure we don't assign a different lecturer to the same (course_code, class).
-      // It's OK to have the same course_code across different classes.
-      final classId = course.classRef ?? '';
-      if (classId.isNotEmpty) {
-        final q = await coursesCollection
-            .where('course_code', isEqualTo: course.courseCode)
-            .where('class', isEqualTo: classId)
-            .get();
-        if (q.docs.isNotEmpty) {
-          // There is already a course document for this course_code+class
-          showDialog<void>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Conflict'),
-              content: const Text(
-                'A lecturer is already assigned to this class for the same course.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-          return;
-        }
-      }
       await coursesCollection.add({
         'course_code': course.courseCode,
         'course_name': course.courseName,
@@ -390,34 +364,6 @@ class _CoursesPageState extends State<CoursesPage> {
   Future<void> _updateCourse(Course oldC, Course newC) async {
     if (oldC.id == null) return;
     try {
-      // When updating we must ensure we don't create a conflict where a different
-      // lecturer is assigned to the same (course_code, class).
-      final newClassId = newC.classRef ?? '';
-      if (newClassId.isNotEmpty) {
-        final q = await coursesCollection
-            .where('course_code', isEqualTo: newC.courseCode)
-            .where('class', isEqualTo: newClassId)
-            .get();
-        final conflict = q.docs.any((d) => d.id != oldC.id);
-        if (conflict) {
-          showDialog<void>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Conflict'),
-              content: const Text(
-                'Another lecturer is already assigned to this class for the same course.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-          return;
-        }
-      }
       await coursesCollection.doc(oldC.id).update({
         'course_code': newC.courseCode,
         'course_name': newC.courseName,
@@ -566,19 +512,21 @@ class _CoursesPageState extends State<CoursesPage> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: _buildMobileTable(),
-                      ),
-                    ),
-            ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : Container(
+                    width: double.infinity,
+                    color: Colors.transparent,
+                    child: isDesktop
+                        ? _buildDesktopTable()
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.vertical,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: _buildMobileTable(),
+                            ),
+                          ),
+                  ),
           ),
         ],
       ),
@@ -598,38 +546,53 @@ class _CoursesPageState extends State<CoursesPage> {
         if (_teacherNames.containsKey(last)) return _teacherNames[last]!;
       }
     }
-    // If we couldn't resolve the name yet, try fetching the teacher doc on-demand
-    // (non-blocking) so the UI updates when the name becomes available.
-    final id = teacherRef.contains('/')
-        ? teacherRef.split('/').where((p) => p.isNotEmpty).toList().last
-        : teacherRef;
-    if (!_pendingTeacherFetch.contains(id) && !_teacherNames.containsKey(id)) {
-      _pendingTeacherFetch.add(id);
-      _ensureTeacherName(
-        id,
-      ).whenComplete(() => _pendingTeacherFetch.remove(id));
+    // fallback: keep empty (names are prefetched before render)
+    return '';
+  }
+
+  Future<void> _prefetchMissingTeachersFromCourses() async {
+    try {
+      final ids = <String>{};
+      for (final c in _courses) {
+        final t = c.teacherRef ?? '';
+        if (t.isEmpty) continue;
+        ids.add(t);
+        if (t.contains('/')) {
+          final parts = t.split('/').where((p) => p.isNotEmpty).toList();
+          if (parts.isNotEmpty) ids.add(parts.last);
+        }
+      }
+
+      final missing = ids
+          .where((id) => !_teacherNames.containsKey(id))
+          .toList();
+      if (missing.isEmpty) return;
+
+      // batch fetch by document id (chunks of 10)
+      const chunkSize = 10;
+      for (var i = 0; i < missing.length; i += chunkSize) {
+        final chunk = missing.skip(i).take(chunkSize).toList();
+        final snap = await teachersCollection
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+        for (final d in snap.docs) {
+          final data = d.data() as Map<String, dynamic>? ?? {};
+          final name = (data['teacher_name'] ?? data['name'] ?? '').toString();
+          if (name.isNotEmpty) {
+            _teacherNames[d.id] = name;
+            _teacherNames[d.reference.path] = name;
+            _teacherNames['/${d.reference.path}'] = name;
+          }
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      // ignore
     }
-    // fallback: return the raw id or empty
-    return teacherRef;
   }
 
   Future<void> _ensureTeacherName(String id) async {
-    try {
-      final doc = await teachersCollection.doc(id).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        final name = (data['teacher_name'] ?? data['name'] ?? '') as String;
-        if (name.isNotEmpty) {
-          setState(() {
-            _teacherNames[id] = name;
-            _teacherNames['teachers/$id'] = name;
-            _teacherNames['/teachers/$id'] = name;
-          });
-        }
-      }
-    } catch (e) {
-      print('Error fetching teacher doc for $id: $e');
-    }
+    // legacy helper removed (prefetch covers all teachers)
   }
 
   Widget _buildDesktopTable() {

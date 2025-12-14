@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/faculty.dart';
 
 class AddFacultyPopup extends StatefulWidget {
@@ -11,9 +12,13 @@ class AddFacultyPopup extends StatefulWidget {
 
 class _AddFacultyPopupState extends State<AddFacultyPopup> {
   final _formKey = GlobalKey<FormState>();
+  final CollectionReference _facultiesCollection = FirebaseFirestore.instance
+      .collection('faculties');
   String? _facultyCode;
   String? _facultyName;
   DateTime? _establishmentDate;
+  String? _codeError;
+  String? _nameError;
 
   @override
   void initState() {
@@ -68,10 +73,26 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                     hintText: "Faculty Code",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _facultyCode = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter faculty code" : null,
+                  onChanged: (val) {
+                    setState(() => _codeError = null);
+                    _facultyCode = val.trim();
+                  },
+                  validator: (val) {
+                    final raw = val?.trim() ?? '';
+                    if (raw.isEmpty) return "Enter faculty code";
+                    final upper = raw.toUpperCase();
+                    final regex = RegExp(r'^(?![0-9]+$)[A-Z0-9]{3,8}$');
+                    if (!regex.hasMatch(upper)) {
+                      return "Invalid faculty code. Use uppercase, no spaces.";
+                    }
+                    _facultyCode = upper;
+                    return null;
+                  },
                 ),
+                if (_codeError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_codeError!, style: const TextStyle(color: Colors.red)),
+                ],
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _facultyName,
@@ -79,10 +100,27 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                     hintText: "Faculty Name",
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _facultyName = val,
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter faculty name" : null,
+                  onChanged: (val) {
+                    setState(() => _nameError = null);
+                    _facultyName = val.trim();
+                  },
+                  validator: (val) {
+                    final value = val?.trim() ?? '';
+                    if (value.isEmpty) return "Enter faculty name";
+                    if (value.length < 3 || value.length > 100) {
+                      return "Please enter a valid faculty name.";
+                    }
+                    final regex = RegExp(r'^[A-Za-z &-]+$');
+                    if (!regex.hasMatch(value)) {
+                      return "Please enter a valid faculty name.";
+                    }
+                    return null;
+                  },
                 ),
+                if (_nameError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_nameError!, style: const TextStyle(color: Colors.red)),
+                ],
                 const SizedBox(height: 16),
                 GestureDetector(
                   onTap: () async {
@@ -145,18 +183,51 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                     SizedBox(
                       height: 40,
                       child: ElevatedButton(
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop(
-                              Faculty(
-                                id: widget.faculty?.id ?? '',
-                                code: _facultyCode!,
-                                name: _facultyName!,
-                                createdAt: DateTime.now(),
-                                establishmentDate: _establishmentDate!,
-                              ),
-                            );
+                        onPressed: () async {
+                          if (!_formKey.currentState!.validate()) return;
+                          final code = _facultyCode!.trim().toUpperCase();
+                          final name = _facultyName!.trim();
+                          final excludeId = widget.faculty?.id;
+
+                          final codeSnap = await _facultiesCollection
+                              .where('faculty_code', isEqualTo: code)
+                              .get();
+                          final nameSnap = await _facultiesCollection
+                              .where('faculty_name', isEqualTo: name)
+                              .get();
+
+                          final codeExists = codeSnap.docs.any(
+                            (d) => d.id != excludeId,
+                          );
+                          final nameExists = nameSnap.docs.any(
+                            (d) => d.id != excludeId,
+                          );
+
+                          if (codeExists || nameExists) {
+                            setState(() {
+                              _codeError = codeExists
+                                  ? 'Faculty code already exists'
+                                  : null;
+                              _nameError = nameExists
+                                  ? 'Faculty name already exists'
+                                  : null;
+                            });
+                            return;
                           }
+
+                          setState(() {
+                            _codeError = null;
+                            _nameError = null;
+                          });
+                          Navigator.of(context).pop(
+                            Faculty(
+                              id: widget.faculty?.id ?? '',
+                              code: code,
+                              name: name,
+                              createdAt: DateTime.now(),
+                              establishmentDate: _establishmentDate!,
+                            ),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[900],

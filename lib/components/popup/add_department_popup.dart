@@ -19,10 +19,15 @@ class AddDepartmentPopup extends StatefulWidget {
 
 class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
   final _formKey = GlobalKey<FormState>();
+  final CollectionReference _departmentsCollection = FirebaseFirestore.instance
+      .collection('departments');
   String? _name;
   String? _code;
   String? _head;
   List<Map<String, String>> _teachers = []; // {id, name}
+  String? _codeError;
+  String? _nameError;
+  String? _headError;
 
   @override
   void initState() {
@@ -165,28 +170,60 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: _name,
-                  decoration: const InputDecoration(
-                    hintText: 'Department Name',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) => _name = val,
-                  validator: (val) => val == null || val.isEmpty
-                      ? 'Enter department name'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
                   initialValue: _code,
                   decoration: const InputDecoration(
                     hintText: 'Department Code',
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (val) => _code = val,
-                  validator: (val) => val == null || val.isEmpty
-                      ? 'Enter department code'
-                      : null,
+                  onChanged: (val) {
+                    setState(() => _codeError = null);
+                    _code = val;
+                  },
+                  validator: (val) {
+                    final raw = val?.trim() ?? '';
+                    if (raw.isEmpty) return 'Enter department code';
+                    final upper = raw.toUpperCase();
+                    final regex = RegExp(r'^(?![0-9]+$)[A-Z0-9]{3,8}$');
+                    if (!regex.hasMatch(upper)) {
+                      return 'Invalid department code. Use uppercase, no spaces.';
+                    }
+                    _code = upper;
+                    return null;
+                  },
                 ),
+                if (_codeError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_codeError!, style: const TextStyle(color: Colors.red)),
+                ],
+                const SizedBox(height: 16),
+                TextFormField(
+                  initialValue: _name,
+                  decoration: const InputDecoration(
+                    hintText: 'Department Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) {
+                    setState(() => _nameError = null);
+                    _name = val;
+                  },
+                  validator: (val) {
+                    final value = val?.trim() ?? '';
+                    if (value.isEmpty) return 'Enter department name';
+                    if (value.length < 3 || value.length > 100) {
+                      return 'Invalid department name. Use letters only';
+                    }
+                    final regex = RegExp(r"^[A-Za-z .\-'&]+$");
+                    if (!regex.hasMatch(value)) {
+                      return 'Invalid department name. Use letters only';
+                    }
+                    _name = value;
+                    return null;
+                  },
+                ),
+                if (_nameError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_nameError!, style: const TextStyle(color: Colors.red)),
+                ],
                 const SizedBox(height: 16),
                 _teachers.isEmpty
                     ? DropdownButtonFormField<String>(
@@ -222,11 +259,18 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                           final name = t['name'] ?? '';
                           return DropdownMenuItem(value: id, child: Text(name));
                         }).toList(),
-                        onChanged: (val) => setState(() => _head = val),
+                        onChanged: (val) => setState(() {
+                          _headError = null;
+                          _head = val;
+                        }),
                         validator: (val) => val == null || val.isEmpty
                             ? 'Select head of department'
                             : null,
                       ),
+                if (_headError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_headError!, style: const TextStyle(color: Colors.red)),
+                ],
                 const SizedBox(height: 16),
                 const SizedBox(height: 24),
                 Row(
@@ -257,17 +301,115 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                     SizedBox(
                       height: 40,
                       child: ElevatedButton(
-                        onPressed: () {
-                          if (_formKey.currentState!.validate()) {
-                            Navigator.of(context).pop(
-                              Department(
-                                code: _code!,
-                                name: _name!,
-                                head: _head!,
-                                status: widget.department?.status ?? 'Active',
-                              ),
+                        onPressed: () async {
+                          if (!_formKey.currentState!.validate()) return;
+
+                          final code = (_code ?? '').trim().toUpperCase();
+                          final name = (_name ?? '').trim();
+                          final head = (_head ?? '').trim();
+                          final excludeId = widget.department?.id;
+
+                          Query query = _departmentsCollection.where(
+                            'department_code',
+                            isEqualTo: code,
+                          );
+                          Query altQuery = _departmentsCollection.where(
+                            'code',
+                            isEqualTo: code,
+                          );
+                          Query nameQuery = _departmentsCollection.where(
+                            'department_name',
+                            isEqualTo: name,
+                          );
+                          Query altNameQuery = _departmentsCollection.where(
+                            'name',
+                            isEqualTo: name,
+                          );
+                          Query headQuery = _departmentsCollection.where(
+                            'head_of_department',
+                            isEqualTo: head,
+                          );
+                          Query altHeadQuery = _departmentsCollection.where(
+                            'head',
+                            isEqualTo: head,
+                          );
+                          if (Session.facultyRef != null) {
+                            query = query.where(
+                              'faculty_ref',
+                              isEqualTo: Session.facultyRef,
+                            );
+                            altQuery = altQuery.where(
+                              'faculty_ref',
+                              isEqualTo: Session.facultyRef,
+                            );
+                            nameQuery = nameQuery.where(
+                              'faculty_ref',
+                              isEqualTo: Session.facultyRef,
+                            );
+                            altNameQuery = altNameQuery.where(
+                              'faculty_ref',
+                              isEqualTo: Session.facultyRef,
+                            );
+                            headQuery = headQuery.where(
+                              'faculty_ref',
+                              isEqualTo: Session.facultyRef,
+                            );
+                            altHeadQuery = altHeadQuery.where(
+                              'faculty_ref',
+                              isEqualTo: Session.facultyRef,
                             );
                           }
+
+                          final results = await Future.wait([
+                            query.get(),
+                            altQuery.get(),
+                            nameQuery.get(),
+                            altNameQuery.get(),
+                            headQuery.get(),
+                            altHeadQuery.get(),
+                          ]);
+
+                          final codeExists =
+                              results[0].docs.any((d) => d.id != excludeId) ||
+                              results[1].docs.any((d) => d.id != excludeId);
+
+                          final nameExists =
+                              results[2].docs.any((d) => d.id != excludeId) ||
+                              results[3].docs.any((d) => d.id != excludeId);
+
+                          final headExists =
+                              results[4].docs.any((d) => d.id != excludeId) ||
+                              results[5].docs.any((d) => d.id != excludeId);
+
+                          if (codeExists || nameExists || headExists) {
+                            setState(() {
+                              _codeError = codeExists
+                                  ? 'Department code already exists'
+                                  : null;
+                              _nameError = nameExists
+                                  ? 'Department name already exists'
+                                  : null;
+                              _headError = headExists
+                                  ? 'This lecturer is already head of another department.'
+                                  : null;
+                            });
+                            return;
+                          }
+
+                          setState(() {
+                            _codeError = null;
+                            _nameError = null;
+                            _headError = null;
+                          });
+
+                          Navigator.of(context).pop(
+                            Department(
+                              code: code,
+                              name: _name!,
+                              head: _head!,
+                              status: widget.department?.status ?? 'Active',
+                            ),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[900],

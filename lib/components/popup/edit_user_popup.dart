@@ -13,6 +13,7 @@ class _EditUserPopupState extends State<EditUserPopup> {
   final _formKey = GlobalKey<FormState>();
   late String _username;
   late String _password;
+  bool _isPasswordHidden = true;
 
   @override
   void initState() {
@@ -63,20 +64,41 @@ class _EditUserPopupState extends State<EditUserPopup> {
                     hintText: "Username",
                     border: OutlineInputBorder(),
                   ),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter username" : null,
+                  validator: (val) {
+                    final value = val?.trim() ?? '';
+                    if (value.isEmpty) return "Enter username";
+                    final regex = RegExp(r'^[a-zA-Z0-9]{3,20}$');
+                    if (!regex.hasMatch(value)) {
+                      return "min 3 characters, no spaces";
+                    }
+                    return null;
+                  },
                   onChanged: (val) => _username = val,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _password,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Password",
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordHidden
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      onPressed: () => setState(
+                        () => _isPasswordHidden = !_isPasswordHidden,
+                      ),
+                    ),
                   ),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? "Enter password" : null,
-                  obscureText: true,
+                  validator: (val) {
+                    final value = val ?? '';
+                    if (value.isEmpty) return "Enter password";
+                    if (value.length < 6) return "min password 6 characters";
+                    return null;
+                  },
+                  obscureText: _isPasswordHidden,
                   onChanged: (val) => _password = val,
                 ),
                 const SizedBox(height: 24),
@@ -117,7 +139,8 @@ class _EditUserPopupState extends State<EditUserPopup> {
                                 role: widget.user.role,
                                 password: _password,
                                 facultyId: widget.user.facultyId,
-                                status: widget.user.status, // Retain current status
+                                status:
+                                    widget.user.status, // Retain current status
                                 createdAt: widget.user.createdAt,
                                 updatedAt: DateTime.now(), // Updated timestamp
                               ),

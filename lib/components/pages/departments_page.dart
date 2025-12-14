@@ -149,31 +149,6 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
 
   Future<void> _addDepartment(Department dept) async {
     try {
-      // Prevent same teacher being head of multiple departments
-      if (dept.head.isNotEmpty) {
-        final conflict = await departmentsCollection
-            .where('head_of_department', isEqualTo: dept.head)
-            .get();
-        if (conflict.docs.isNotEmpty) {
-          // show popup message
-          showDialog<void>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Duplicate Head'),
-              content: const Text(
-                'This lecturer is already head of another department.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-          return;
-        }
-      }
       final Map<String, dynamic> toWrite = {
         'department_code': dept.code,
         'department_name': dept.name,
@@ -203,31 +178,6 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
   Future<void> _updateDepartment(Department oldDept, Department newDept) async {
     if (oldDept.id == null) return;
     try {
-      // Prevent assigning a head that's already used by another department
-      if (newDept.head.isNotEmpty && newDept.head != oldDept.head) {
-        final conflict = await departmentsCollection
-            .where('head_of_department', isEqualTo: newDept.head)
-            .get();
-        final hasOther = conflict.docs.any((d) => d.id != oldDept.id);
-        if (hasOther) {
-          showDialog<void>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Duplicate Head'),
-              content: const Text(
-                'This lecturer is already head of another department.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('OK'),
-                ),
-              ],
-            ),
-          );
-          return;
-        }
-      }
       await departmentsCollection.doc(oldDept.id).update({
         'department_code': newDept.code,
         'department_name': newDept.name,

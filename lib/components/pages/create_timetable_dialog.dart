@@ -38,6 +38,21 @@ class CreateTimetableTimePayload {
   CreateTimetableTimePayload({required this.results, this.periodsOverride});
 }
 
+/// Prefill data for existing timetable sessions
+class PrefilledSession {
+  final int dayIndex;
+  final String periodLabel;
+  final String? course;
+  final String? lecturer;
+
+  PrefilledSession({
+    required this.dayIndex,
+    required this.periodLabel,
+    this.course,
+    this.lecturer,
+  });
+}
+
 class CreateTimetableDialog extends StatefulWidget {
   final List<String> departments; // display names list (UI only)
   final Map<String, List<String>> departmentClasses; // fallback mapping
@@ -52,6 +67,7 @@ class CreateTimetableDialog extends StatefulWidget {
   final dynamic departmentArg;
 
   final List<String>? preconfiguredLabels; // optional periods passed in
+  final List<PrefilledSession>? prefilledSessions; // optional existing sessions
 
   const CreateTimetableDialog({
     super.key,
@@ -63,6 +79,7 @@ class CreateTimetableDialog extends StatefulWidget {
     this.initialDepartment,
     this.initialClass,
     this.preconfiguredLabels,
+    this.prefilledSessions,
     this.departmentArg,
   });
 
@@ -79,6 +96,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   bool _useCustomLecturer = false;
   final TextEditingController _lecturerCustomCtrl = TextEditingController();
   String? _course;
+
+  // Keep all prefilled sessions so we can filter them by course selection.
+  List<PrefilledSession> _allPrefilledSessions = [];
 
   final List<_SessionRow> _sessions = [_SessionRow()];
 
@@ -121,10 +141,19 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
     _availableLecturers = List<String>.from(widget.lecturers);
 
+    _allPrefilledSessions = List<PrefilledSession>.from(
+      widget.prefilledSessions ?? const <PrefilledSession>[],
+    );
+
     if (widget.preconfiguredLabels != null &&
         widget.preconfiguredLabels!.isNotEmpty) {
       _loadPreconfigured(widget.preconfiguredLabels!);
     }
+
+    // Apply prefilled sessions when labels are known; filtering happens per course.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyPrefilledSessionsForCourse(_course);
+    });
 
     if (widget.departmentArg != null) {
       _loadClassesForDepartment(
@@ -147,11 +176,6 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   }
 
   // ---------------- Loaders ----------------
-
-  void _safeLoadClassesForDepartment(dynamic dep) {
-    if (dep == null) return;
-    _loadClassesForDepartment(dep, preserveInitialClass: false);
-  }
 
   Future<void> _loadClassesForDepartment(
     dynamic depIdOrRef, {
@@ -454,6 +478,68 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       for (final s in _sessions) {
         s.dayIndex ??= 0;
         s.periodDropdownIndex = null;
+      }
+    });
+  }
+
+  void _applyPrefilledSessionsForCourse(String? courseName) {
+    if (_labels.isEmpty) return; // need labels to map periods
+
+    final target = courseName?.trim().toLowerCase() ?? '';
+    final sessions = target.isEmpty
+        ? <PrefilledSession>[]
+        : _allPrefilledSessions.where((s) {
+            final c = s.course?.trim().toLowerCase() ?? '';
+            return c == target;
+          }).toList();
+
+    setState(() {
+      if (sessions.isEmpty) {
+        _sessions
+          ..clear()
+          ..add(_SessionRow());
+        _lecturer = null;
+        _useCustomLecturer = false;
+        _lecturerCustomCtrl.clear();
+        return;
+      }
+
+      _sessions
+        ..clear()
+        ..addAll(List.generate(sessions.length, (_) => _SessionRow()));
+
+      String? firstLecturer;
+
+      for (int i = 0; i < sessions.length; i++) {
+        final src = sessions[i];
+        final dst = _sessions[i];
+        dst.dayIndex = src.dayIndex;
+
+        final idx = _labels.indexWhere(
+          (l) => l.toLowerCase().trim() == src.periodLabel.toLowerCase().trim(),
+        );
+        if (idx >= 0) {
+          final teachingIdx = _teachingIndices.indexOf(idx);
+          if (teachingIdx >= 0) dst.periodDropdownIndex = teachingIdx;
+        }
+
+        firstLecturer ??= src.lecturer?.trim().isNotEmpty == true
+            ? src.lecturer!.trim()
+            : null;
+      }
+
+      if (firstLecturer != null) {
+        if (_availableLecturers.contains(firstLecturer)) {
+          _lecturer = firstLecturer;
+          _useCustomLecturer = false;
+        } else {
+          _useCustomLecturer = true;
+          _lecturerCustomCtrl.text = firstLecturer;
+        }
+      } else {
+        _lecturer = null;
+        _useCustomLecturer = false;
+        _lecturerCustomCtrl.clear();
       }
     });
   }
@@ -1124,6 +1210,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                         setState(() {
                           _course = v;
                         });
+
+                        // When a course is chosen, show only its existing sessions (if any).
+                        _applyPrefilledSessionsForCourse(v);
 
                         if (v == null) return;
 
@@ -1876,7 +1965,6 @@ class _AddPeriodDialog extends StatefulWidget {
   final int? periodMinutes;
 
   const _AddPeriodDialog({
-    super.key,
     required this.existingSpans,
     required this.existingLabels,
     required this.periodMinutes,

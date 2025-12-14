@@ -18,9 +18,10 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
   String? _username;
   String? _password;
   bool _obscurePassword = true;
-  String _gender = 'Male';
+  String? _gender;
   String? _departmentId;
   String? _classId;
+  bool _editingClassInactive = false;
 
   List<Map<String, String>> _departments = [];
   List<Map<String, String>> _classes = [];
@@ -77,6 +78,26 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
     return false;
   }
 
+  bool _isDepartmentActive(Map<String, dynamic> data) {
+    final status = data['status'];
+    if (status is bool) return status;
+    if (status is String) return status.toLowerCase() == 'active';
+    return true;
+  }
+
+  bool _isClassActive(Map<String, dynamic> data) {
+    final status = data['status'];
+    if (status is bool) return status; // true = active, false = inactive
+    if (status is String) {
+      final s = status.trim().toLowerCase();
+      // Treat common inactive variants as inactive; allow only explicit active/true
+      if (s == 'inactive' || s == 'in active' || s == 'false') return false;
+      if (s == 'active' || s == 'true') return true;
+    }
+    // Default to active if status is missing/unknown to avoid over-filtering
+    return true;
+  }
+
   Future<void> _fetchDepartments() async {
     try {
       Query dq = FirebaseFirestore.instance.collection('departments');
@@ -93,10 +114,22 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
       for (final d in docs) {
         final data = d.data() as Map<String, dynamic>;
         if (!_docMatchesSessionFaculty(data)) continue;
+        // Only list active departments; inactive ones stay hidden.
+        final isActive = _isDepartmentActive(data);
+        if (!isActive) continue;
+        final id = d.id;
         final name = (data['department_name'] ?? data['name'] ?? '') as String;
-        items.add({'id': d.id, 'name': name});
+        items.add({'id': id, 'name': name});
       }
-      if (mounted) setState(() => _departments = items);
+      if (mounted) {
+        setState(() {
+          _departments = items;
+          if (_departmentId != null &&
+              _departments.every((d) => d['id'] != _departmentId)) {
+            _departmentId = null;
+          }
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _departments = []);
       // ignore errors but log
@@ -117,16 +150,61 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
       final snap = await cq.get();
       final docs = snap.docs;
       final items = <Map<String, String>>[];
+      bool editingClassInactive = false;
       for (final d in docs) {
         final data = d.data() as Map<String, dynamic>;
         if (!_docMatchesSessionFaculty(data)) continue;
+        // Include only active classes normally, but always include the
+        // student's existing class when editing to avoid popup errors.
+        final isActive = _isClassActive(data);
         final name = (data['class_name'] ?? data['name'] ?? '') as String;
         final dep = data['department_ref'] is DocumentReference
             ? (data['department_ref'] as DocumentReference).id
             : (data['department_ref']?.toString() ?? '');
-        items.add({'id': d.id, 'name': name, 'department': dep});
+        final id = d.id;
+        final isEditingExistingClass =
+            widget.student?.classRef != null && widget.student!.classRef == id;
+        if (isActive || isEditingExistingClass) {
+          items.add({'id': id, 'name': name, 'department': dep});
+          if (isEditingExistingClass && !isActive) {
+            editingClassInactive = true;
+          }
+        }
       }
-      if (mounted) setState(() => _classes = items);
+      // If editing and the student's class wasn't captured due to scoping,
+      // fetch and include it to keep the dropdown value valid.
+      if (widget.student?.classRef != null &&
+          items.every((e) => e['id'] != widget.student!.classRef)) {
+        try {
+          final cDoc = await FirebaseFirestore.instance
+              .collection('classes')
+              .doc(widget.student!.classRef)
+              .get();
+          if (cDoc.exists) {
+            final data = cDoc.data() as Map<String, dynamic>;
+            final name = (data['class_name'] ?? data['name'] ?? '').toString();
+            final dep = data['department_ref'] is DocumentReference
+                ? (data['department_ref'] as DocumentReference).id
+                : (data['department_ref']?.toString() ?? '');
+            items.add({'id': cDoc.id, 'name': name, 'department': dep});
+            if (!editingClassInactive && !_isClassActive(data)) {
+              editingClassInactive = true;
+            }
+          }
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() {
+          _classes = items;
+          _editingClassInactive = editingClassInactive;
+          if (editingClassInactive) {
+            _departmentId = null;
+          }
+        });
+        if (editingClassInactive) {
+          await _fetchDepartments();
+        }
+      }
     } catch (e) {
       if (mounted) setState(() => _classes = []);
       // print('Error fetching classes: $e');
@@ -153,7 +231,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
             .doc(_departmentId)
             .get();
         if (dep.exists) {
-          final data = dep.data() as Map<String, dynamic>?;
+          final data = dep.data();
           final cand = data == null
               ? null
               : (data['faculty_ref'] ??
@@ -172,7 +250,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
       fullname: (_fullname ?? '').trim(),
       username: (_username ?? '').trim(),
       password: _password ?? '',
-      gender: _gender,
+      gender: _gender ?? 'Male',
       departmentRef: _departmentId,
       classRef: _classId,
       facultyRef: facultyId.isEmpty ? null : facultyId,
@@ -221,23 +299,9 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Row: Full name | Username
+                  // Row: Username | Full name
                   Row(
                     children: [
-                      Expanded(
-                        child: TextFormField(
-                          initialValue: _fullname,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            hintText: 'Full name',
-                          ),
-                          onChanged: (v) => setState(() => _fullname = v),
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Enter full name'
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
                         child: TextFormField(
                           initialValue: _username,
@@ -246,9 +310,38 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                             hintText: 'Username',
                           ),
                           onChanged: (v) => setState(() => _username = v),
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Enter username'
-                              : null,
+                          validator: (v) {
+                            final value = v?.trim() ?? '';
+                            if (value.isEmpty) return 'Enter username';
+                            final regex = RegExp(r'^[a-zA-Z0-9]{3,20}$');
+                            if (!regex.hasMatch(value)) {
+                              return 'min 3 characters, no spaces';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          initialValue: _fullname,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            hintText: 'Full name',
+                          ),
+                          onChanged: (v) => setState(() => _fullname = v),
+                          validator: (v) {
+                            final value = v?.trim() ?? '';
+                            if (value.isEmpty) return 'Enter full name';
+                            if (value.length < 3 || value.length > 100) {
+                              return 'Please enter a valid name (letters only).';
+                            }
+                            final regex = RegExp(r'^[A-Za-z ]+$');
+                            if (!regex.hasMatch(value)) {
+                              return 'Please enter a valid name (letters only).';
+                            }
+                            return null;
+                          },
                         ),
                       ),
                     ],
@@ -271,8 +364,9 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                                     DropdownMenuItem(value: g, child: Text(g)),
                               )
                               .toList(),
-                          onChanged: (v) =>
-                              setState(() => _gender = v ?? 'Male'),
+                          onChanged: (v) => setState(() => _gender = v),
+                          validator: (v) =>
+                              v == null || v.isEmpty ? 'Select gender' : null,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -283,6 +377,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                             border: OutlineInputBorder(),
                             hintText: 'Department',
                           ),
+                          isExpanded: true,
                           items: _departments
                               .map(
                                 (d) => DropdownMenuItem(
@@ -341,10 +436,12 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       ),
                     ),
                     onChanged: (v) => setState(() => _password = v),
-                    validator: (v) =>
-                        widget.student == null && (v == null || v.isEmpty)
-                        ? 'Enter password'
-                        : null,
+                    validator: (v) {
+                      final value = v ?? '';
+                      if (value.isEmpty) return 'Enter password';
+                      if (value.length < 6) return 'min password 6 characters';
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 24),
                   Row(

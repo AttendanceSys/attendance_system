@@ -16,12 +16,18 @@ class FacultyUserHandlingPage extends StatefulWidget {
 class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
   final CollectionReference usersCollection = FirebaseFirestore.instance
       .collection('users');
+  final CollectionReference studentsCollection = FirebaseFirestore.instance
+      .collection('students');
 
   List<AppUser> _students = [];
   String _searchText = '';
   int? _selectedIndex;
 
-  // (no per-row password visibility needed here)
+  // track per-user password visibility by user id
+  final Map<String, bool> _showPasswordById = {};
+
+  // Scroll controller for the list
+  final ScrollController _scrollController = ScrollController();
 
   List<AppUser> get _filteredStudents => _students
       .where(
@@ -37,6 +43,12 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
   void initState() {
     super.initState();
     _fetchStudents();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   bool _recordMatchesFaculty(Map<String, dynamic> data) {
@@ -68,44 +80,44 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
       final Query q = usersCollection.where('role', isEqualTo: 'student');
       final snap = await q.get();
       final docs = snap.docs;
+
+      final List<AppUser> users = [];
+      for (final doc in docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        // normalize faculty id into string for display/matching
+        final facultyId = (data['faculty_id'] is DocumentReference)
+            ? (data['faculty_id'] as DocumentReference).id
+            : (data['faculty_id']?.toString() ?? '');
+
+        final user = AppUser(
+          id: doc.id,
+          username: data['username'] ?? '',
+          role: data['role'] ?? 'student',
+          password: data['password'] ?? '',
+          facultyId: facultyId,
+          status: (data['status'] ?? 'enabled').toString(),
+          createdAt:
+              (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          updatedAt:
+              (data['updated_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        );
+
+        // apply faculty scoping client-side if Session.facultyRef present
+        if (Session.facultyRef == null) {
+          users.add(user);
+        } else {
+          if (_recordMatchesFaculty(data)) users.add(user);
+        }
+
+        // initialize password visibility state (default hidden)
+        _showPasswordById[user.id] = _showPasswordById[user.id] ?? false;
+      }
+
       setState(() {
-        _students = docs
-            .map((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              // normalize faculty id into string for display/matching
-              final facultyId = (data['faculty_id'] is DocumentReference)
-                  ? (data['faculty_id'] as DocumentReference).id
-                  : (data['faculty_id']?.toString() ?? '');
-
-              return AppUser(
-                id: doc.id,
-                username: data['username'] ?? '',
-                role: data['role'] ?? 'student',
-                password: data['password'] ?? '',
-                facultyId: facultyId,
-                status: data['status'] ?? 'enabled',
-                createdAt:
-                    (data['created_at'] as Timestamp?)?.toDate() ??
-                    DateTime.now(),
-                updatedAt:
-                    (data['updated_at'] as Timestamp?)?.toDate() ??
-                    DateTime.now(),
-              );
-            })
-            .where((u) {
-              // if Session.facultyRef is null then show all; otherwise apply client-side filter as backup
-              if (Session.facultyRef == null) return true;
-              final raw =
-                  docs.firstWhere((d) => d.id == u.id).data()
-                      as Map<String, dynamic>;
-              return _recordMatchesFaculty(raw);
-            })
-            .toList();
-
-        // no per-row password visibility tracking required here
+        _students = users;
       });
     } catch (e) {
-      print('Error fetching students for faculty user handling: $e');
+      debugPrint('Error fetching students for faculty user handling: $e');
     }
   }
 
@@ -117,17 +129,41 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
       builder: (context) => EditUserPopup(user: student),
     );
     if (result != null) {
+      // Update user document
       await usersCollection.doc(student.id).update(result.toFirestore());
+
+      // Propagate username/password changes to matching student document(s)
+      final snap = await studentsCollection
+          .where('username', isEqualTo: student.username)
+          .get();
+      for (final doc in snap.docs) {
+        await doc.reference.update({
+          'username': result.username,
+          'password': result.password,
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      }
       await _fetchStudents();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('User updated'),
+            backgroundColor: Colors.blueGrey.shade800,
+          ),
+        );
+      }
     }
   }
 
-  Future<void> _confirmDeleteStudent(AppUser s) async {
+  // Generic toggle (enable/disable) with confirmation
+  Future<void> _confirmToggleStatus(AppUser s) async {
+    final isDisabled = s.status.toLowerCase() == 'disabled';
+    final actionLabel = isDisabled ? 'Enable' : 'Disable';
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete student'),
-        content: Text('Delete ${s.username}?'),
+        title: Text('$actionLabel student'),
+        content: Text('$actionLabel ${s.username}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -135,26 +171,39 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isDisabled ? Colors.green : Colors.blue,
+            ),
+            child: Text(actionLabel),
           ),
         ],
       ),
     );
     if (ok == true) {
       try {
-        await usersCollection.doc(s.id).delete();
+        final newStatus = isDisabled ? 'enabled' : 'disabled';
+        await usersCollection.doc(s.id).update({'status': newStatus});
         await _fetchStudents();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Student deleted'),
-              backgroundColor: Colors.green,
+            SnackBar(
+              content: Text(
+                'Student ${isDisabled ? 'enabled' : 'disabled'} successfully',
+              ),
+              backgroundColor: Colors.blueGrey.shade800,
             ),
           );
         }
       } catch (e) {
-        print('Error deleting student: $e');
+        debugPrint('Error toggling student status: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update student status'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -163,6 +212,133 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  Widget _buildScrollableTable({required bool isDesktop}) {
+    final rows = _filteredStudents;
+    return Column(
+      children: [
+        // Header
+        Container(
+          color: Colors.grey[100],
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Row(
+            children: const [
+              Expanded(
+                flex: 1,
+                child: Text(
+                  'No',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Username',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Role',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Status',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Password',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // List with Scrollbar
+        Expanded(
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: isDesktop,
+            child: ListView.separated(
+              controller: _scrollController,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              itemCount: rows.length,
+              separatorBuilder: (_, __) =>
+                  Divider(height: 1, color: Colors.grey.shade300),
+              itemBuilder: (context, index) {
+                final user = rows[index];
+                final selected = _selectedIndex == index;
+                final visible = _showPasswordById[user.id] ?? false;
+
+                return InkWell(
+                  onTap: () => _handleRowTap(index),
+                  child: Container(
+                    color: selected ? Colors.blue.shade50 : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(flex: 1, child: Text('${index + 1}')),
+                        Expanded(flex: 3, child: Text(user.username)),
+                        Expanded(flex: 2, child: Text(user.role)),
+                        Expanded(flex: 2, child: Text(user.status)),
+                        Expanded(
+                          flex: 3,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  visible ? (user.password ?? '') : '••••••••',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  visible
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _showPasswordById[user.id] =
+                                        !(_showPasswordById[user.id] ?? false);
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopTable() {
+    // Use the scrollable list on both desktop and mobile for consistency and accessibility.
+    return _buildScrollableTable(isDesktop: true);
+  }
+
+  Widget _buildMobileTable() {
+    return _buildScrollableTable(isDesktop: false);
   }
 
   @override
@@ -235,11 +411,11 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
                         ),
                         const SizedBox(width: 8),
                         SizedBox(
-                          width: 80,
+                          width: 100,
                           height: 36,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
+                              backgroundColor: Colors.blue,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
@@ -250,12 +426,18 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
                             ),
                             onPressed: _selectedIndex == null
                                 ? null
-                                : () => _confirmDeleteStudent(
+                                : () => _confirmToggleStatus(
                                     _filteredStudents[_selectedIndex!],
                                   ),
-                            child: const Text(
-                              "Delete",
-                              style: TextStyle(
+                            child: Text(
+                              _selectedIndex == null
+                                  ? 'Disable'
+                                  : (_filteredStudents[_selectedIndex!].status
+                                                .toLowerCase() ==
+                                            'disabled'
+                                        ? 'Enable'
+                                        : 'Disable'),
+                              style: const TextStyle(
                                 fontSize: 15,
                                 color: Colors.white,
                               ),
@@ -274,123 +456,10 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
             child: Container(
               width: double.infinity,
               color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: _buildMobileTable(),
-                      ),
-                    ),
+              child: isDesktop ? _buildDesktopTable() : _buildMobileTable(),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopTable() {
-    return Table(
-      columnWidths: const {
-        0: FixedColumnWidth(64), // No
-        1: FixedColumnWidth(160), // Username
-        2: FixedColumnWidth(160), // Role
-        3: FixedColumnWidth(120), // Password
-      },
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell("NO"),
-            _tableHeaderCell("Username"),
-            _tableHeaderCell("Role"),
-            _tableHeaderCell("Password"),
-          ],
-        ),
-        for (int index = 0; index < _filteredStudents.length; index++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(
-                _filteredStudents[index].username,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                _filteredStudents[index].role,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
-            ],
-          ),
-      ],
-    );
-  }
-
-  Widget _buildMobileTable() {
-    return Table(
-      defaultColumnWidth: const IntrinsicColumnWidth(),
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell("NO"),
-            _tableHeaderCell("Username"),
-            _tableHeaderCell("Role"),
-            _tableHeaderCell("Password"),
-          ],
-        ),
-        for (int index = 0; index < _filteredStudents.length; index++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(
-                _filteredStudents[index].username,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                _filteredStudents[index].role,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
-            ],
-          ),
-      ],
-    );
-  }
-
-  Widget _tableHeaderCell(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.bold),
-        textAlign: TextAlign.left,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
-
-  Widget _tableBodyCell(String text, {VoidCallback? onTap}) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(text, overflow: TextOverflow.ellipsis),
       ),
     );
   }

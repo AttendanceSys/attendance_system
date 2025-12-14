@@ -24,6 +24,27 @@ class _AdminsPageState extends State<AdminsPage> {
   String _searchText = '';
   int? _selectedIndex;
 
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.blueGrey.shade800,
+      ),
+    );
+  }
+
+  List<Admin> get _filteredAdmins {
+    final query = _searchText.trim().toLowerCase();
+    if (query.isEmpty) return _admins;
+    return _admins
+        .where(
+          (admin) =>
+              admin.username.toLowerCase().startsWith(query) ||
+              admin.fullName.toLowerCase().startsWith(query),
+        )
+        .toList();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -127,6 +148,7 @@ class _AdminsPageState extends State<AdminsPage> {
     await usersCollection.add(userData);
 
     _fetchAdmins();
+    _showSnack('Admin added successfully');
   }
 
   Future<void> _updateAdmin(Admin admin) async {
@@ -141,6 +163,7 @@ class _AdminsPageState extends State<AdminsPage> {
     final userData = {
       'username': admin.username, // Update username
       'password': admin.password,
+      'role': 'admin',
       'faculty_id': facultiesCollection.doc(admin.facultyId),
       'updated_at': FieldValue.serverTimestamp(),
     };
@@ -167,6 +190,7 @@ class _AdminsPageState extends State<AdminsPage> {
         });
 
     _fetchAdmins();
+    _showSnack('Admin updated successfully');
   }
 
   Future<void> _deleteAdmin(Admin admin) async {
@@ -176,6 +200,7 @@ class _AdminsPageState extends State<AdminsPage> {
     // Delete from users collection
     await usersCollection
         .where('username', isEqualTo: admin.username)
+        .where('role', isEqualTo: 'admin')
         .get()
         .then((snapshot) {
           for (var doc in snapshot.docs) {
@@ -184,6 +209,7 @@ class _AdminsPageState extends State<AdminsPage> {
         });
 
     _fetchAdmins();
+    _showSnack('Admin deleted successfully');
   }
 
   Future<void> _showAddAdminPopup() async {
@@ -198,7 +224,7 @@ class _AdminsPageState extends State<AdminsPage> {
 
   Future<void> _showEditAdminPopup() async {
     if (_selectedIndex == null) return;
-    final admin = _admins[_selectedIndex!];
+    final admin = _filteredAdmins[_selectedIndex!];
     final result = await showDialog<Admin>(
       context: context,
       builder: (context) =>
@@ -211,7 +237,7 @@ class _AdminsPageState extends State<AdminsPage> {
 
   Future<void> _confirmDeleteAdmin() async {
     if (_selectedIndex == null) return;
-    final admin = _admins[_selectedIndex!];
+    final admin = _filteredAdmins[_selectedIndex!];
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -349,7 +375,10 @@ class _AdminsPageState extends State<AdminsPage> {
               width: double.infinity,
               color: Colors.transparent,
               child: isDesktop
-                  ? _buildDesktopTable()
+                  ? SingleChildScrollView(
+                      scrollDirection: Axis.vertical,
+                      child: _buildDesktopTable(),
+                    )
                   : SingleChildScrollView(
                       scrollDirection: Axis.vertical,
                       child: SingleChildScrollView(
@@ -371,7 +400,6 @@ class _AdminsPageState extends State<AdminsPage> {
         1: FixedColumnWidth(120), // Admin ID
         2: FixedColumnWidth(140), // Full Name
         3: FixedColumnWidth(120), // Faculty Name
-        4: FixedColumnWidth(120), // Password
       },
       border: TableBorder(
         horizontalInside: BorderSide(color: Colors.grey.shade300),
@@ -380,13 +408,12 @@ class _AdminsPageState extends State<AdminsPage> {
         TableRow(
           children: [
             _tableHeaderCell("No"),
-            _tableHeaderCell("Admin ID"),
-            _tableHeaderCell("Full Name"),
+            _tableHeaderCell("Username"),
+            _tableHeaderCell("Admin Name"),
             _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Password"),
           ],
         ),
-        for (int index = 0; index < _admins.length; index++)
+        for (int index = 0; index < _filteredAdmins.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index
@@ -396,18 +423,17 @@ class _AdminsPageState extends State<AdminsPage> {
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                _admins[index].username,
+                _filteredAdmins[index].username,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                _admins[index].fullName,
+                _filteredAdmins[index].fullName,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                _admins[index].facultyId,
+                _filteredAdmins[index].facultyId,
                 onTap: () => _handleRowTap(index),
               ),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
             ],
           ),
       ],
@@ -427,10 +453,9 @@ class _AdminsPageState extends State<AdminsPage> {
             _tableHeaderCell("Admin ID"),
             _tableHeaderCell("Full Name"),
             _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Password"),
           ],
         ),
-        for (int index = 0; index < _admins.length; index++)
+        for (int index = 0; index < _filteredAdmins.length; index++)
           TableRow(
             decoration: BoxDecoration(
               color: _selectedIndex == index
@@ -440,18 +465,17 @@ class _AdminsPageState extends State<AdminsPage> {
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
               _tableBodyCell(
-                _admins[index].username,
+                _filteredAdmins[index].username,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                _admins[index].fullName,
+                _filteredAdmins[index].fullName,
                 onTap: () => _handleRowTap(index),
               ),
               _tableBodyCell(
-                _admins[index].facultyId,
+                _filteredAdmins[index].facultyId,
                 onTap: () => _handleRowTap(index),
               ),
-              _tableBodyCell("••••••••", onTap: () => _handleRowTap(index)),
             ],
           ),
       ],
