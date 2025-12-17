@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'package:attendance_system/services/session.dart';
 import 'student_details_panel.dart';
 
@@ -11,12 +12,42 @@ class AttendanceUnifiedPage extends StatefulWidget {
 }
 
 class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
+  // Return cached courses for this class if available
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Data sources populated from Firestore
   List<String> departments = [];
+  List<String> departmentIds = [];
   List<String> classesForDept = [];
   List<String> coursesForClass = [];
+  // Simple in-memory caches to avoid repeated Firestore queries
+  final Map<String, List<String>> _classesCache = {};
+  final Map<String, List<String>> _coursesCache = {};
+  // Map class display name -> list of class doc ids (populated when loading classes)
+  final Map<String, List<String>> _classDocIdsCache = {};
+
+  bool _deptMatchesSessionFaculty(Map<String, dynamic> data) {
+    if (Session.facultyRef == null) return true;
+    final sessionId = Session.facultyRef!.id;
+    final sessionPath = '/${Session.facultyRef!.path}';
+
+    final cand =
+        data['faculty_ref'] ??
+        data['faculty_id'] ??
+        data['faculty'] ??
+        data['facultyId'];
+    if (cand == null) return false;
+    if (cand is DocumentReference) return cand.id == sessionId;
+    if (cand is String) {
+      if (cand == sessionId) return true;
+      if (cand == sessionPath) return true;
+      final normalized = cand.startsWith('/') ? cand : '/$cand';
+      if (normalized == sessionPath) return true;
+      final parts = cand.split('/').where((p) => p.isNotEmpty).toList();
+      if (parts.isNotEmpty && parts.last == sessionId) return true;
+    }
+    return false;
+  }
 
   // Roster grouped by class -> section -> list of student maps
   // Each student map includes 'docId' so we can update the student doc.
@@ -24,10 +55,11 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       {};
 
   // UI selections
+  // selectedDepartment holds the display name; selectedDepartmentId holds the doc id
   String? selectedDepartment;
+  String? selectedDepartmentId;
   String? selectedClass;
   String? selectedCourse;
-  DateTime? selectedDate;
   String? selectedUsername;
   String? selectedStudentName;
   String? selectedStudentClass;
@@ -55,13 +87,14 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       classesForDept = [];
       coursesForClass = [];
       selectedDepartment = null;
+      selectedDepartmentId = null;
       selectedClass = null;
       selectedCourse = null;
       classSectionStudents = {};
     });
 
     try {
-      final deptSet = <String>{};
+      final Map<String, String> deptMap = {};
 
       // Use only Session.username (adjust here if your Session exposes a different id field)
       final currentUsername = (Session.username ?? '').toString();
@@ -77,13 +110,14 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
 
           for (final doc in q.docs) {
             final d = doc.data();
+            if (!_deptMatchesSessionFaculty(d)) continue;
             final deptValue =
-                (d['department_code'] ??
-                        d['department_name'] ??
+                (d['department_name'] ??
+                        d['department_code'] ??
                         d['department'])
                     ?.toString() ??
                 '';
-            if (deptValue.isNotEmpty) deptSet.add(deptValue);
+            if (deptValue.isNotEmpty) deptMap[doc.id] = deptValue;
           }
         } catch (_) {
           // ignore and fall back
@@ -91,21 +125,35 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       }
 
       // 2) Legacy fallback: if no departments found for this user, fall back to timetables-based discovery
-      if (deptSet.isEmpty) {
+      // If no departments found for this user, fetch departments collection (all active)
+      if (deptMap.isEmpty) {
         try {
-          final qs = await _firestore.collection('timetables').get();
+          final qs = await _firestore
+              .collection('departments')
+              .where('status', isEqualTo: true)
+              .get();
           for (final doc in qs.docs) {
             final d = doc.data();
-            final dep = (d['department'] ?? '').toString();
-            if (dep.isNotEmpty) deptSet.add(dep);
+            if (!_deptMatchesSessionFaculty(d)) continue;
+            final dep =
+                (d['department_name'] ??
+                        d['department_code'] ??
+                        d['department'])
+                    ?.toString() ??
+                '';
+            if (dep.isNotEmpty) deptMap[doc.id] = dep;
           }
         } catch (e) {
-          debugPrint('Failed fallback timetables fetch: $e');
+          debugPrint('Failed fallback departments fetch: $e');
         }
       }
 
+      // Turn deptMap into parallel lists sorted by display name
+      final entries = deptMap.entries.toList();
+      entries.sort((a, b) => a.value.compareTo(b.value));
       setState(() {
-        departments = deptSet.toList()..sort();
+        departmentIds = entries.map((e) => e.key).toList();
+        departments = entries.map((e) => e.value).toList();
       });
     } catch (e) {
       ScaffoldMessenger.of(
@@ -129,18 +177,168 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     });
 
     try {
-      final qs = await _firestore
-          .collection('timetables')
-          .where('department', isEqualTo: dept)
-          .get();
-      final clsSet = <String>{};
-      for (final doc in qs.docs) {
-        final d = doc.data();
-        final cls = (d['className'] ?? '').toString();
-        if (cls.isNotEmpty) clsSet.add(cls);
+      // Return cached classes if available
+      if (_classesCache.containsKey(dept) && _classesCache[dept]!.isNotEmpty) {
+        setState(() {
+          classesForDept = List<String>.from(_classesCache[dept]!);
+        });
+        return;
       }
+      // Try multiple strategies to discover classes for the selected department.
+      final clsSet = <String>{};
+
+      // Helper to extract class name from class doc data
+      String _extractClassName(Map<String, dynamic> d) =>
+          (d['className'] ?? d['class_name'] ?? d['class'] ?? '')
+              .toString()
+              .trim();
+
+      // 1) Direct match: try classes where 'department_ref' == dept (doc id),
+      // then try where 'department' == dept (legacy/code)
+      try {
+        // try department_ref first
+        try {
+          final qsRef = await _firestore
+              .collection('classes')
+              .where('department_ref', isEqualTo: dept)
+              .get();
+          for (final doc in qsRef.docs) {
+            final cls = _extractClassName(doc.data());
+            if (cls.isNotEmpty) {
+              clsSet.add(cls);
+              _classDocIdsCache.putIfAbsent(cls, () => []).add(doc.id);
+            }
+          }
+        } catch (_) {}
+
+        // then try department field (code or name)
+        if (clsSet.isEmpty) {
+          final qs = await _firestore
+              .collection('classes')
+              .where('department', isEqualTo: dept)
+              .get();
+          for (final doc in qs.docs) {
+            final cls = _extractClassName(doc.data());
+            if (cls.isNotEmpty) {
+              clsSet.add(cls);
+              _classDocIdsCache.putIfAbsent(cls, () => []).add(doc.id);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Direct classes by department failed: $e');
+      }
+
+      // 2) Try matching classes documents that store department name/code in different fields
+      if (clsSet.isEmpty) {
+        try {
+          final qs = await _firestore.collection('classes').get();
+          for (final doc in qs.docs) {
+            final d = doc.data();
+            final deptCandidates = <String>{
+              (d['department_name'] ?? '').toString(),
+              (d['departmentName'] ?? '').toString(),
+              (d['department_code'] ?? '').toString(),
+              (d['department'] ?? '').toString(),
+            }..removeWhere((e) => e.isEmpty);
+            for (final cand in deptCandidates) {
+              if (_looseNameMatch(cand, dept)) {
+                final cls = _extractClassName(d);
+                if (cls.isNotEmpty) {
+                  clsSet.add(cls);
+                  _classDocIdsCache.putIfAbsent(cls, () => []).add(doc.id);
+                }
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Scanning classes for dept fields failed: $e');
+        }
+      }
+
+      // 3) Resolve department document(s) from 'departments' collection and query classes by doc id or code
+      if (clsSet.isEmpty) {
+        try {
+          final deptQs = await _firestore
+              .collection('departments')
+              .where('status', isEqualTo: true)
+              .get();
+          final matchedDeptDocs =
+              <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+          for (final d in deptQs.docs) {
+            final data = d.data();
+            final name = (data['department_name'] ?? data['department'] ?? '')
+                .toString();
+            final code = (data['department_code'] ?? '').toString();
+            if (_looseNameMatch(name, dept) ||
+                _looseNameMatch(code, dept) ||
+                name == dept ||
+                code == dept) {
+              matchedDeptDocs.add(d);
+            }
+          }
+
+          for (final md in matchedDeptDocs) {
+            // try classes where department_ref equals the department doc id
+            try {
+              final qs = await _firestore
+                  .collection('classes')
+                  .where('department_ref', isEqualTo: md.id)
+                  .get();
+              for (final doc in qs.docs) {
+                final cls = _extractClassName(doc.data());
+                if (cls.isNotEmpty) {
+                  clsSet.add(cls);
+                  _classDocIdsCache.putIfAbsent(cls, () => []).add(doc.id);
+                }
+              }
+            } catch (_) {}
+
+            // try classes where department equals the department code (legacy)
+            try {
+              final code = (md.data()['department_code'] ?? '').toString();
+              if (code.isNotEmpty) {
+                final qs2 = await _firestore
+                    .collection('classes')
+                    .where('department', isEqualTo: code)
+                    .get();
+                for (final doc in qs2.docs) {
+                  final cls = _extractClassName(doc.data());
+                  if (cls.isNotEmpty) {
+                    clsSet.add(cls);
+                    _classDocIdsCache.putIfAbsent(cls, () => []).add(doc.id);
+                  }
+                }
+              }
+            } catch (_) {}
+          }
+        } catch (e) {
+          debugPrint('Resolving departments docs failed: $e');
+        }
+      }
+
+      // 4) Last fallback: legacy timetables
+      if (clsSet.isEmpty) {
+        try {
+          final qs = await _firestore
+              .collection('timetables')
+              .where('department', isEqualTo: dept)
+              .get();
+          for (final doc in qs.docs) {
+            final d = doc.data();
+            final cls = (d['className'] ?? '').toString();
+            if (cls.isNotEmpty) clsSet.add(cls);
+          }
+        } catch (e) {
+          debugPrint('Failed to load classes from timetables fallback: $e');
+        }
+      }
+
       setState(() {
         classesForDept = clsSet.toList()..sort();
+        // cache
+        _classesCache[dept] = List<String>.from(classesForDept);
       });
     } catch (e) {
       ScaffoldMessenger.of(
@@ -162,32 +360,138 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     });
 
     try {
-      final qs = await _firestore
-          .collection('timetables')
-          .where('className', isEqualTo: cls)
-          .get();
+      // Return cached courses for this class if available
+      if (_coursesCache.containsKey(cls) && _coursesCache[cls]!.isNotEmpty) {
+        setState(() {
+          coursesForClass = List<String>.from(_coursesCache[cls]!);
+        });
+        return;
+      }
+      // Prefer querying classes collection to find matching class docs and then fetch courses
       final courseSet = <String>{};
-      for (final doc in qs.docs) {
-        final d = doc.data();
-        final gm = d['grid_meta'];
-        if (gm is List) {
-          for (final gmItem in gm) {
-            if (gmItem is Map && gmItem['cells'] is List) {
-              for (final cell in (gmItem['cells'] as List)) {
-                if (cell is Map && cell['course'] != null) {
-                  final c = cell['course'].toString().trim();
-                  if (c.isNotEmpty) courseSet.add(c);
-                } else if (cell is String) {
-                  final c = cell.toString().trim();
-                  if (c.isNotEmpty) courseSet.add(c);
+      final classDocIds = <String>{};
+
+      // If we already discovered class doc ids earlier when loading classes, use them.
+      if (_classDocIdsCache.containsKey(cls)) {
+        classDocIds.addAll(_classDocIdsCache[cls]!);
+      }
+
+      // Use cached course list if available
+      try {
+        // try to find class documents matching cls (several variants)
+        final variants = <String>{
+          cls.trim(),
+          cls.trim().toUpperCase(),
+          cls.trim().toLowerCase(),
+          cls.replaceAll(' ', ''),
+        }..removeWhere((e) => e.isEmpty);
+
+        for (final v in variants) {
+          try {
+            final cQ = await _firestore
+                .collection('classes')
+                .where('className', isEqualTo: v)
+                .get();
+            for (final cd in cQ.docs) {
+              classDocIds.add(cd.id);
+              try {
+                final cname =
+                    (cd.data()['className'] ??
+                            cd.data()['class_name'] ??
+                            cd.data()['class'] ??
+                            '')
+                        .toString()
+                        .trim();
+                if (cname.isNotEmpty)
+                  _classDocIdsCache.putIfAbsent(cname, () => []).add(cd.id);
+              } catch (_) {}
+            }
+          } catch (_) {}
+        }
+      } catch (e) {
+        debugPrint('Error finding class docs: $e');
+      }
+
+      // If we found class doc IDs, query courses by class ref
+      if (classDocIds.isNotEmpty) {
+        for (final cid in classDocIds) {
+          // Query courses by class id (fast)
+          try {
+            final cq = await _firestore
+                .collection('courses')
+                .where('class', isEqualTo: cid)
+                .get();
+            for (final doc in cq.docs) {
+              final data = doc.data();
+              final name =
+                  (data['course_name'] ??
+                          data['course'] ??
+                          data['course_code'] ??
+                          '')
+                      .toString();
+              if (name.isNotEmpty) courseSet.add(name.trim());
+            }
+          } catch (e) {
+            debugPrint('Error querying courses for class id $cid: $e');
+          }
+        }
+      }
+
+      // Fallback: try to query courses where 'class' equals the given cls string (in case cls is id)
+      if (courseSet.isEmpty) {
+        try {
+          // Last-resort fallback: scan timetables for subjects (legacy)
+          final cq = await _firestore
+              .collection('courses')
+              .where('class', isEqualTo: cls)
+              .get();
+          for (final doc in cq.docs) {
+            final data = doc.data();
+            final name =
+                (data['course_name'] ??
+                        data['course'] ??
+                        data['course_code'] ??
+                        '')
+                    .toString();
+            if (name.isNotEmpty) courseSet.add(name.trim());
+          }
+        } catch (_) {}
+      }
+
+      // Last-resort fallback: scan timetables for subjects (legacy)
+      if (courseSet.isEmpty) {
+        try {
+          final qs = await _firestore
+              .collection('timetables')
+              .where('className', isEqualTo: cls)
+              .get();
+          for (final doc in qs.docs) {
+            final d = doc.data();
+            final gm = d['grid_meta'];
+            if (gm is List) {
+              for (final gmItem in gm) {
+                if (gmItem is Map && gmItem['cells'] is List) {
+                  for (final cell in (gmItem['cells'] as List)) {
+                    if (cell is Map && cell['course'] != null) {
+                      final c = cell['course'].toString().trim();
+                      if (c.isNotEmpty) courseSet.add(c);
+                    } else if (cell is String) {
+                      final c = cell.toString().trim();
+                      if (c.isNotEmpty) courseSet.add(c);
+                    }
+                  }
                 }
               }
             }
           }
+        } catch (e) {
+          debugPrint('Failed legacy timetables subject fetch: $e');
         }
       }
+
       setState(() {
         coursesForClass = courseSet.toList()..sort();
+        _coursesCache[cls] = List<String>.from(coursesForClass);
       });
     } catch (e) {
       ScaffoldMessenger.of(
@@ -204,7 +508,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   // Students loader for selected class
   // --------------------------
   Future<void> _fetchStudentsForSelection() async {
-    if (selectedDepartment == null ||
+    if (selectedDepartmentId == null ||
         selectedClass == null ||
         selectedCourse == null)
       return;
@@ -264,14 +568,47 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         }
         if (classDocIds.isEmpty) {
           try {
-            final classesInDept = await _firestore
-                .collection('classes')
-                .where('department', isEqualTo: selectedDepartment)
-                .get();
-            for (final cd in classesInDept.docs) {
-              final cname = (cd.data()['className'] ?? '').toString();
-              if (cname.isNotEmpty && _looseNameMatch(cname, selectedClass))
-                classDocIds.add(cd.id);
+            // Prefer classes where department_ref == selectedDepartmentId
+            try {
+              final classesInDept = await _firestore
+                  .collection('classes')
+                  .where('department_ref', isEqualTo: selectedDepartmentId)
+                  .get();
+              for (final cd in classesInDept.docs) {
+                final cname = (cd.data()['className'] ?? '').toString();
+                if (cname.isNotEmpty && _looseNameMatch(cname, selectedClass))
+                  classDocIds.add(cd.id);
+              }
+            } catch (_) {}
+
+            // Fallback: try department field matching id or display name
+            if (classDocIds.isEmpty) {
+              try {
+                final qs = await _firestore
+                    .collection('classes')
+                    .where('department', isEqualTo: selectedDepartmentId)
+                    .get();
+                for (final cd in qs.docs) {
+                  final cname = (cd.data()['className'] ?? '').toString();
+                  if (cname.isNotEmpty && _looseNameMatch(cname, selectedClass))
+                    classDocIds.add(cd.id);
+                }
+              } catch (_) {}
+
+              if (classDocIds.isEmpty && selectedDepartment != null) {
+                try {
+                  final qs2 = await _firestore
+                      .collection('classes')
+                      .where('department', isEqualTo: selectedDepartment)
+                      .get();
+                  for (final cd in qs2.docs) {
+                    final cname = (cd.data()['className'] ?? '').toString();
+                    if (cname.isNotEmpty &&
+                        _looseNameMatch(cname, selectedClass))
+                      classDocIds.add(cd.id);
+                  }
+                } catch (_) {}
+              }
             }
           } catch (_) {}
         }
@@ -293,11 +630,22 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
 
       if (fetchedDocs.isEmpty) {
         try {
-          final deptQ = await _firestore
-              .collection('students')
-              .where('department', isEqualTo: selectedDepartment)
-              .limit(2000)
-              .get();
+          // Try students where department equals the selectedDepartmentId first
+          QuerySnapshot<Map<String, dynamic>> deptQ;
+          try {
+            deptQ = await _firestore
+                .collection('students')
+                .where('department', isEqualTo: selectedDepartmentId)
+                .limit(2000)
+                .get();
+          } catch (_) {
+            // fallback to department display name if id-based lookup fails
+            deptQ = await _firestore
+                .collection('students')
+                .where('department', isEqualTo: selectedDepartment)
+                .limit(2000)
+                .get();
+          }
           for (final d in deptQ.docs) {
             final data = d.data();
             final sClass =
@@ -327,7 +675,6 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         final fullname =
             (data['fullname'] ?? data['fullName'] ?? data['name'] ?? username)
                 .toString();
-        final status = data['status'] == true;
         final courses = (data['courses'] is List)
             ? List<Map<String, dynamic>>.from(data['courses'])
             : <Map<String, dynamic>>[];
@@ -336,7 +683,6 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         final studentMap = <String, dynamic>{
           'username': username,
           'name': fullname,
-          'status': status,
           'courses': courses,
           'docId': d.id,
         };
@@ -360,23 +706,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     }
   }
 
-  // --------------------------
-  // Update student status (present/absent) in Firestore
-  // --------------------------
-  Future<void> _updateStudentStatusInFirestore(
-    String docId,
-    bool status,
-  ) async {
-    try {
-      await _firestore.collection('students').doc(docId).update({
-        'status': status,
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update student status: $e')),
-      );
-    }
-  }
+  // status update removed
 
   // --------------------------
   // Update student courses array in Firestore
@@ -454,7 +784,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   @override
   Widget build(BuildContext context) {
     final showTable =
-        selectedDepartment != null &&
+        selectedDepartmentId != null &&
         selectedClass != null &&
         selectedCourse != null &&
         selectedUsername == null;
@@ -484,23 +814,22 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
             const SizedBox(height: 12),
             _FiltersRow(
               departments: departments,
+              departmentIds: departmentIds,
               classes: classes,
               courses: courses,
               selectedDepartment: selectedDepartment,
+              selectedDepartmentId: selectedDepartmentId,
               selectedClass: selectedClass,
               selectedCourse: selectedCourse,
-              selectedDate: selectedDate,
               onChanged:
-                  ({
-                    String? department,
-                    String? className,
-                    String? course,
-                    DateTime? date,
-                  }) {
+                  ({String? department, String? className, String? course}) {
                     setState(() {
                       if (department != null &&
-                          department != selectedDepartment) {
-                        selectedDepartment = department;
+                          department != selectedDepartmentId) {
+                        // department is the department doc id
+                        selectedDepartmentId = department;
+                        final idx = departmentIds.indexOf(department);
+                        selectedDepartment = idx >= 0 ? departments[idx] : null;
                         selectedClass = null;
                         selectedCourse = null;
                         classesForDept = [];
@@ -518,13 +847,12 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                       if (course != null && course != selectedCourse) {
                         selectedCourse = course;
                         classSectionStudents = {};
-                        if (selectedDepartment != null &&
+                        if (selectedDepartmentId != null &&
                             selectedClass != null &&
                             selectedCourse != null) {
                           _fetchStudentsForSelection();
                         }
                       }
-                      if (date != null) selectedDate = date;
                     });
                   },
             ),
@@ -535,7 +863,6 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                       department: selectedDepartment ?? '',
                       className: selectedClass ?? '',
                       course: selectedCourse ?? '',
-                      date: selectedDate,
                       searchText: searchText,
                       classSectionStudents: classSectionStudents,
                       onStudentSelected: (studentId) {
@@ -569,56 +896,13 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                               '$selectedClass${(foundSection != null && foundSection != "None") ? foundSection : ""}';
                         });
                       },
-                      onStatusChanged: (studentId, newStatus) async {
-                        setState(() {
-                          final sectionsMap =
-                              classSectionStudents[selectedClass] ?? {};
-                          for (final list in sectionsMap.values) {
-                            final student = list.firstWhere(
-                              (s) => s['username'] == studentId,
-                              orElse: () => <String, dynamic>{},
-                            );
-                            if (student.isNotEmpty) {
-                              student['status'] = newStatus;
-                              break;
-                            }
-                          }
-                        });
-                        String? docId;
-                        final sectionsMap =
-                            classSectionStudents[selectedClass] ?? {};
-                        for (final list in sectionsMap.values) {
-                          final student = list.firstWhere(
-                            (s) => s['username'] == studentId,
-                            orElse: () => <String, dynamic>{},
-                          );
-                          if (student.isNotEmpty) {
-                            docId = student['docId']?.toString();
-                            break;
-                          }
-                        }
-                        if (docId != null) {
-                          await _updateStudentStatusInFirestore(
-                            docId,
-                            newStatus,
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Could not find student document to update.',
-                              ),
-                            ),
-                          );
-                        }
-                      },
                     )
                   : showStudentDetails
                   ? StudentDetailsPanel(
                       studentId: selectedUsername!,
                       studentName: selectedStudentName,
                       studentClass: selectedStudentClass,
-                      selectedDate: selectedDate,
+                      selectedCourse: selectedCourse,
                       attendanceRecords: _getRecordsForSelectedStudent(),
                       searchText: searchText,
                       onBack: () {
@@ -656,26 +940,23 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
 // --- Filters Widget (inline) ---
 class _FiltersRow extends StatelessWidget {
   final List<String> departments;
+  final List<String>? departmentIds;
   final List<String> classes;
   final List<String> courses;
   final String? selectedDepartment, selectedClass, selectedCourse;
-  final DateTime? selectedDate;
-  final Function({
-    String? department,
-    String? className,
-    String? course,
-    DateTime? date,
-  })
+  final String? selectedDepartmentId;
+  final Function({String? department, String? className, String? course})
   onChanged;
 
   const _FiltersRow({
     required this.departments,
+    this.departmentIds,
     required this.classes,
     required this.courses,
     this.selectedDepartment,
+    this.selectedDepartmentId,
     this.selectedClass,
     this.selectedCourse,
-    this.selectedDate,
     required this.onChanged,
   });
 
@@ -685,12 +966,39 @@ class _FiltersRow extends StatelessWidget {
       spacing: 12,
       runSpacing: 12,
       children: [
-        _DropdownFilter(
-          hint: "Dep",
-          value: selectedDepartment,
-          items: departments,
-          onChanged: (val) => onChanged(department: val),
-        ),
+        // Department dropdown: prefer using doc ids as values when provided
+        if (departmentIds != null && departmentIds!.isNotEmpty)
+          SizedBox(
+            width: 230,
+            child: DropdownButtonFormField<String?>(
+              value: selectedDepartmentId,
+              hint: const Text('Dep'),
+              items: [
+                DropdownMenuItem<String?>(value: null, child: Text('Dep')),
+                for (var i = 0; i < departmentIds!.length; i++)
+                  DropdownMenuItem<String?>(
+                    value: departmentIds![i],
+                    child: Text(departments[i]),
+                  ),
+              ],
+              onChanged: (val) => onChanged(department: val),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
+              ),
+            ),
+          )
+        else
+          _DropdownFilter(
+            hint: "Dep",
+            value: selectedDepartment,
+            items: departments,
+            onChanged: (val) => onChanged(department: val),
+          ),
         _DropdownFilter(
           hint: "Class",
           value: selectedClass,
@@ -703,10 +1011,7 @@ class _FiltersRow extends StatelessWidget {
           items: courses,
           onChanged: (val) => onChanged(course: val),
         ),
-        _DateFilter(
-          date: selectedDate,
-          onChanged: (date) => onChanged(date: date),
-        ),
+        // Date filter removed
       ],
     );
   }
@@ -727,92 +1032,60 @@ class _DropdownFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 170,
-      child: DropdownButtonFormField<String?>(
-        value: value,
-        hint: Text(hint),
-        items: [
-          const DropdownMenuItem<String?>(value: null, child: Text('Select')),
-          ...items
-              .map(
-                (item) =>
-                    DropdownMenuItem<String?>(value: item, child: Text(item)),
-              )
-              .toList(),
-        ],
-        onChanged: onChanged,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        ),
-      ),
-    );
-  }
-}
-
-class _DateFilter extends StatelessWidget {
-  final DateTime? date;
-  final ValueChanged<DateTime> onChanged;
-  const _DateFilter({required this.date, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 140,
-      child: InkWell(
-        onTap: () async {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: date ?? DateTime.now(),
-            firstDate: DateTime(2020),
-            lastDate: DateTime(2100),
-          );
-          if (picked != null) onChanged(picked);
-        },
-        child: InputDecorator(
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                date != null
-                    ? '${date!.day}/${date!.month}/${date!.year}'
-                    : 'Date',
-              ),
-              const Icon(Icons.calendar_today, size: 18),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : double.infinity;
+        final width = available.isFinite
+            ? math.min(230, available).toDouble()
+            : 230.0;
+        return SizedBox(
+          width: width,
+          child: DropdownButtonFormField<String?>(
+            value: value,
+            hint: Text(hint),
+            items: [
+              DropdownMenuItem<String?>(value: null, child: Text(hint)),
+              ...items
+                  .map(
+                    (item) => DropdownMenuItem<String?>(
+                      value: item,
+                      child: Text(item),
+                    ),
+                  )
+                  .toList(),
             ],
+            onChanged: onChanged,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
+
+// Date filter widget removed
 
 // --- Attendance Table ---
 class _AttendanceTable extends StatelessWidget {
   final String department, className, course;
-  final DateTime? date;
   final String searchText;
   final Map<String, Map<String, List<Map<String, dynamic>>>>
   classSectionStudents;
   final Function(String studentId) onStudentSelected;
-  final void Function(String studentId, bool newStatus)? onStatusChanged;
 
   const _AttendanceTable({
     required this.department,
     required this.className,
     required this.course,
     required this.classSectionStudents,
-    this.date,
     required this.searchText,
     required this.onStudentSelected,
-    this.onStatusChanged,
   });
 
   @override
@@ -876,12 +1149,7 @@ class _AttendanceTable extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
-                DataColumn(
-                  label: Text(
-                    "Status",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
+                // Status column removed
               ],
               rows: List.generate(filtered.length, (index) {
                 final row = filtered[index];
@@ -924,18 +1192,7 @@ class _AttendanceTable extends StatelessWidget {
                     DataCell(Text(department)),
                     DataCell(Text(className)),
                     DataCell(Text(course)),
-                    DataCell(
-                      Switch(
-                        value: row['status'] ?? false,
-                        activeColor: Colors.green,
-                        inactiveThumbColor: Colors.red,
-                        onChanged: (val) {
-                          if (onStatusChanged != null) {
-                            onStatusChanged!(row['username'], val);
-                          }
-                        },
-                      ),
-                    ),
+                    // Status control removed
                   ],
                 );
               }),

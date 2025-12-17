@@ -3,7 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../services/session.dart';
-import '../popup/success_popup.dart';
+// replaced old success popup with reusable attendance alert widget
+import '../../components/popup/attendance_alert.dart';
 import 'student_view_attendance_page.dart';
 import 'student_profile_page.dart';
 
@@ -20,6 +21,13 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
   final MobileScannerController _controller = MobileScannerController();
   String? scanResult;
   late final AnimationController _pulseController;
+  // Loaded student profile fields (populated from Firestore)
+  String? _profileName;
+  String? _profileClassName;
+  String? _profileSemester;
+  String? _profileGender;
+  String? _profileId;
+  String? _profileAvatarLetter;
 
   @override
   void initState() {
@@ -28,6 +36,44 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
+    // Load the student's profile for use when opening the profile page
+    _loadProfileForCurrentUser();
+  }
+
+  Future<void> _loadProfileForCurrentUser() async {
+    try {
+      final username = Session.username;
+      if (username == null) return;
+      final doc = await _loadStudentProfile(username);
+      if (doc == null || !doc.exists) return;
+      final data = doc.data() ?? <String, dynamic>{};
+      final name =
+          (data['name'] ?? data['fullName'] ?? data['studentName'] ?? username)
+              .toString();
+      final className =
+          (data['className'] ?? data['class_name'] ?? data['class'] ?? '')
+              .toString();
+      final semester = (data['semester'] ?? data['sem'] ?? '').toString();
+      final gender = (data['gender'] ?? '').toString();
+      final id =
+          (data['studentId'] ?? data['id'] ?? data['username'] ?? username)
+              .toString();
+      final avatar = (name.isNotEmpty
+          ? name.trim()[0].toUpperCase()
+          : (id.isNotEmpty ? id[0].toUpperCase() : 'S'));
+      if (mounted) {
+        setState(() {
+          _profileName = name;
+          _profileClassName = className;
+          _profileSemester = semester;
+          _profileGender = gender;
+          _profileId = id;
+          _profileAvatarLetter = avatar;
+        });
+      }
+    } catch (e, st) {
+      debugPrint('Error loading profile for scanner page: $e\n$st');
+    }
   }
 
   @override
@@ -315,14 +361,16 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
         .get();
 
     if (dupQuery.docs.isNotEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Attendance already recorded')),
-        );
-      }
       debugPrint(
         'Duplicate attendance prevented for user=$username code=$code',
       );
+      // Show "already recorded" dialog
+      if (mounted) {
+        await AttendanceAlert.showAlreadyRecorded(
+          context,
+          subject: sessionData['subject']?.toString(),
+        );
+      }
       return;
     }
 
@@ -360,16 +408,18 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
     await firestore.collection('attendance_records').add(attendanceData);
 
     debugPrint('Attendance written: user=$username session=${sessionDoc.id}');
-    // Show success popup with subject, date and time
+    // Show success popup with subject, date and time using reusable AttendanceAlert
     if (mounted) {
       final now = DateTime.now();
       final date = '${now.day}/${now.month}/${now.year}';
       final time =
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-      showDialog(
-        context: context,
-        builder: (ctx) =>
-            SuccessPopup(subject: subject, date: date, time: time),
+      await AttendanceAlert.showSuccess(
+        context,
+        subject: subject,
+        date: date,
+        time: time,
+        autoCloseAfter: const Duration(seconds: 2),
       );
     }
   }
@@ -420,10 +470,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
           .get();
 
       if (dupQuery.docs.isNotEmpty) {
+        debugPrint('Duplicate found while scanning code: $code');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Attendance already recorded')),
-          );
+          await AttendanceAlert.showAlreadyRecorded(context);
         }
         return;
       }
@@ -435,12 +484,13 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
           .get();
 
       if (sessionQuery.docs.isEmpty) {
+        debugPrint('Exact code match not found for scanned code: $code');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No active QR session found')),
+          await AttendanceAlert.showQrExpired(
+            context,
+            details: 'No active QR session found for this code.',
           );
         }
-        debugPrint('Exact code match not found for scanned code: $code');
         return;
       }
 
@@ -457,21 +507,24 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       }
 
       if (!allowed) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('This QR is not for your class')),
-          );
-        }
         debugPrint(
           'Blocked scan: session ${sessionDoc.id} is not for student class (user=$username)',
         );
+        if (mounted) {
+          await AttendanceAlert.showNotYourClass(
+            context,
+            details: 'This QR/session does not belong to your assigned class.',
+          );
+        }
         return;
       }
 
       if (_isSessionExpired(sessionData, nowUtc)) {
+        debugPrint('Session ${sessionDoc.id} is expired at scan time');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('QR session has expired')),
+          await AttendanceAlert.showQrExpired(
+            context,
+            details: 'This QR/session has expired.',
           );
         }
         return;
@@ -503,12 +556,12 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
 
   @override
   Widget build(BuildContext context) {
-    final studentName = "QaalI Cabdi Cali";
-    final avatarLetter = "Q";
-    final className = "B3-A Computer Science";
-    final semester = "Semester 7";
-    final gender = "Female";
-    final id = "B3SC760";
+    final studentName = _profileName ?? "QaalI Cabdi Cali";
+    final avatarLetter = _profileAvatarLetter ?? "Q";
+    final className = _profileClassName ?? "B3-A Computer Science";
+    final semester = _profileSemester ?? "Semester 7";
+    final gender = _profileGender ?? "Female";
+    final id = _profileId ?? "B3SC760";
 
     return Scaffold(
       backgroundColor: Colors.white,

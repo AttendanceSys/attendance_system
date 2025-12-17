@@ -1,21 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/session.dart';
 
-class TeacherSidebar extends StatelessWidget {
+class TeacherSidebar extends StatefulWidget {
   final Function(int) onItemSelected;
   final int selectedIndex;
-  final bool collapsed;
-  final String teacherName;
+  final bool collapsed; // parent-controlled collapsed state
+  final String teacherName; // optional fallback
 
   const TeacherSidebar({
     super.key,
     required this.onItemSelected,
     required this.selectedIndex,
     this.collapsed = false,
-    this.teacherName = "Dr Adam",
+    this.teacherName = "",
   });
 
   @override
+  State<TeacherSidebar> createState() => _TeacherSidebarState();
+}
+
+class _TeacherSidebarState extends State<TeacherSidebar> {
+  String? displayName;
+
+  @override
+  void initState() {
+    super.initState();
+    displayName = widget.teacherName.isNotEmpty
+        ? widget.teacherName
+        : Session.name;
+    if ((displayName == null || displayName!.isEmpty) &&
+        Session.username != null &&
+        Session.username!.isNotEmpty) {
+      _loadDisplayName();
+    }
+  }
+
+  Future<void> _loadDisplayName() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('teachers')
+          .where('username', isEqualTo: Session.username)
+          .limit(1)
+          .get();
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        final name =
+            (data['teacher_name'] ?? data['name'] ?? Session.username)
+                as String;
+        if (mounted) setState(() => displayName = name);
+        Session.name = name;
+        return;
+      }
+
+      // Fallback to users collection
+      final q2 = await FirebaseFirestore.instance
+          .collection('users')
+          .where('username', isEqualTo: Session.username)
+          .limit(1)
+          .get();
+      if (q2.docs.isNotEmpty) {
+        final d = q2.docs.first.data();
+        final name =
+            (d['name'] ?? d['display_name'] ?? Session.username) as String;
+        if (mounted) setState(() => displayName = name);
+        Session.name = name;
+      }
+    } catch (_) {
+      // ignore errors
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final collapsed = widget.collapsed;
+    final selectedIndex = widget.selectedIndex;
+    final onItemSelected = widget.onItemSelected;
+
     return Container(
       width: collapsed ? 60 : 220,
       color: const Color(0xFF3B4B9B),
@@ -23,24 +84,11 @@ class TeacherSidebar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 24),
-          CircleAvatar(
-            radius: 25,
-            backgroundColor: const Color(0xFF70C2FF),
-            child: Text(
-              teacherName.trim().isNotEmpty ? teacherName.trim()[0] : '',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          if (!collapsed) ...[
-            const SizedBox(height: 10),
+          if (!collapsed)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Text(
-                teacherName,
+                displayName ?? 'Teacher',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -50,7 +98,21 @@ class TeacherSidebar extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ),
-          ],
+          if (!collapsed) const SizedBox(height: 10),
+          CircleAvatar(
+            radius: 25,
+            backgroundColor: const Color(0xFF70C2FF),
+            child: Text(
+              (displayName != null && displayName!.isNotEmpty)
+                  ? displayName![0].toUpperCase()
+                  : 'T',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           const SizedBox(height: 20),
           Expanded(
             child: ListView(
@@ -125,7 +187,9 @@ class SidebarItem extends StatelessWidget {
               color: isSelected ? selectedBg : Colors.transparent,
             ),
             child: Row(
-              mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+              mainAxisAlignment: collapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
               children: [
                 Icon(
                   icon,
@@ -139,7 +203,9 @@ class SidebarItem extends StatelessWidget {
                     style: TextStyle(
                       color: isSelected ? selectedText : unselectedText,
                       fontSize: 16,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 ],
