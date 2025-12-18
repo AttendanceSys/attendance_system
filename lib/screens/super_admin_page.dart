@@ -1,3 +1,5 @@
+//super admin page
+
 import 'package:attendance_system/components/pages/admins_page.dart';
 import 'package:flutter/material.dart';
 import '../components/sidebars/admin_sidebar.dart';
@@ -7,8 +9,9 @@ import 'package:attendance_system/components/pages/faculties_page.dart';
 import 'package:attendance_system/components/pages/lecturer_page.dart';
 import 'package:attendance_system/components/pages/Admin_user_handling_page.dart';
 import 'package:attendance_system/components/popup/logout_confirmation_popup.dart';
-import 'package:attendance_system/components/charts/bar_chart.dart';
-import 'package:attendance_system/components/charts/pie_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/session.dart';
+// Removed global theme controller usage to keep dark mode local to Super Admin
 
 // ---- Logout confirmation popup matching your design ----
 // Use reusable popup from components/popup/logout_confirmation_popup.dart
@@ -23,6 +26,141 @@ class SuperAdminPage extends StatefulWidget {
 class _SuperAdminPageState extends State<SuperAdminPage> {
   int _selectedIndex = 0;
   bool _collapsed = true;
+  bool _localDark = false; // Dark mode local to SuperAdmin only
+
+  String _prefKeyForUser() {
+    final user = Session.username ?? 'default';
+    return 'superadmin_dark_$user';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreThemePreference();
+  }
+
+  Future<void> _restoreThemePreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getBool(_prefKeyForUser());
+      if (saved != null) {
+        setState(() {
+          _localDark = saved;
+        });
+      }
+    } catch (_) {
+      // ignore storage errors
+    }
+  }
+
+  Future<void> _persistThemePreference() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefKeyForUser(), _localDark);
+    } catch (_) {
+      // ignore storage errors
+    }
+  }
+
+  ThemeData _superAdminDarkTheme(ThemeData base) {
+    const scaffold = Color(0xFF1F2431);
+    const surface = Color(0xFF262C3A);
+    const surfaceHigh = Color(0xFF323746);
+    const inputFill = Color(0xFF2B303D);
+    const border = Color(0xFF3A404E);
+    const textPrimary = Color(0xFFE6EAF1);
+    const textSecondary = Color(0xFF9EA5B5);
+    const icon = Color(0xFFE6EAF1);
+    const accent = Color(0xFF0A1E90);
+    const overlay = Color(0x1AFFFFFF);
+
+    return base.copyWith(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: scaffold,
+      canvasColor: scaffold,
+      colorScheme: base.colorScheme.copyWith(
+        brightness: Brightness.dark,
+        background: scaffold,
+        surface: surface,
+        primary: accent,
+        onPrimary: Colors.white,
+        onSurface: textPrimary,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: scaffold,
+        foregroundColor: textPrimary,
+        elevation: 0,
+      ),
+      textTheme: base.textTheme.apply(
+        bodyColor: textPrimary,
+        displayColor: textPrimary,
+      ),
+      iconTheme: IconThemeData(color: icon),
+      cardTheme: const CardThemeData(
+        color: surface,
+        elevation: 0,
+        margin: EdgeInsets.all(12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        filled: true,
+        fillColor: inputFill,
+        hintStyle: TextStyle(color: textSecondary),
+        labelStyle: TextStyle(color: textSecondary),
+        border: OutlineInputBorder(
+          borderSide: BorderSide(color: border),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: border),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white70),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: MaterialStateProperty.all<Color>(accent),
+          foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
+          overlayColor: MaterialStateProperty.all<Color>(overlay),
+          shape: MaterialStateProperty.all(
+            const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
+          ),
+          padding: MaterialStateProperty.all(
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+        ),
+      ),
+      dataTableTheme: DataTableThemeData(
+        headingRowColor: MaterialStateProperty.all(surfaceHigh),
+        dataRowColor: MaterialStateProperty.all(scaffold),
+        headingTextStyle: const TextStyle(
+          color: textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+        dataTextStyle: const TextStyle(color: textPrimary),
+        dividerThickness: 0.8,
+        headingRowHeight: 48,
+      ),
+      snackBarTheme: const SnackBarThemeData(
+        backgroundColor: surfaceHigh,
+        contentTextStyle: TextStyle(color: textPrimary),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   final List<Widget> _pages = [
     Padding(
@@ -31,26 +169,16 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Dashboard",
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: null,
             ),
           ),
           const SizedBox(height: 32),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: const [
-                  AdminDashboardStatsGrid(),
-                  SizedBox(height: 24),
-                  _ChartsSection(),
-                ],
-              ),
-            ),
-          ),
+          Expanded(child: AdminDashboardStatsGrid()),
         ],
       ),
     ),
@@ -77,14 +205,49 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
 
   @override
   Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final isDark = _localDark; // use local dark flag only for SuperAdmin
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final sidebarColor = const Color(0xFF3B4B9B);
+    final sidebarColor = isDark
+        ? const Color(0xFF0E1A60)
+        : const Color(0xFF3B4B9B);
 
-    return Scaffold(
+    Widget _themeToggle({Color? color}) {
+      final iconColor = color ?? (_localDark ? Colors.white : Colors.black87);
+      final bgColor = _localDark ? const Color(0xFF2E3545) : Colors.white;
+      return Container(
+        decoration: BoxDecoration(
+          color: bgColor,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IconButton(
+          icon: Icon(
+            _localDark ? Icons.light_mode : Icons.dark_mode,
+            color: iconColor,
+          ),
+          tooltip: _localDark ? 'Switch to light mode' : 'Switch to dark mode',
+          onPressed: () {
+            setState(() {
+              _localDark = !_localDark; // toggle only for this page
+            });
+            _persistThemePreference();
+          },
+        ),
+      );
+    }
+
+    final scaffold = Scaffold(
       appBar: isMobile
           ? AppBar(
               title: const Text('Admin Panel'),
-              backgroundColor: Colors.indigo.shade100,
+              backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
               leading: Builder(
                 builder: (context) => IconButton(
                   icon: const Icon(Icons.menu),
@@ -92,6 +255,7 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
                 ),
               ),
               actions: [
+                _themeToggle(color: Theme.of(context).iconTheme.color),
                 IconButton(
                   icon: const Icon(Icons.logout),
                   tooltip: 'Logout',
@@ -184,99 +348,29 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
             Positioned(
               top: 16,
               right: 24,
-              child: IconButton(
-                icon: const Icon(Icons.logout, color: Colors.black87),
-                tooltip: 'Logout',
-                onPressed: () => _logout(context),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _themeToggle(),
+                  IconButton(
+                    icon: Icon(
+                      Icons.logout,
+                      color: Theme.of(context).iconTheme.color,
+                    ),
+                    tooltip: 'Logout',
+                    onPressed: () => _logout(context),
+                  ),
+                ],
               ),
             ),
         ],
       ),
     );
-  }
-}
 
-// --- Charts section for Super Admin dashboard ---
-class _ChartsSection extends StatelessWidget {
-  const _ChartsSection();
+    if (isDark) {
+      return Theme(data: _superAdminDarkTheme(baseTheme), child: scaffold);
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    final double width = MediaQuery.of(context).size.width;
-    final bool stackCharts = width < 1000;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (stackCharts) ...[
-          const _Card(
-            title: 'Qaybinta ardayda (qeybo %)',
-            height: 240,
-            child: UsersPieChart(),
-          ),
-          const SizedBox(height: 16),
-          const _Card(
-            title: 'Students per Department',
-            height: 240,
-            child: StudentsPerDepartmentBarChart(),
-          ),
-        
-        ] else ...[
-          Row(
-            children: const [
-              Expanded(
-                child: _Card(
-                  title: 'Qaybinta ardayda (qeybo %)',
-                  height: 240,
-                  child: UsersPieChart(),
-                ),
-              ),
-              SizedBox(width: 16),
-              Expanded(
-                child: _Card(
-                  title: 'Students per Department',
-                  height: 240,
-                  child: StudentsPerDepartmentBarChart(),
-                ),
-              ),
-            ],
-          ),
- 
-        ],
-      ],
-    );
-  }
-}
-
-class _Card extends StatelessWidget {
-  final String title;
-  final Widget child;
-  final double? height;
-
-  const _Card({required this.title, required this.child, this.height});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(height: height ?? 240, child: child),
-        ],
-      ),
-    );
+    return scaffold;
   }
 }

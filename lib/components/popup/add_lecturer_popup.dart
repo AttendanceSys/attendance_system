@@ -1,3 +1,5 @@
+//addd lecturer
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/lecturer.dart';
@@ -39,6 +41,14 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
         ? 400
         : double.infinity;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final containerBg = isDark ? const Color(0xFF262C3A) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF3A404E) : Colors.blue[100]!;
+    final titleColor = isDark ? const Color(0xFFE6EAF1) : null;
+    final cancelTextColor = isDark ? const Color(0xFFE6EAF1) : Colors.black87;
+    final cancelBorderColor = isDark ? const Color(0xFFE6EAF1) : Colors.black54;
+    final saveBg = isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!;
+
     return Dialog(
       elevation: 8,
       backgroundColor: Colors.transparent,
@@ -46,9 +56,9 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
         child: Container(
           width: dialogWidth,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: containerBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.blue[100]!, width: 2),
+            border: Border.all(color: borderColor, width: 2),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.08),
@@ -66,17 +76,18 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
               children: [
                 Text(
                   widget.teacher == null ? "Add Teacher" : "Edit Teacher",
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _username,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Username",
-                    border: OutlineInputBorder(),
+                    border: isDark ? null : const OutlineInputBorder(),
                   ),
                   onChanged: (val) {
                     setState(() => _usernameError = null);
@@ -102,9 +113,9 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _teacherName,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Lecturer Name",
-                    border: OutlineInputBorder(),
+                    border: isDark ? null : const OutlineInputBorder(),
                   ),
                   onChanged: (val) {
                     setState(() => _nameError = null);
@@ -130,9 +141,9 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _facultyId,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Faculty",
-                    border: OutlineInputBorder(),
+                    border: isDark ? null : const OutlineInputBorder(),
                   ),
                   items: widget.facultyNames
                       .map(
@@ -149,7 +160,7 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                   initialValue: _password,
                   decoration: InputDecoration(
                     hintText: "Password",
-                    border: const OutlineInputBorder(),
+                    border: isDark ? null : const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _showPassword ? Icons.visibility : Icons.visibility_off,
@@ -176,16 +187,16 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.black54),
+                          side: BorderSide(color: cancelBorderColor),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
-                        child: const Text(
+                        child: Text(
                           "Cancel",
                           style: TextStyle(
-                            color: Colors.black87,
+                            color: cancelTextColor,
                             fontWeight: FontWeight.w500,
                             fontSize: 16,
                           ),
@@ -230,7 +241,7 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[900],
+                          backgroundColor: saveBg,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),

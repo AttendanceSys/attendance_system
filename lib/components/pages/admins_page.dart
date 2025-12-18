@@ -1,3 +1,4 @@
+//admin page
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/admin.dart';
@@ -280,11 +281,7 @@ class _AdminsPageState extends State<AdminsPage> {
           const SizedBox(height: 8),
           const Text(
             "Admins",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
           Row(
@@ -394,6 +391,9 @@ class _AdminsPageState extends State<AdminsPage> {
   }
 
   Widget _buildDesktopTable() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(64), // No
@@ -416,9 +416,7 @@ class _AdminsPageState extends State<AdminsPage> {
         for (int index = 0; index < _filteredAdmins.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
+              color: _selectedIndex == index ? highlight : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
@@ -441,6 +439,9 @@ class _AdminsPageState extends State<AdminsPage> {
   }
 
   Widget _buildMobileTable() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+
     return Table(
       defaultColumnWidth: const IntrinsicColumnWidth(),
       border: TableBorder(
@@ -458,9 +459,7 @@ class _AdminsPageState extends State<AdminsPage> {
         for (int index = 0; index < _filteredAdmins.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
+              color: _selectedIndex == index ? highlight : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),

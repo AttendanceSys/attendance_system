@@ -1,3 +1,5 @@
+//search bar
+
 import 'package:flutter/material.dart';
 
 class SearchAddBar extends StatelessWidget {
@@ -16,6 +18,11 @@ class SearchAddBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color addBgColor = isDark
+        ? const Color(0xFF0E1A60) // keep dark-mode button as set
+        : const Color(0xFF3B4B9B); // restore original light-mode background
+
     return Row(
       children: [
         // Search Field
@@ -46,7 +53,7 @@ class SearchAddBar extends StatelessWidget {
               style: const TextStyle(color: Colors.white),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3F489E), // Dark blue
+              backgroundColor: addBgColor,
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),

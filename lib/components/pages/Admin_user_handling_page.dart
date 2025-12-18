@@ -1,3 +1,5 @@
+//admin user handling
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user.dart';
@@ -241,48 +243,75 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
     return Column(
       children: [
         // Header (sticky look)
-        Container(
-          color: Colors.grey[100],
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          child: Row(
-            children: const [
-              Expanded(
-                flex: 1,
-                child: Text(
-                  'No',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+        Builder(
+          builder: (context) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final headerBg = isDark
+                ? const Color(0xFF323746)
+                : Colors.grey[100];
+            final headerTextColor = isDark
+                ? const Color(0xFFE6EAF1)
+                : Colors.black87;
+
+            return Container(
+              color: headerBg,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: Text(
+                      'No',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: headerTextColor,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      'Username',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: headerTextColor,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      'Role',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: headerTextColor,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      'Status',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: headerTextColor,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      'Password',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: headerTextColor,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Expanded(
-                flex: 3,
-                child: Text(
-                  'Username',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'Role',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'Status',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                flex: 3,
-                child: Text(
-                  'Password',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
 
         // Flexible area with scrollbar + ListView
@@ -301,10 +330,15 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                 final selected = _selectedIndex == index;
                 final visible = _showPasswordById[user.id] ?? false;
 
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final highlight = isDark
+                    ? const Color(0xFF2E3545)
+                    : Colors.blue.shade50;
+
                 return InkWell(
                   onTap: () => _handleRowTap(index),
                   child: Container(
-                    color: selected ? Colors.blue.shade50 : Colors.transparent,
+                    color: selected ? highlight : Colors.transparent,
                     padding: const EdgeInsets.symmetric(
                       vertical: 12,
                       horizontal: 8,
@@ -367,11 +401,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
           const SizedBox(height: 8),
           const Text(
             "User Handling",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
           Row(

@@ -1,3 +1,5 @@
+//add admin
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/admin.dart';
@@ -39,6 +41,14 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
         ? 400
         : double.infinity;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final containerBg = isDark ? const Color(0xFF262C3A) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF3A404E) : Colors.blue[100]!;
+    final titleColor = isDark ? const Color(0xFFE6EAF1) : null;
+    final cancelTextColor = isDark ? const Color(0xFFE6EAF1) : Colors.black87;
+    final cancelBorderColor = isDark ? const Color(0xFFE6EAF1) : Colors.black54;
+    final saveBg = isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!;
+
     return Dialog(
       elevation: 8,
       backgroundColor: Colors.transparent,
@@ -46,9 +56,9 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
         child: Container(
           width: dialogWidth,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: containerBg,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.blue[100]!, width: 2),
+            border: Border.all(color: borderColor, width: 2),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.08),
@@ -66,17 +76,18 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
               children: [
                 Text(
                   widget.admin == null ? "Add Admin" : "Edit Admin",
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _username,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Username",
-                    border: OutlineInputBorder(),
+                    border: isDark ? null : const OutlineInputBorder(),
                   ),
                   onChanged: (val) {
                     setState(() => _usernameError = null);
@@ -102,9 +113,9 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _fullName,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Full Name",
-                    border: OutlineInputBorder(),
+                    border: isDark ? null : const OutlineInputBorder(),
                   ),
                   onChanged: (val) {
                     setState(() => _fullNameError = null);
@@ -133,9 +144,9 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _facultyId,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Faculty Name",
-                    border: OutlineInputBorder(),
+                    border: isDark ? null : const OutlineInputBorder(),
                   ),
                   items: widget.facultyNames
                       .map(
@@ -152,7 +163,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                   initialValue: _password,
                   decoration: InputDecoration(
                     hintText: "Password",
-                    border: const OutlineInputBorder(),
+                    border: isDark ? null : const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isPasswordHidden
@@ -181,16 +192,16 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.black54),
+                          side: BorderSide(color: cancelBorderColor),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
-                        child: const Text(
+                        child: Text(
                           "Cancel",
                           style: TextStyle(
-                            color: Colors.black87,
+                            color: cancelTextColor,
                             fontWeight: FontWeight.w500,
                             fontSize: 16,
                           ),
@@ -234,7 +245,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[900],
+                          backgroundColor: saveBg,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),

@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
+//faculty page
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/faculty.dart';
 import '../popup/add_faculty_popup.dart';
 import '../cards/searchBar.dart';
+import 'package:flutter/material.dart';
 
 class FacultiesPage extends StatefulWidget {
   const FacultiesPage({super.key});
@@ -196,6 +198,9 @@ class _FacultiesPageState extends State<FacultiesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isDesktop = screenWidth > 800;
 
@@ -207,11 +212,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
           const SizedBox(height: 8),
           const Text(
             "Faculties",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
           Row(
@@ -321,6 +322,9 @@ class _FacultiesPageState extends State<FacultiesPage> {
   }
 
   Widget _buildDesktopTable() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(64), // No
@@ -343,9 +347,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
         for (int index = 0; index < _filteredFaculties.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
+              color: _selectedIndex == index ? highlight : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
@@ -370,6 +372,9 @@ class _FacultiesPageState extends State<FacultiesPage> {
   }
 
   Widget _buildMobileTable() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+
     return Table(
       defaultColumnWidth: const IntrinsicColumnWidth(),
       border: TableBorder(
@@ -387,9 +392,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
         for (int index = 0; index < _filteredFaculties.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
+              color: _selectedIndex == index ? highlight : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),

@@ -1,3 +1,5 @@
+//admin side bar
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/session.dart';
@@ -64,31 +66,19 @@ class _AdminSidebarState extends State<AdminSidebar> {
     final collapsed = widget.collapsed;
     final selectedIndex = widget.selectedIndex;
     final onItemSelected = widget.onItemSelected;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sidebarColor = isDark
+        ? const Color(0xFF0E1A60)
+        : const Color(0xFF3B4B9B);
 
     return Container(
       width: collapsed ? 60 : 220,
-      color: const Color(0xFF3B4B9B),
+      color: sidebarColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 24),
-          // Avatar on top
-          CircleAvatar(
-            radius: collapsed ? 22 : 42,
-            backgroundColor: const Color(0xFF70C2FF),
-            child: Text(
-              (displayName != null && displayName!.isNotEmpty)
-                  ? displayName![0].toUpperCase()
-                  : 'U',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: collapsed ? 18 : 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          // Name beneath avatar (hidden when collapsed)
+          // Profile Section
           if (!collapsed)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -96,13 +86,28 @@ class _AdminSidebarState extends State<AdminSidebar> {
                 displayName ?? 'User',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   overflow: TextOverflow.ellipsis,
                 ),
                 textAlign: TextAlign.center,
               ),
             ),
+          if (!collapsed) const SizedBox(height: 10),
+          CircleAvatar(
+            radius: 25,
+            backgroundColor: const Color(0xFF70C2FF),
+            child: Text(
+              (displayName != null && displayName!.isNotEmpty)
+                  ? displayName![0].toUpperCase()
+                  : 'U',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           const SizedBox(height: 20),
           // Sidebar Items
           Expanded(
@@ -172,11 +177,28 @@ class SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color selectedBg = Colors.white.withOpacity(0.13);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color selectedBg = isDark
+        ? Colors.white.withOpacity(0.13) // keep dark mode as-is
+        : Colors.white.withOpacity(0.25); // restore brighter light selection
     final Color selectedText = Colors.white;
     final Color unselectedText = Colors.white;
     final Color selectedIcon = Colors.white;
     final Color unselectedIcon = Colors.white;
+
+    final overlay = MaterialStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(MaterialState.hovered)) {
+        return isDark
+            ? Colors.white.withOpacity(0.10) // keep subtle dark hover
+            : Colors.white.withOpacity(0.20); // restore brighter light hover
+      }
+      if (states.contains(MaterialState.pressed)) {
+        return isDark
+            ? Colors.white.withOpacity(0.16)
+            : Colors.white.withOpacity(0.28);
+      }
+      return null;
+    });
     return Tooltip(
       message: collapsed ? title : "",
       verticalOffset: 0,
@@ -187,6 +209,7 @@ class SidebarItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         elevation: isSelected ? 2 : 0,
         child: InkWell(
+          overlayColor: overlay,
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           child: Container(

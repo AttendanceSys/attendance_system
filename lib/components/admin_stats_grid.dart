@@ -1,3 +1,5 @@
+//admin stast_grid
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -18,16 +20,20 @@ class AdminDashboardStatsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<int>>(
+    return FutureBuilder(
       future: Future.wait([
-        _fetchCount('faculties'),
-        _fetchCount('teachers'),
-        _fetchCount('admins'),
+        _fetchCount("faculties"),
+        _fetchCount("admins"),
+        _fetchCount("teachers"), // Fetch lecturers/teachers data
       ]),
-      builder: (context, snapshot) {
+      builder: (context, AsyncSnapshot<List<int>> snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
+
+        final facultiesCount = snapshot.data![0];
+        final adminsCount = snapshot.data![1];
+        final lecturersCount = snapshot.data![2];
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -44,30 +50,38 @@ class AdminDashboardStatsGrid extends StatelessWidget {
               crossAxis = 4; // Desktop
             }
 
-            final labels = ['Faculties', 'Teachers', 'Admins'];
+            final labels = ["Faculties", "Admins", "Lecturers"];
             final icons = [
-              Icons.apartment_outlined,
+              Icons.account_tree_outlined,
+              Icons.groups,
               Icons.school_outlined,
-              Icons.admin_panel_settings_outlined,
+            ];
+            final colors = [
+              const Color(0xFFB9EEB6),
+              const Color(0xFFF7B345),
+              const Color(0xFF31B9C1),
+            ];
+            final values = [
+              facultiesCount.toString(),
+              adminsCount.toString(),
+              lecturersCount.toString(),
             ];
 
             return GridView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               itemCount: labels.length,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: crossAxis,
                 crossAxisSpacing: 22,
-                mainAxisSpacing: 16,
-                mainAxisExtent: 90,
+                mainAxisSpacing: 22,
+                childAspectRatio: 1.4,
               ),
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              primary: false,
               itemBuilder: (context, index) {
                 return _StatsCard(
                   label: labels[index],
-                  value: snapshot.data![index].toString(),
+                  value: values[index],
                   icon: icons[index],
+                  color: colors[index],
                 );
               },
             );
@@ -82,77 +96,89 @@ class _StatsCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final Color color;
 
   const _StatsCard({
     required this.icon,
     required this.label,
     required this.value,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, size) {
-        final scale = (size.maxHeight / 130).clamp(0.75, 1.0);
+        final scale = (size.maxHeight / 180).clamp(0.75, 1.0);
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final bgColor = isDark
+            ? (Theme.of(context).cardTheme.color ??
+                  Theme.of(context).colorScheme.surface)
+            : Colors.white;
+        final textColor =
+            Theme.of(context).textTheme.bodyMedium?.color ??
+            (isDark ? Colors.white : Colors.black87);
 
         return ClipRect(
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: bgColor,
               borderRadius: BorderRadius.circular(20 * scale),
-              boxShadow: const [
+              boxShadow: [
                 BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 10,
-                  offset: Offset(0, 4),
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: 22 * scale,
-                vertical: 12 * scale,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+              padding: EdgeInsets.all(16 * scale),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(left: 6 * scale),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 16 * scale,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          SizedBox(height: 6 * scale),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              value,
-                              style: TextStyle(
-                                fontSize: 34 * scale,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                  // ICON BADGE
+                  Container(
+                    padding: EdgeInsets.all(12 * scale),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, size: 30 * scale, color: color),
+                  ),
+
+                  SizedBox(height: 14 * scale),
+
+                  // LABEL
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16 * scale,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
                     ),
                   ),
-                  SizedBox(width: 14 * scale),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6 * scale),
-                    child: Icon(icon, size: 32 * scale, color: Colors.black87),
+
+                  SizedBox(height: 10 * scale),
+
+                  // VALUE — FittedBox prevents overflow
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          value,
+                          style: TextStyle(
+                            fontSize: 38 * scale,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
