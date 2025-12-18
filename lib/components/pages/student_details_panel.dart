@@ -30,14 +30,10 @@ class StudentDetailsPanel extends StatefulWidget {
 class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  bool isEditing = false;
   late List<Map<String, dynamic>> editRecords;
-  late List<Map<String, dynamic>> baseRecords; // snapshot for confirmation
-  String? editError;
 
   // Firestore state
   bool loading = true;
-  String? _docId; // firestore student doc id (if found)
   String? _displayName;
   String? _displayClass;
   String? _loadError;
@@ -46,8 +42,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
   void initState() {
     super.initState();
     // start from parent-supplied records (fallback)
-    editRecords = widget.attendanceRecords.map((e) => Map<String, dynamic>.from(e)).toList();
-    baseRecords = widget.attendanceRecords.map((e) => Map<String, dynamic>.from(e)).toList();
+    editRecords = widget.attendanceRecords
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
     _displayName = widget.studentName;
     _displayClass = widget.studentClass;
     _loadAndCompute();
@@ -61,15 +58,27 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
 
     try {
       // 1) Load student doc (if present) and use courses[] if available
-      bool usedStudentCourses = false;
       try {
-        final q = await _firestore.collection('students').where('username', isEqualTo: widget.studentId).limit(1).get();
+        final q = await _firestore
+            .collection('students')
+            .where('username', isEqualTo: widget.studentId)
+            .limit(1)
+            .get();
         if (q.docs.isNotEmpty) {
           final doc = q.docs.first;
-          _docId = doc.id;
           final data = doc.data();
-          _displayName = (data['fullname'] ?? data['fullName'] ?? data['name'] ?? _displayName)?.toString();
-          _displayClass = (data['className'] ?? data['class_name'] ?? data['class'] ?? _displayClass)?.toString();
+          _displayName =
+              (data['fullname'] ??
+                      data['fullName'] ??
+                      data['name'] ??
+                      _displayName)
+                  ?.toString();
+          _displayClass =
+              (data['className'] ??
+                      data['class_name'] ??
+                      data['class'] ??
+                      _displayClass)
+                  ?.toString();
 
           if (data['courses'] is List && (data['courses'] as List).isNotEmpty) {
             final parsed = <Map<String, dynamic>>[];
@@ -77,28 +86,42 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
               if (c is Map) parsed.add(Map<String, dynamic>.from(c));
             }
             if (parsed.isNotEmpty) {
-              editRecords = parsed.map((e) => Map<String, dynamic>.from(e)).toList();
-              baseRecords = parsed.map((e) => Map<String, dynamic>.from(e)).toList();
-              usedStudentCourses = true;
+              editRecords = parsed
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList();
             }
           }
         } else {
           // try as doc id
-          final doc = await _firestore.collection('students').doc(widget.studentId).get();
+          final doc = await _firestore
+              .collection('students')
+              .doc(widget.studentId)
+              .get();
           if (doc.exists) {
-            _docId = doc.id;
             final data = doc.data();
-            _displayName = (data?['fullname'] ?? data?['fullName'] ?? data?['name'] ?? _displayName)?.toString();
-            _displayClass = (data?['className'] ?? data?['class_name'] ?? data?['class'] ?? _displayClass)?.toString();
-            if (data != null && data['courses'] is List && (data['courses'] as List).isNotEmpty) {
+            _displayName =
+                (data?['fullname'] ??
+                        data?['fullName'] ??
+                        data?['name'] ??
+                        _displayName)
+                    ?.toString();
+            _displayClass =
+                (data?['className'] ??
+                        data?['class_name'] ??
+                        data?['class'] ??
+                        _displayClass)
+                    ?.toString();
+            if (data != null &&
+                data['courses'] is List &&
+                (data['courses'] as List).isNotEmpty) {
               final parsed = <Map<String, dynamic>>[];
               for (final c in List.from(data['courses'])) {
                 if (c is Map) parsed.add(Map<String, dynamic>.from(c));
               }
               if (parsed.isNotEmpty) {
-                editRecords = parsed.map((e) => Map<String, dynamic>.from(e)).toList();
-                baseRecords = parsed.map((e) => Map<String, dynamic>.from(e)).toList();
-                usedStudentCourses = true;
+                editRecords = parsed
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList();
               }
             }
           }
@@ -111,8 +134,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
       if (editRecords.isEmpty) {
         final synthesized = await _buildCoursesFromAttendanceRecords();
         if (synthesized.isNotEmpty) {
-          editRecords = synthesized.map((e) => Map<String, dynamic>.from(e)).toList();
-          baseRecords = synthesized.map((e) => Map<String, dynamic>.from(e)).toList();
+          editRecords = synthesized
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
         }
       }
 
@@ -120,16 +144,14 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
       if (editRecords.isEmpty) {
         final fromSessions = await _buildCoursesFromQrGeneration();
         if (fromSessions.isNotEmpty) {
-          editRecords = fromSessions.map((e) => Map<String, dynamic>.from(e)).toList();
-          baseRecords = fromSessions.map((e) => Map<String, dynamic>.from(e)).toList();
+          editRecords = fromSessions
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
         }
       }
 
       // 4) For each course record compute totals & present counts (overrides/sets record['total'] and record['present'])
       await _computeTotalsForRecords(editRecords);
-
-      // reflect baseRecords as snapshot after computing totals
-      baseRecords = editRecords.map((e) => Map<String, dynamic>.from(e)).toList();
     } catch (e) {
       _loadError = 'Failed to load student data: $e';
     } finally {
@@ -141,16 +163,20 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
 
   // Build course summaries from attendance_records when student.courses absent
   // Groups attendance_records by subject (or 'course' field if present) and computes counts.
-  Future<List<Map<String, dynamic>>> _buildCoursesFromAttendanceRecords() async {
+  Future<List<Map<String, dynamic>>>
+  _buildCoursesFromAttendanceRecords() async {
     try {
-      Query<Map<String, dynamic>> q = _firestore.collection('attendance_records').where('username', isEqualTo: widget.studentId);
+      Query<Map<String, dynamic>> q = _firestore
+          .collection('attendance_records')
+          .where('username', isEqualTo: widget.studentId);
       if (widget.studentClass != null && widget.studentClass!.isNotEmpty) {
         q = q.where('className', isEqualTo: widget.studentClass);
       }
       final snap = await q.get();
       if (snap.docs.isEmpty) return [];
 
-      final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> groups = {};
+      final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      groups = {};
       for (final d in snap.docs) {
         final data = d.data();
         final subj = (data['subject'] ?? data['course'] ?? '').toString();
@@ -173,7 +199,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
           'course': subj,
           'total': total,
           'present': present,
-          'percentage': total > 0 ? "${((present / total) * 100).toStringAsFixed(1)}%" : "0%",
+          'percentage': total > 0
+              ? "${((present / total) * 100).toStringAsFixed(1)}%"
+              : "0%",
         });
       }
       return result;
@@ -195,7 +223,8 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
       if (snap.docs.isEmpty) return [];
 
       // Group sessions by subject
-      final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> groups = {};
+      final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      groups = {};
       for (final d in snap.docs) {
         final subj = (d.data()['subject'] ?? '').toString();
         if (subj.isEmpty) continue;
@@ -207,7 +236,10 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         final subj = entry.key;
         final sessions = entry.value;
         final sessionIds = sessions.map((s) => s.id).toList();
-        final sessionCodes = sessions.map((s) => (s.data()['code']?.toString())).whereType<String>().toList();
+        final sessionCodes = sessions
+            .map((s) => (s.data()['code']?.toString()))
+            .whereType<String>()
+            .toList();
 
         // Count student's attendance docs for these sessions (may be zero)
         final countedAttendanceDocIds = <String>{};
@@ -216,7 +248,12 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         if (sessionIds.isNotEmpty) {
           const batchSize = 10;
           for (var i = 0; i < sessionIds.length; i += batchSize) {
-            final sub = sessionIds.sublist(i, (i + batchSize > sessionIds.length) ? sessionIds.length : i + batchSize);
+            final sub = sessionIds.sublist(
+              i,
+              (i + batchSize > sessionIds.length)
+                  ? sessionIds.length
+                  : i + batchSize,
+            );
             final q2 = await _firestore
                 .collection('attendance_records')
                 .where('username', isEqualTo: widget.studentId)
@@ -230,7 +267,12 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         if (sessionCodes.isNotEmpty) {
           const batchSize = 10;
           for (var i = 0; i < sessionCodes.length; i += batchSize) {
-            final sub = sessionCodes.sublist(i, (i + batchSize > sessionCodes.length) ? sessionCodes.length : i + batchSize);
+            final sub = sessionCodes.sublist(
+              i,
+              (i + batchSize > sessionCodes.length)
+                  ? sessionCodes.length
+                  : i + batchSize,
+            );
             final q3 = await _firestore
                 .collection('attendance_records')
                 .where('username', isEqualTo: widget.studentId)
@@ -243,7 +285,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         final presentCount = countedAttendanceDocIds.length;
         final totalSessions = sessionIds.length;
 
-        final percent = (totalSessions > 0) ? ((presentCount / totalSessions) * 100) : 0.0;
+        final percent = (totalSessions > 0)
+            ? ((presentCount / totalSessions) * 100)
+            : 0.0;
 
         result.add({
           'course': subj,
@@ -261,7 +305,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
   }
 
   // For each record (by course name) compute totals & present counts by matching qr_generation sessions
-  Future<void> _computeTotalsForRecords(List<Map<String, dynamic>> records) async {
+  Future<void> _computeTotalsForRecords(
+    List<Map<String, dynamic>> records,
+  ) async {
     for (final record in records) {
       final courseName = (record['course'] ?? '').toString();
       if (courseName.isEmpty) {
@@ -272,14 +318,22 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
       }
 
       try {
-        Query<Map<String, dynamic>> sessionQuery = _firestore.collection('qr_generation').where('subject', isEqualTo: courseName);
+        Query<Map<String, dynamic>> sessionQuery = _firestore
+            .collection('qr_generation')
+            .where('subject', isEqualTo: courseName);
         if (widget.studentClass != null && widget.studentClass!.isNotEmpty) {
-          sessionQuery = sessionQuery.where('className', isEqualTo: widget.studentClass);
+          sessionQuery = sessionQuery.where(
+            'className',
+            isEqualTo: widget.studentClass,
+          );
         }
         final sessionSnap = await sessionQuery.get();
         final sessionDocs = sessionSnap.docs;
         final sessionIds = sessionDocs.map((d) => d.id).toList();
-        final sessionCodes = sessionDocs.map((d) => (d.data()['code']?.toString())).whereType<String>().toList();
+        final sessionCodes = sessionDocs
+            .map((d) => (d.data()['code']?.toString()))
+            .whereType<String>()
+            .toList();
 
         final countedAttendanceDocIds = <String>{};
 
@@ -287,7 +341,12 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         if (sessionIds.isNotEmpty) {
           const batchSize = 10;
           for (var i = 0; i < sessionIds.length; i += batchSize) {
-            final sub = sessionIds.sublist(i, (i + batchSize > sessionIds.length) ? sessionIds.length : i + batchSize);
+            final sub = sessionIds.sublist(
+              i,
+              (i + batchSize > sessionIds.length)
+                  ? sessionIds.length
+                  : i + batchSize,
+            );
             final q = await _firestore
                 .collection('attendance_records')
                 .where('username', isEqualTo: widget.studentId)
@@ -301,7 +360,12 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         if (sessionCodes.isNotEmpty) {
           const batchSize = 10;
           for (var i = 0; i < sessionCodes.length; i += batchSize) {
-            final sub = sessionCodes.sublist(i, (i + batchSize > sessionCodes.length) ? sessionCodes.length : i + batchSize);
+            final sub = sessionCodes.sublist(
+              i,
+              (i + batchSize > sessionCodes.length)
+                  ? sessionCodes.length
+                  : i + batchSize,
+            );
             final q = await _firestore
                 .collection('attendance_records')
                 .where('username', isEqualTo: widget.studentId)
@@ -315,13 +379,19 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         int presentCount = countedAttendanceDocIds.length;
         final totalSessions = sessionIds.length;
         if (totalSessions == 0) {
-          final q = await _firestore.collection('attendance_records').where('username', isEqualTo: widget.studentId).where('subject', isEqualTo: courseName).get();
+          final q = await _firestore
+              .collection('attendance_records')
+              .where('username', isEqualTo: widget.studentId)
+              .where('subject', isEqualTo: courseName)
+              .get();
           presentCount = q.docs.map((d) => d.id).toSet().length;
         }
 
         record['total'] = totalSessions;
         record['present'] = presentCount;
-        final percent = (record['total'] is num && (record['total'] as num) > 0) ? ((presentCount / (record['total'] as num)) * 100) : 0.0;
+        final percent = (record['total'] is num && (record['total'] as num) > 0)
+            ? ((presentCount / (record['total'] as num)) * 100)
+            : 0.0;
         record['percentage'] = "${percent.toStringAsFixed(1)}%";
       } catch (e) {
         record['total'] = 0;
@@ -334,114 +404,16 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
     setState(() {});
   }
 
-  void _startEdit() {
-    setState(() {
-      isEditing = true;
-      editError = null;
-      baseRecords = editRecords.map((e) => Map<String, dynamic>.from(e)).toList();
-    });
-  }
-
-  void _cancelEdit() {
-    setState(() {
-      isEditing = false;
-      editRecords = baseRecords.map((e) => Map<String, dynamic>.from(e)).toList();
-      editError = null;
-    });
-  }
-
-  Future<void> _saveEdit() async {
-    // Validate present days
-    for (final record in editRecords) {
-      final present = (record["present"] ?? 0) as num;
-      final total = (record["total"] ?? 0) as num;
-      if (present < 0 || present > total) {
-        setState(() {
-          editError = "Present days must be between 0 and total days for each course.";
-        });
-        return;
-      }
-    }
-
-    // Find changed subjects (compare with baseRecords)
-    final changes = <Map<String, dynamic>>[];
-    for (final record in editRecords) {
-      final orig = baseRecords.firstWhere((r) => r["course"] == record["course"], orElse: () => <String, dynamic>{});
-      final origPresent = orig.isNotEmpty ? (orig["present"] ?? 0) as num : 0;
-      final diff = ((record["present"] ?? 0) as num) - origPresent;
-      if (diff != 0) {
-        changes.add({
-          "course": record["course"],
-          "added": diff > 0 ? diff : 0,
-          "removed": diff < 0 ? -diff : 0,
-          "newValue": record["present"],
-          "oldValue": origPresent,
-        });
-      }
-    }
-
-    if (changes.isNotEmpty) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text("Confirm Edit"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Are you sure you want to edit these subjects?"),
-              const SizedBox(height: 10),
-              ...changes.map(
-                (change) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    "${change["course"]}: "
-                    "${change["added"] > 0 ? "+${change["added"]}" : ""}"
-                    "${change["removed"] > 0 ? "-${change["removed"]}" : ""} "
-                    "(was: ${change["oldValue"]}, now: ${change["newValue"]})",
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(child: const Text("Cancel"), onPressed: () => Navigator.of(ctx).pop(false)),
-            ElevatedButton(child: const Text("Confirm"), onPressed: () => Navigator.of(ctx).pop(true)),
-          ],
-        ),
-      );
-      if (confirmed != true) return;
-    }
-
-    // Persist changes to Firestore if we have a docId
-    if (_docId != null) {
-      try {
-        await _firestore.collection('students').doc(_docId).update({
-          'courses': editRecords,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save student data: $e')));
-        return;
-      }
-    } else {
-      // no student doc: still notify parent with edited records (parent may create doc)
-    }
-
-    setState(() {
-      isEditing = false;
-      editError = null;
-      baseRecords = editRecords.map((e) => Map<String, dynamic>.from(e)).toList();
-    });
-
-    widget.onEdit(editRecords);
-  }
+  // Edit actions removed (view-only panel)
 
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return Container(width: double.infinity, margin: const EdgeInsets.symmetric(vertical: 24), child: const Center(child: CircularProgressIndicator()));
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(vertical: 24),
+        child: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     if (_loadError != null) {
@@ -454,7 +426,12 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
             children: [
               Text(_loadError!, style: const TextStyle(color: Colors.red)),
               const SizedBox(height: 12),
-              if (widget.onBack != null) ElevatedButton.icon(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back), label: const Text('Back')),
+              if (widget.onBack != null)
+                ElevatedButton.icon(
+                  onPressed: widget.onBack,
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Back'),
+                ),
             ],
           ),
         ),
@@ -462,118 +439,374 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
     }
 
     // Use DB-backed records when available, otherwise fall back to widget.attendanceRecords
-    final sourceRecords = (editRecords.isNotEmpty) ? (isEditing ? editRecords : baseRecords) : widget.attendanceRecords;
-    final records = isEditing ? editRecords : List<Map<String, dynamic>>.from(sourceRecords.map((e) => Map<String, dynamic>.from(e)));
-    final filteredRecords = records.where((rec) => rec["course"].toString().toLowerCase().contains(widget.searchText.toLowerCase())).toList();
+    final sourceRecords = editRecords.isNotEmpty
+        ? editRecords
+        : widget.attendanceRecords;
+    final records = List<Map<String, dynamic>>.from(
+      sourceRecords.map((e) => Map<String, dynamic>.from(e)),
+    );
+    final filteredRecords = records
+        .where(
+          (rec) => rec["course"].toString().toLowerCase().contains(
+            widget.searchText.toLowerCase(),
+          ),
+        )
+        .toList();
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 24),
-      child: Material(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: BorderRadius.circular(18),
-        elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 38, vertical: 30),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top bar
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  if (widget.onBack != null)
-                    IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack, tooltip: "Back", splashRadius: 24),
-                  Column(
+      color: const Color(0xFFF8FAFC),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.onBack != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 6, bottom: 8),
+              child: IconButton(
+                onPressed: widget.onBack,
+                icon: const Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 18,
+                  color: Color(0xFF2563EB),
+                ),
+                tooltip: 'Back',
+                splashRadius: 22,
+              ),
+            ),
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1100),
+              child: Card(
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                color: Colors.white,
+                shadowColor: Colors.black.withOpacity(0.05),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
+                  ),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('username: ${widget.studentId}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
-                      const SizedBox(height: 8),
-                      Text('full name: ${_displayName ?? widget.studentName ?? ''}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 8),
-                      Text('Class: ${_displayClass ?? widget.studentClass ?? ''}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const Spacer(),
-                  if (!isEditing) ElevatedButton.icon(icon: const Icon(Icons.edit, size: 20), label: const Text('Edit'), onPressed: _startEdit),
-                  if (isEditing)
-                    Row(
-                      children: [
-                        ElevatedButton.icon(icon: const Icon(Icons.save, size: 20), label: const Text('Save'), onPressed: _saveEdit),
-                        const SizedBox(width: 10),
-                        ElevatedButton.icon(icon: const Icon(Icons.cancel, size: 20), label: const Text('Cancel'), onPressed: _cancelEdit),
-                      ],
-                    ),
-                ],
-              ),
-              if (editError != null) Padding(padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8), child: Text(editError!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
-              if (widget.selectedDate != null) Padding(padding: const EdgeInsets.only(left: 48.0, top: 5), child: Text("Date: ${widget.selectedDate!.day}/${widget.selectedDate!.month}/${widget.selectedDate!.year}", style: const TextStyle(fontSize: 16))),
-              const SizedBox(height: 28),
-              if (filteredRecords.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24.0),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.info_outline, size: 48, color: Colors.grey[500]),
-                        const SizedBox(height: 12),
-                        const Text('No attendance records available for this student.', style: TextStyle(fontSize: 16, color: Colors.black54), textAlign: TextAlign.center),
-                        const SizedBox(height: 12),
-                        if (widget.onBack != null) ElevatedButton.icon(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back), label: const Text('Back')),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  width: double.infinity,
-                  constraints: const BoxConstraints(maxWidth: 900),
-                  child: DataTable(
-                    columnSpacing: 60,
-                    headingRowHeight: 48,
-                    dataRowHeight: 44,
-                    columns: const [
-                      DataColumn(label: Text("Courses", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                      DataColumn(label: Text("Total QR", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                      DataColumn(label: Text("Present", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                      DataColumn(label: Text("Percentage (%)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
-                    ],
-                    rows: List.generate(filteredRecords.length, (i) {
-                      final record = filteredRecords[i];
-                      return DataRow(
-                        cells: [
-                          DataCell(Text(record["course"]?.toString() ?? "", style: const TextStyle(fontSize: 16))),
-                          DataCell(Text((record["total"] ?? 0).toString(), style: const TextStyle(fontSize: 16))),
-                          DataCell(
-                            isEditing
-                                ? Row(
-                                    children: [
-                                      IconButton(icon: const Icon(Icons.remove, size: 18), tooltip: "Remove present day", onPressed: () {
-                                        setState(() {
-                                          if ((record["present"] ?? 0) > 0) record["present"] = (record["present"] ?? 0) - 1;
-                                        });
-                                      }),
-                                      Text("${record["present"]}", style: const TextStyle(fontSize: 16)),
-                                      IconButton(icon: const Icon(Icons.add, size: 18), tooltip: "Add present day", onPressed: () {
-                                        setState(() {
-                                          if ((record["present"] ?? 0) < (record["total"] ?? 0)) record["present"] = (record["present"] ?? 0) + 1;
-                                        });
-                                      }),
-                                    ],
-                                  )
-                                : Text(record["present"].toString(), style: const TextStyle(fontSize: 16)),
+                      // Top info block
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundColor: const Color(0xFFE5EDFF),
+                            child: Text(
+                              _initials,
+                              style: const TextStyle(
+                                color: Color(0xFF2563EB),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 18,
+                              ),
+                            ),
                           ),
-                          DataCell(Text((record["percentage"] ?? "0%").toString(), style: const TextStyle(fontSize: 16))),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _displayName ??
+                                      widget.studentName ??
+                                      widget.studentId,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '@${widget.studentId}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Color(0xFF64748B),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.school_outlined,
+                                      size: 18,
+                                      color: Color(0xFF475569),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Class: ${_displayClass ?? widget.studentClass ?? ''}',
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF475569),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: const [
+                                    Icon(
+                                      Icons.menu_book_outlined,
+                                      size: 18,
+                                      color: Color(0xFF475569),
+                                    ),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Student Attendance Overview',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF475569),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
-                      );
-                    }),
+                      ),
+                      const SizedBox(height: 24),
+                      const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Attendance Summary',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF0F172A),
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (filteredRecords.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24.0),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  size: 56,
+                                  color: Colors.grey[500],
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'No attendance records available for this student.',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Color(0xFF6D6D6D),
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 16),
+                                if (widget.onBack != null)
+                                  OutlinedButton.icon(
+                                    onPressed: widget.onBack,
+                                    icon: const Icon(
+                                      Icons.arrow_back_ios_new,
+                                      size: 16,
+                                    ),
+                                    label: const Text('Back'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF2563EB),
+                                      side: const BorderSide(
+                                        color: Color(0xFF2563EB),
+                                        width: 1.1,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 10,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: DataTable(
+                            columnSpacing: 48,
+                            headingRowHeight: 46,
+                            dataRowHeight: 44,
+                            headingRowColor: MaterialStateProperty.all(
+                              const Color(0xFFF1F5F9),
+                            ),
+                            dataRowColor: MaterialStateProperty.resolveWith(
+                              (states) => states.contains(MaterialState.hovered)
+                                  ? const Color(0xFFF8FAFC)
+                                  : Colors.white,
+                            ),
+                            columns: const [
+                              DataColumn(
+                                label: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6.0),
+                                  child: Text(
+                                    "Course",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6.0),
+                                  child: Text(
+                                    "Total QR",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6.0),
+                                  child: Text(
+                                    "Present",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 6.0),
+                                  child: Text(
+                                    "Percentage",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            rows: List.generate(filteredRecords.length, (i) {
+                              final record = filteredRecords[i];
+                              final course = record["course"]?.toString() ?? "";
+                              final total = (record["total"] ?? 0).toString();
+                              final present = (record["present"] ?? 0)
+                                  .toString();
+                              final percent = (record["percentage"] ?? "0%")
+                                  .toString();
+                              return DataRow(
+                                cells: [
+                                  DataCell(
+                                    Text(
+                                      course,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      total,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF1F2937),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    Text(
+                                      present,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF1F2937),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(_percentBadge(percent)),
+                                ],
+                              );
+                            }),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
+  }
+
+  String get _initials {
+    final source = (_displayName ?? widget.studentName ?? widget.studentId)
+        .trim();
+    if (source.isEmpty) return "?";
+    final parts = source.split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  Widget _percentBadge(String value) {
+    final pct = _parsePercent(value);
+    Color bg;
+    Color fg;
+    if (pct >= 90) {
+      bg = const Color(0xFFEFFAF3);
+      fg = const Color(0xFF16A34A);
+    } else if (pct >= 75) {
+      bg = const Color(0xFFFEF7E8);
+      fg = const Color(0xFFF59E0B);
+    } else {
+      bg = const Color(0xFFFEECEC);
+      fg = const Color(0xFFDC2626);
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        value,
+        style: TextStyle(color: fg, fontWeight: FontWeight.w700, fontSize: 13),
+      ),
+    );
+  }
+
+  double _parsePercent(String value) {
+    final cleaned = value.replaceAll('%', '').trim();
+    return double.tryParse(cleaned) ?? 0.0;
   }
 }

@@ -4,6 +4,7 @@ import '../components/pages/teacher_qr_generation_page.dart';
 import '../components/pages/teacher_attendance_page.dart';
 import '../components/popup/logout_confirmation_popup.dart'; // <-- reusable popup
 import 'login_screen.dart';
+
 class TeacherMainPage extends StatefulWidget {
   const TeacherMainPage({super.key});
 
@@ -36,11 +37,11 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
   Future<void> _logout(BuildContext context) async {
     final confirmed = await showLogoutConfirmationPopup(context);
     if (confirmed == true) {
-       Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
   }
 
   @override
@@ -116,7 +117,21 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
                   ),
                 ),
               if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
-              Expanded(child: pages[selectedIndex]),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {
+                    // If the sidebar is expanded (collapsed == false), collapse it when
+                    // the user taps the main content / blank area.
+                    if (!collapsed) {
+                      setState(() {
+                        collapsed = true;
+                      });
+                    }
+                  },
+                  child: pages[selectedIndex],
+                ),
+              ),
             ],
           ),
           // Desktop/Tablet logout button

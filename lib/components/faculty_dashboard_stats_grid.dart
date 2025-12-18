@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../components/charts/line_chart.dart' as charts;
+import '../components/charts/bar_chart.dart' as charts;
+import '../components/charts/area_chart.dart' as charts;
 import '../services/session.dart';
 
 class DashboardStatsGrid extends StatelessWidget {
@@ -21,75 +24,142 @@ class DashboardStatsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: FutureBuilder<List<int>>(
-        future: Future.wait([
-          _fetchCount('departments'),
-          _fetchCount('courses'),
-          _fetchCount('classes'),
-          _fetchCount('students'),
-        ]),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return FutureBuilder<List<int>>(
+      future: Future.wait([
+        _fetchCount('departments'),
+        _fetchCount('courses'),
+        _fetchCount('classes'),
+        _fetchCount('students'),
+      ]),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              // RESPONSIVE BREAKPOINTS
-              final width = constraints.maxWidth;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // RESPONSIVE BREAKPOINTS
+            final width = constraints.maxWidth;
 
-              int crossAxis;
-              if (width < 550) {
-                crossAxis = 1; // Mobile
-              } else if (width < 900) {
-                crossAxis = 2; // Tablet Portrait
-              } else if (width < 1300) {
-                crossAxis = 3; // Tablet Landscape
-              } else {
-                crossAxis = 4; // Desktop
-              }
+            int crossAxis;
+            if (width < 550) {
+              crossAxis = 1; // Mobile
+            } else if (width < 900) {
+              crossAxis = 2; // Tablet Portrait
+            } else if (width < 1300) {
+              crossAxis = 3; // Tablet Landscape
+            } else {
+              crossAxis = 4; // Desktop
+            }
 
-              return GridView.builder(
-                padding: const EdgeInsets.all(20),
-                itemCount: 4,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxis,
-                  crossAxisSpacing: 22,
-                  mainAxisSpacing: 22,
-                  childAspectRatio: 1.4,
+            // Build KPI grid + charts below
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: 4,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxis,
+                    crossAxisSpacing: 22,
+                    mainAxisSpacing: 16,
+                    mainAxisExtent: 90,
+                  ),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  primary: false,
+                  itemBuilder: (context, index) {
+                    final labels = [
+                      "Departments",
+                      "Courses",
+                      "Classes",
+                      "Students",
+                    ];
+                    final icons = [
+                      Icons.account_tree_outlined,
+                      Icons.menu_book_outlined,
+                      Icons.groups_2_outlined,
+                      Icons.people_alt_outlined,
+                    ];
+                    final colors = [
+                      Colors.blue,
+                      Colors.indigo,
+                      Colors.teal,
+                      Colors.orange,
+                    ];
+
+                    return _StatsCard(
+                      label: labels[index],
+                      value: snapshot.data![index].toString(),
+                      icon: icons[index],
+                      color: colors[index],
+                    );
+                  },
                 ),
-                itemBuilder: (context, index) {
-                  final labels = [
-                    "Departments",
-                    "Courses",
-                    "Classes",
-                    "Students",
-                  ];
-                  final icons = [
-                    Icons.account_tree_outlined,
-                    Icons.menu_book_outlined,
-                    Icons.groups_2_outlined,
-                    Icons.people_alt_outlined,
-                  ];
-                  final colors = [
-                    Colors.blue,
-                    Colors.indigo,
-                    Colors.teal,
-                    Colors.orange,
-                  ];
+                const SizedBox(height: 24),
+                // Charts section matching super admin style
+                Row(
+                  children: const [
+                    Expanded(
+                      child: _ChartCard(
+                        title: 'Growth (Monthly)',
+                        height: 220,
+                        child: charts.LineGrowthChart(),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: _ChartCard(
+                        title: 'Activity Comparison',
+                        height: 220,
+                        child: charts.FacultyActivityBarChart(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const _ChartCard(
+                  title: 'Usage Rate',
+                  height: 320,
+                  child: charts.AttendanceAreaChart(),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
 
-                  return _StatsCard(
-                    label: labels[index],
-                    value: snapshot.data![index].toString(),
-                    icon: icons[index],
-                    color: colors[index],
-                  );
-                },
-              );
-            },
-          );
-        },
+class _ChartCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+  final double? height;
+
+  const _ChartCard({required this.title, required this.child, this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(height: height ?? 240, child: child),
+        ],
       ),
     );
   }
@@ -112,7 +182,7 @@ class _StatsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, size) {
-        final scale = (size.maxHeight / 180).clamp(0.75, 1.0);
+        final scale = (size.maxHeight / 130).clamp(0.75, 1.0);
 
         return ClipRect(
           child: Container(
@@ -128,52 +198,53 @@ class _StatsCard extends StatelessWidget {
               ],
             ),
             child: Padding(
-              padding: EdgeInsets.all(16 * scale),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: EdgeInsets.symmetric(
+                horizontal: 22 * scale,
+                vertical: 12 * scale,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // ICON BADGE
-                  Container(
-                    padding: EdgeInsets.all(12 * scale),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(icon, size: 30 * scale, color: color),
-                  ),
-
-                  SizedBox(height: 14 * scale),
-
-                  // LABEL
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16 * scale,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-
-                  SizedBox(height: 10 * scale),
-
-                  // VALUE — FittedBox prevents overflow
+                  // LEFT: LABEL + VALUE
                   Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomLeft,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          value,
-                          style: TextStyle(
-                            fontSize: 38 * scale,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 6 * scale),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 18 * scale,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
                           ),
-                        ),
+                          SizedBox(height: 4 * scale),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              value,
+                              style: TextStyle(
+                                fontSize: 34 * scale,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                  ),
+
+                  // RIGHT: ICON
+                  SizedBox(width: 14 * scale),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6 * scale),
+                    child: Icon(icon, size: 38 * scale, color: Colors.black87),
                   ),
                 ],
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:attendance_system/screens/super_admin_page.dart';
 import 'package:attendance_system/screens/faculty_admin_page.dart';
 // <-- Import your teacher page!
@@ -26,6 +27,12 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
   bool _isLoggingIn = false;
   bool _obscurePassword = true;
+
+  bool _isMobilePlatform() {
+    if (kIsWeb) return false;
+    final p = defaultTargetPlatform;
+    return p == TargetPlatform.android || p == TargetPlatform.iOS;
+  }
 
   // Shared text styles
   static const TextStyle _headerStyle = TextStyle(
@@ -127,27 +134,54 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       Session.name = displayName;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-      await Future.delayed(const Duration(milliseconds: 700));
 
       if (role == 'Super admin') {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
+        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const SuperAdminPage()),
         );
       } else if (role == 'admin') {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
+        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const FacultyAdminPage()),
         );
       } else if (role == 'teacher') {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
+        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const TeacherMainPage()),
         );
       } else if (role == 'student') {
+        if (!_isMobilePlatform()) {
+          setState(() {
+            _errorMessage =
+                'Student login is allowed only on mobile (Android/iOS).';
+            _isLoggingIn = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Student login is allowed only on mobile (Android/iOS).',
+              ),
+            ),
+          );
+          return;
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
+        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(

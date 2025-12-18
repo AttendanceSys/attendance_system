@@ -17,6 +17,7 @@ import 'dart:convert';
 // - Replace your existing lib/components/pages/timetable_page.dart with this file.
 
 import 'dart:convert';
+import '../cards/searchBar.dart';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -2035,36 +2036,33 @@ class _TimetablePageState extends State<TimetablePage> {
     final canExport = canDelete || showLecturerList;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Time Table'),
-        foregroundColor: Colors.black,
-      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.all(32.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search Time Table...',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
+              const SizedBox(height: 8),
+              const Text(
+                'Time Table',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
+              ),
+              const SizedBox(height: 16),
+              SearchAddBar(
+                hintText: 'Search Time Table...',
+                buttonText: '', // hide add button; we already have one below
+                onAddPressed: () {},
                 onChanged: (v) => setState(() => searchText = v),
               ),
               const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   ElevatedButton.icon(
                     icon: const Icon(Icons.add, size: 18),
@@ -2138,294 +2136,283 @@ class _TimetablePageState extends State<TimetablePage> {
                       await _applyCreatePayload(payload);
                     },
                   ),
-                  Row(
-                    children: [
-                      SizedBox(
-                        height: 36,
-                        child: OutlinedButton.icon(
-                          icon: const Icon(
-                            Icons.refresh,
-                            size: 18,
-                            color: Colors.purple,
-                          ),
-                          label: const Text(
-                            'Reload',
-                            style: TextStyle(color: Colors.purple),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.purple),
-                            foregroundColor: Colors.purple,
-                          ),
-                          onPressed: () async {
-                            setState(() {
-                              selectedDepartment = null;
-                              selectedClass = null;
-                              selectedLecturer = null;
-                              selectedCourse = null;
-                              _classes = [];
-                              _teachers = [];
-                              _coursesForSelectedClass = [];
-                              timetableData.clear();
-                              classPeriods.clear();
-                              spans.clear();
-                              editingEnabled = false;
-                            });
-                            await _loadDepartments();
-                            // teachers/courses reload after re-selection
-                          },
-                        ),
+                  SizedBox(
+                    height: 36,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(
+                        Icons.refresh,
+                        size: 18,
+                        color: Colors.purple,
                       ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width:
-                            100, // Adjusted width for consistency with the delete button
-                        height: 36,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                          ),
-                          onPressed: !canEdit
-                              ? null
-                              : () => setState(
-                                  () => editingEnabled = !editingEnabled,
-                                ),
-                          child: Text(
-                            editingEnabled ? "Done" : "Edit",
-                            style: const TextStyle(
-                              fontSize: 15,
-                              color: Colors.white,
+                      label: const Text(
+                        'Reload',
+                        style: TextStyle(color: Colors.purple),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.purple),
+                        foregroundColor: Colors.purple,
+                      ),
+                      onPressed: () async {
+                        setState(() {
+                          selectedDepartment = null;
+                          selectedClass = null;
+                          selectedLecturer = null;
+                          selectedCourse = null;
+                          _classes = [];
+                          _teachers = [];
+                          _coursesForSelectedClass = [];
+                          timetableData.clear();
+                          classPeriods.clear();
+                          spans.clear();
+                          editingEnabled = false;
+                        });
+                        await _loadDepartments();
+                        // teachers/courses reload after re-selection
+                      },
+                    ),
+                  ),
+                  SizedBox(
+                    width: 100,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                      ),
+                      onPressed: !canEdit
+                          ? null
+                          : () => setState(
+                              () => editingEnabled = !editingEnabled,
                             ),
-                          ),
+                      child: Text(
+                        editingEnabled ? "Done" : "Edit",
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Colors.white,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 100, // Adjusted width for better visibility
-                        height: 36,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                          ),
-                          onPressed: selectedClass == null
-                              ? null
-                              : () async {
-                                  final classDisplayName =
-                                      await _resolveClassDisplayName(
-                                        selectedClass!,
-                                      );
-
-                                  final confirmDelete = await showDialog<bool>(
-                                    context: context,
-                                    builder: (ctx) => AlertDialog(
-                                      title: const Text('Delete Timetable'),
-                                      content: Text(
-                                        'Are you sure you want to delete the timetable for class "$classDisplayName"?',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(ctx, false),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(ctx, true),
-                                          child: const Text('Delete'),
-                                        ),
-                                      ],
-                                    ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 100,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      onPressed: selectedClass == null
+                          ? null
+                          : () async {
+                              final classDisplayName =
+                                  await _resolveClassDisplayName(
+                                    selectedClass!,
                                   );
 
-                                  if (confirmDelete == true) {
-                                    _deleteTimetable(deleteEntireClass: true);
-                                  }
-                                },
-                          child: const Text(
-                            "Delete",
-                            style: TextStyle(fontSize: 15, color: Colors.white),
-                          ),
-                        ),
+                              final confirmDelete = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Delete Timetable'),
+                                  content: Text(
+                                    'Are you sure you want to delete the timetable for class "$classDisplayName"?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirmDelete == true) {
+                                _deleteTimetable(deleteEntireClass: true);
+                              }
+                            },
+                      child: const Text(
+                        "Delete",
+                        style: TextStyle(fontSize: 15, color: Colors.white),
                       ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Export PDF',
-                        onPressed: canExport ? _exportPdfFlow : null,
-                        icon: const Icon(Icons.picture_as_pdf_outlined),
-                      ),
-                    ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Export PDF',
+                    onPressed: canExport ? _exportPdfFlow : null,
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    // Department dropdown
-                    Container(
-                      constraints: const BoxConstraints(
-                        minWidth: 130,
-                        maxWidth: 240,
-                      ),
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          isDense: true,
-                          filled: true,
-                          fillColor: Colors.white,
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  // Department dropdown
+                  Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 130,
+                      maxWidth: 240,
+                    ),
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
                         ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            hint: _loadingDeps
-                                ? const Text('Loading...')
-                                : const Text('Department'),
-                            isExpanded: true,
-                            value: selectedDepartment,
-                            items: _departments
-                                .map(
-                                  (d) => DropdownMenuItem<String>(
-                                    value: d['id'] as String,
-                                    child: Text(d['name'] as String),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) async {
-                              setState(() {
-                                selectedDepartment = v;
-                                selectedClass = null;
-                                _classes = [];
-                                // clear previous lecturer selection when department changes
-                                selectedLecturer = null;
-                                _teachers = [];
-                              });
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        isDense: true,
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          hint: _loadingDeps
+                              ? const Text('Loading...')
+                              : const Text('Department'),
+                          isExpanded: true,
+                          value: selectedDepartment,
+                          items: _departments
+                              .map(
+                                (d) => DropdownMenuItem<String>(
+                                  value: d['id'] as String,
+                                  child: Text(d['name'] as String),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) async {
+                            setState(() {
+                              selectedDepartment = v;
+                              selectedClass = null;
+                              _classes = [];
+                              // clear previous lecturer selection when department changes
+                              selectedLecturer = null;
+                              _teachers = [];
+                            });
 
-                              dynamic loaderArg;
-                              try {
-                                final found = _departments.firstWhere(
-                                  (d) => d['id'] == v,
-                                  orElse: () => <String, dynamic>{},
-                                );
-                                if (found.isNotEmpty &&
-                                    found['ref'] is DocumentReference)
-                                  loaderArg = found['ref'];
-                                else
-                                  loaderArg = v;
-                              } catch (_) {
+                            dynamic loaderArg;
+                            try {
+                              final found = _departments.firstWhere(
+                                (d) => d['id'] == v,
+                                orElse: () => <String, dynamic>{},
+                              );
+                              if (found.isNotEmpty &&
+                                  found['ref'] is DocumentReference)
+                                loaderArg = found['ref'];
+                              else
                                 loaderArg = v;
-                              }
+                            } catch (_) {
+                              loaderArg = v;
+                            }
 
-                              if (loaderArg != null)
-                                await _loadClassesForDepartment(loaderArg);
-                              // ensure teachers reflect current session/faculty
+                            if (loaderArg != null)
+                              await _loadClassesForDepartment(loaderArg);
+                            // ensure teachers reflect current session/faculty
+                            await _loadTeachers();
+                            await _handleSelectionChangeSafe();
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Class dropdown
+                  Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 130,
+                      maxWidth: 240,
+                    ),
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        isDense: true,
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          hint: _loadingClasses
+                              ? const Text('Loading...')
+                              : const Text('Class'),
+                          isExpanded: true,
+                          value: selectedClass,
+                          items: _classes
+                              .map(
+                                (c) => DropdownMenuItem<String>(
+                                  value: c['id'] as String,
+                                  child: Text(c['name'] as String),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) async {
+                            setState(() {
+                              selectedClass = v;
+                            });
+                            try {
+                              // Ensure lecturer list refreshes after class selection
                               await _loadTeachers();
                               await _handleSelectionChangeSafe();
-                            },
-                          ),
+                            } catch (err, st) {
+                              debugPrint(
+                                'Error in selection change after class select: $err\n$st',
+                              );
+                            }
+                          },
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    // Class dropdown
-                    Container(
-                      constraints: const BoxConstraints(
-                        minWidth: 130,
-                        maxWidth: 240,
-                      ),
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          isDense: true,
-                          filled: true,
-                          fillColor: Colors.white,
+                  ),
+                  // Lecturer dropdown
+                  Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 130,
+                      maxWidth: 240,
+                    ),
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 5,
                         ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            hint: _loadingClasses
-                                ? const Text('Loading...')
-                                : const Text('Class'),
-                            isExpanded: true,
-                            value: selectedClass,
-                            items: _classes
-                                .map(
-                                  (c) => DropdownMenuItem<String>(
-                                    value: c['id'] as String,
-                                    child: Text(c['name'] as String),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) async {
-                              setState(() {
-                                selectedClass = v;
-                              });
-                              try {
-                                // Ensure lecturer list refreshes after class selection
-                                await _loadTeachers();
-                                await _handleSelectionChangeSafe();
-                              } catch (err, st) {
-                                debugPrint(
-                                  'Error in selection change after class select: $err\n$st',
-                                );
-                              }
-                            },
-                          ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        isDense: true,
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          hint: _loadingTeachers
+                              ? const Text('Loading...')
+                              : const Text('Lecturer'),
+                          isExpanded: true,
+                          value: selectedLecturer,
+                          items: _teachers
+                              .map(
+                                (t) => DropdownMenuItem<String>(
+                                  value: t['name'] as String,
+                                  child: Text(t['name'] as String),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) =>
+                              setState(() => selectedLecturer = v),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    // Lecturer dropdown
-                    Container(
-                      constraints: const BoxConstraints(
-                        minWidth: 130,
-                        maxWidth: 240,
-                      ),
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          isDense: true,
-                          filled: true,
-                          fillColor: Colors.white,
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            hint: _loadingTeachers
-                                ? const Text('Loading...')
-                                : const Text('Lecturer'),
-                            isExpanded: true,
-                            value: selectedLecturer,
-                            items: _teachers
-                                .map(
-                                  (t) => DropdownMenuItem<String>(
-                                    value: t['name'] as String,
-                                    child: Text(t['name'] as String),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => selectedLecturer = v),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               Expanded(

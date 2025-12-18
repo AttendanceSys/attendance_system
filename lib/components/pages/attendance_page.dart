@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:attendance_system/services/session.dart';
 import 'student_details_panel.dart';
+import '../cards/searchBar.dart';
 
 class AttendanceUnifiedPage extends StatefulWidget {
   const AttendanceUnifiedPage({super.key});
@@ -461,116 +462,128 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     final showStudentDetails = selectedUsername != null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Attendance")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              decoration: InputDecoration(
-                hintText: "Search Attendance...",
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 0,
-                  horizontal: 16,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 8),
+              const Text(
+                'Attendance',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
               ),
-              onChanged: (value) => setState(() => searchText = value),
-            ),
-            const SizedBox(height: 12),
-            _FiltersRow(
-              departments: departments,
-              classes: classes,
-              courses: courses,
-              selectedDepartment: selectedDepartment,
-              selectedClass: selectedClass,
-              selectedCourse: selectedCourse,
-              selectedDate: selectedDate,
-              onChanged:
-                  ({
-                    String? department,
-                    String? className,
-                    String? course,
-                    DateTime? date,
-                  }) {
-                    setState(() {
-                      if (department != null &&
-                          department != selectedDepartment) {
-                        selectedDepartment = department;
-                        selectedClass = null;
-                        selectedCourse = null;
-                        classesForDept = [];
-                        coursesForClass = [];
-                        classSectionStudents = {};
-                        _loadClassesForDepartment(department);
-                      }
-                      if (className != null && className != selectedClass) {
-                        selectedClass = className;
-                        selectedCourse = null;
-                        coursesForClass = [];
-                        classSectionStudents = {};
-                        _loadSubjectsForClass(className);
-                      }
-                      if (course != null && course != selectedCourse) {
-                        selectedCourse = course;
-                        classSectionStudents = {};
-                        if (selectedDepartment != null &&
-                            selectedClass != null &&
-                            selectedCourse != null) {
-                          _fetchStudentsForSelection();
+              const SizedBox(height: 16),
+              SearchAddBar(
+                hintText: 'Search Attendance...',
+                buttonText: '',
+                onAddPressed: () {},
+                onChanged: (value) => setState(() => searchText = value),
+              ),
+              const SizedBox(height: 10),
+              _FiltersRow(
+                departments: departments,
+                classes: classes,
+                courses: courses,
+                selectedDepartment: selectedDepartment,
+                selectedClass: selectedClass,
+                selectedCourse: selectedCourse,
+                loadingDepartments: loadingDepartments,
+                loadingClasses: loadingClasses,
+                loadingCourses: loadingSubjects,
+                onChanged:
+                    ({String? department, String? className, String? course}) {
+                      setState(() {
+                        if (department != null &&
+                            department != selectedDepartment) {
+                          selectedDepartment = department;
+                          selectedClass = null;
+                          selectedCourse = null;
+                          classesForDept = [];
+                          coursesForClass = [];
+                          classSectionStudents = {};
+                          _loadClassesForDepartment(department);
                         }
-                      }
-                      if (date != null) selectedDate = date;
-                    });
-                  },
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: showTable
-                  ? _AttendanceTable(
-                      department: selectedDepartment ?? '',
-                      className: selectedClass ?? '',
-                      course: selectedCourse ?? '',
-                      date: selectedDate,
-                      searchText: searchText,
-                      classSectionStudents: classSectionStudents,
-                      onStudentSelected: (studentId) {
-                        final sectionsMap =
-                            classSectionStudents[selectedClass] ?? {};
-                        String? foundSection;
-                        Map<String, dynamic>? student;
-                        for (final entry in sectionsMap.entries) {
-                          final s = entry.value.firstWhere(
-                            (it) => it['username'] == studentId,
-                            orElse: () => <String, dynamic>{},
-                          );
-                          if (s.isNotEmpty) {
-                            foundSection = entry.key;
-                            student = s;
-                            break;
+                        if (className != null && className != selectedClass) {
+                          selectedClass = className;
+                          selectedCourse = null;
+                          coursesForClass = [];
+                          classSectionStudents = {};
+                          _loadSubjectsForClass(className);
+                        }
+                        if (course != null && course != selectedCourse) {
+                          selectedCourse = course;
+                          classSectionStudents = {};
+                          if (selectedDepartment != null &&
+                              selectedClass != null &&
+                              selectedCourse != null) {
+                            _fetchStudentsForSelection();
                           }
                         }
-                        if (student == null || student.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Student data not available.'),
-                            ),
-                          );
-                          return;
-                        }
-                        setState(() {
-                          selectedUsername = studentId;
-                          selectedStudentName = student!['name']?.toString();
-                          selectedStudentClass =
-                              '$selectedClass${(foundSection != null && foundSection != "None") ? foundSection : ""}';
-                        });
-                      },
-                      onStatusChanged: (studentId, newStatus) async {
-                        setState(() {
+                      });
+                    },
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: showTable
+                    ? _AttendanceTable(
+                        department: selectedDepartment ?? '',
+                        className: selectedClass ?? '',
+                        course: selectedCourse ?? '',
+                        date: selectedDate,
+                        searchText: searchText,
+                        classSectionStudents: classSectionStudents,
+                        onStudentSelected: (studentId) {
+                          final sectionsMap =
+                              classSectionStudents[selectedClass] ?? {};
+                          String? foundSection;
+                          Map<String, dynamic>? student;
+                          for (final entry in sectionsMap.entries) {
+                            final s = entry.value.firstWhere(
+                              (it) => it['username'] == studentId,
+                              orElse: () => <String, dynamic>{},
+                            );
+                            if (s.isNotEmpty) {
+                              foundSection = entry.key;
+                              student = s;
+                              break;
+                            }
+                          }
+                          if (student == null || student.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Student data not available.'),
+                              ),
+                            );
+                            return;
+                          }
+                          setState(() {
+                            selectedUsername = studentId;
+                            selectedStudentName = student!['name']?.toString();
+                            selectedStudentClass =
+                                '$selectedClass${(foundSection != null && foundSection != "None") ? foundSection : ""}';
+                          });
+                        },
+                        onStatusChanged: (studentId, newStatus) async {
+                          setState(() {
+                            final sectionsMap =
+                                classSectionStudents[selectedClass] ?? {};
+                            for (final list in sectionsMap.values) {
+                              final student = list.firstWhere(
+                                (s) => s['username'] == studentId,
+                                orElse: () => <String, dynamic>{},
+                              );
+                              if (student.isNotEmpty) {
+                                student['status'] = newStatus;
+                                break;
+                              }
+                            }
+                          });
+                          String? docId;
                           final sectionsMap =
                               classSectionStudents[selectedClass] ?? {};
                           for (final list in sectionsMap.values) {
@@ -579,62 +592,49 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                               orElse: () => <String, dynamic>{},
                             );
                             if (student.isNotEmpty) {
-                              student['status'] = newStatus;
+                              docId = student['docId']?.toString();
                               break;
                             }
                           }
-                        });
-                        String? docId;
-                        final sectionsMap =
-                            classSectionStudents[selectedClass] ?? {};
-                        for (final list in sectionsMap.values) {
-                          final student = list.firstWhere(
-                            (s) => s['username'] == studentId,
-                            orElse: () => <String, dynamic>{},
-                          );
-                          if (student.isNotEmpty) {
-                            docId = student['docId']?.toString();
-                            break;
-                          }
-                        }
-                        if (docId != null) {
-                          await _updateStudentStatusInFirestore(
-                            docId,
-                            newStatus,
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Could not find student document to update.',
+                          if (docId != null) {
+                            await _updateStudentStatusInFirestore(
+                              docId,
+                              newStatus,
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Could not find student document to update.',
+                                ),
                               ),
-                            ),
-                          );
-                        }
-                      },
-                    )
-                  : showStudentDetails
-                  ? StudentDetailsPanel(
-                      studentId: selectedUsername!,
-                      studentName: selectedStudentName,
-                      studentClass: selectedStudentClass,
-                      selectedDate: selectedDate,
-                      attendanceRecords: _getRecordsForSelectedStudent(),
-                      searchText: searchText,
-                      onBack: () {
-                        setState(() {
-                          selectedUsername = null;
-                          selectedStudentName = null;
-                          selectedStudentClass = null;
-                        });
-                      },
-                      onEdit: _updateAttendanceForStudent,
-                    )
-                  : Center(
-                      child: Text("Select all filters to view attendance"),
-                    ),
-            ),
-          ],
+                            );
+                          }
+                        },
+                      )
+                    : showStudentDetails
+                    ? StudentDetailsPanel(
+                        studentId: selectedUsername!,
+                        studentName: selectedStudentName,
+                        studentClass: selectedStudentClass,
+                        selectedDate: selectedDate,
+                        attendanceRecords: _getRecordsForSelectedStudent(),
+                        searchText: searchText,
+                        onBack: () {
+                          setState(() {
+                            selectedUsername = null;
+                            selectedStudentName = null;
+                            selectedStudentClass = null;
+                          });
+                        },
+                        onEdit: _updateAttendanceForStudent,
+                      )
+                    : Center(
+                        child: Text("Select all filters to view attendance"),
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -659,13 +659,10 @@ class _FiltersRow extends StatelessWidget {
   final List<String> classes;
   final List<String> courses;
   final String? selectedDepartment, selectedClass, selectedCourse;
-  final DateTime? selectedDate;
-  final Function({
-    String? department,
-    String? className,
-    String? course,
-    DateTime? date,
-  })
+  final bool loadingDepartments;
+  final bool loadingClasses;
+  final bool loadingCourses;
+  final Function({String? department, String? className, String? course})
   onChanged;
 
   const _FiltersRow({
@@ -675,7 +672,9 @@ class _FiltersRow extends StatelessWidget {
     this.selectedDepartment,
     this.selectedClass,
     this.selectedCourse,
-    this.selectedDate,
+    required this.loadingDepartments,
+    required this.loadingClasses,
+    required this.loadingCourses,
     required this.onChanged,
   });
 
@@ -686,26 +685,25 @@ class _FiltersRow extends StatelessWidget {
       runSpacing: 12,
       children: [
         _DropdownFilter(
-          hint: "Dep",
+          hint: "Department",
           value: selectedDepartment,
           items: departments,
+          isLoading: loadingDepartments,
           onChanged: (val) => onChanged(department: val),
         ),
         _DropdownFilter(
           hint: "Class",
           value: selectedClass,
           items: classes,
+          isLoading: loadingClasses,
           onChanged: (val) => onChanged(className: val),
         ),
         _DropdownFilter(
           hint: "Course",
           value: selectedCourse,
           items: courses,
+          isLoading: loadingCourses,
           onChanged: (val) => onChanged(course: val),
-        ),
-        _DateFilter(
-          date: selectedDate,
-          onChanged: (date) => onChanged(date: date),
         ),
       ],
     );
@@ -717,76 +715,62 @@ class _DropdownFilter extends StatelessWidget {
   final String hint;
   final List<String> items;
   final ValueChanged<String?> onChanged;
+  final bool isLoading;
 
   const _DropdownFilter({
     required this.hint,
     required this.value,
     required this.items,
     required this.onChanged,
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 170,
-      child: DropdownButtonFormField<String?>(
-        value: value,
-        hint: Text(hint),
-        items: [
-          const DropdownMenuItem<String?>(value: null, child: Text('Select')),
-          ...items
-              .map(
-                (item) =>
-                    DropdownMenuItem<String?>(value: item, child: Text(item)),
-              )
-              .toList(),
-        ],
-        onChanged: onChanged,
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        ),
-      ),
+    const hintStyle = TextStyle(fontSize: 16, color: Color(0xFF6D6D6D));
+    const itemStyle = TextStyle(fontSize: 16, color: Colors.black87);
+    const borderColor = Color(0xFFC7BECF);
+    const borderShape = OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(8)),
+      borderSide: BorderSide(color: borderColor, width: 1.1),
     );
-  }
-}
-
-class _DateFilter extends StatelessWidget {
-  final DateTime? date;
-  final ValueChanged<DateTime> onChanged;
-  const _DateFilter({required this.date, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 140,
-      child: InkWell(
-        onTap: () async {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: date ?? DateTime.now(),
-            firstDate: DateTime(2020),
-            lastDate: DateTime(2100),
-          );
-          if (picked != null) onChanged(picked);
-        },
-        child: InputDecorator(
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 150, maxWidth: 240),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 5,
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                date != null
-                    ? '${date!.day}/${date!.month}/${date!.year}'
-                    : 'Date',
+          border: borderShape,
+          enabledBorder: borderShape,
+          focusedBorder: borderShape,
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white,
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String?>(
+            isExpanded: true,
+            style: itemStyle,
+            iconEnabledColor: const Color(0xFF6D6D6D),
+            value: value,
+            hint: Text(isLoading ? 'Loading...' : hint, style: hintStyle),
+            items: [
+              DropdownMenuItem<String?>(
+                value: null,
+                child: Text(hint, style: hintStyle),
               ),
-              const Icon(Icons.calendar_today, size: 18),
+              ...items
+                  .map(
+                    (item) => DropdownMenuItem<String?>(
+                      value: item,
+                      child: Text(item, style: itemStyle),
+                    ),
+                  )
+                  .toList(),
             ],
+            onChanged: isLoading ? null : onChanged,
           ),
         ),
       ),

@@ -228,8 +228,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       _prefillAppliedForCurrentSelection = false;
       currentSessionId = null;
       currentSessionCode = null;
-      _noActive_session_message_reset() {}
-      ;
+      // legacy no-op placeholder removed
     });
     try {
       final qs = await _firestore
@@ -848,39 +847,29 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
+      padding: const EdgeInsets.all(32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             'Attendance',
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 18),
 
-          // Compact dropdowns
           Wrap(
             spacing: 14,
             runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              DropdownButton<String?>(
+              _styledDropdown(
                 value: department,
-                hint: const Text('Select Department'),
-                items:
-                    <DropdownMenuItem<String?>>[
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Select Department'),
-                      ),
-                    ] +
-                    departments
-                        .map(
-                          (d) => DropdownMenuItem<String?>(
-                            value: d,
-                            child: Text(d),
-                          ),
-                        )
-                        .toList(),
+                items: departments,
+                hint: 'Select Department',
                 onChanged: (v) {
                   setState(() {
                     department = v;
@@ -897,24 +886,10 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                   if (v != null) _loadClassesForDepartment(v);
                 },
               ),
-              DropdownButton<String?>(
+              _styledDropdown(
                 value: className,
-                hint: const Text('Select Class'),
-                items:
-                    <DropdownMenuItem<String?>>[
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Select Class'),
-                      ),
-                    ] +
-                    classes
-                        .map(
-                          (c) => DropdownMenuItem<String?>(
-                            value: c,
-                            child: Text(c),
-                          ),
-                        )
-                        .toList(),
+                items: classes,
+                hint: 'Select Class',
                 onChanged: (v) {
                   setState(() {
                     className = v;
@@ -929,24 +904,10 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                   if (v != null) _loadSubjectsForClass(v);
                 },
               ),
-              DropdownButton<String?>(
+              _styledDropdown(
                 value: subject,
-                hint: const Text('Select Subject'),
-                items:
-                    <DropdownMenuItem<String?>>[
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Select Subject'),
-                      ),
-                    ] +
-                    subjects
-                        .map(
-                          (s) => DropdownMenuItem<String?>(
-                            value: s,
-                            child: Text(s),
-                          ),
-                        )
-                        .toList(),
+                items: subjects,
+                hint: 'Select Subject',
                 onChanged: (v) {
                   setState(() {
                     subject = v;
@@ -1108,6 +1069,50 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _styledDropdown({
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    required String hint,
+    bool isLoading = false,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 130, maxWidth: 240),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 5,
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white,
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String?>(
+            isExpanded: true,
+            value: value,
+            hint: isLoading ? const Text('Loading...') : Text(hint),
+            items: [
+              DropdownMenuItem<String?>(
+                value: null,
+                child: Text(hint, style: const TextStyle(color: Colors.grey)),
+              ),
+              ...items
+                  .map(
+                    (e) => DropdownMenuItem<String?>(value: e, child: Text(e)),
+                  )
+                  .toList(),
+            ],
+            onChanged: onChanged,
+            dropdownColor: Colors.white,
+          ),
+        ),
       ),
     );
   }

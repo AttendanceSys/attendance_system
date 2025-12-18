@@ -7,6 +7,8 @@ import 'package:attendance_system/components/pages/faculties_page.dart';
 import 'package:attendance_system/components/pages/lecturer_page.dart';
 import 'package:attendance_system/components/pages/Admin_user_handling_page.dart';
 import 'package:attendance_system/components/popup/logout_confirmation_popup.dart';
+import 'package:attendance_system/components/charts/bar_chart.dart';
+import 'package:attendance_system/components/charts/pie_chart.dart';
 
 // ---- Logout confirmation popup matching your design ----
 // Use reusable popup from components/popup/logout_confirmation_popup.dart
@@ -29,7 +31,7 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          Text(
+          const Text(
             "Dashboard",
             style: TextStyle(
               fontSize: 28,
@@ -38,7 +40,17 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
             ),
           ),
           const SizedBox(height: 32),
-          Expanded(child: AdminDashboardStatsGrid()),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: const [
+                  AdminDashboardStatsGrid(),
+                  SizedBox(height: 24),
+                  _ChartsSection(),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     ),
@@ -178,6 +190,91 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
                 onPressed: () => _logout(context),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- Charts section for Super Admin dashboard ---
+class _ChartsSection extends StatelessWidget {
+  const _ChartsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final double width = MediaQuery.of(context).size.width;
+    final bool stackCharts = width < 1000;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (stackCharts) ...[
+          const _Card(
+            title: 'Qaybinta ardayda (qeybo %)',
+            height: 240,
+            child: UsersPieChart(),
+          ),
+          const SizedBox(height: 16),
+          const _Card(
+            title: 'Students per Department',
+            height: 240,
+            child: StudentsPerDepartmentBarChart(),
+          ),
+        
+        ] else ...[
+          Row(
+            children: const [
+              Expanded(
+                child: _Card(
+                  title: 'Qaybinta ardayda (qeybo %)',
+                  height: 240,
+                  child: UsersPieChart(),
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: _Card(
+                  title: 'Students per Department',
+                  height: 240,
+                  child: StudentsPerDepartmentBarChart(),
+                ),
+              ),
+            ],
+          ),
+ 
+        ],
+      ],
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  final String title;
+  final Widget child;
+  final double? height;
+
+  const _Card({required this.title, required this.child, this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(height: height ?? 240, child: child),
         ],
       ),
     );

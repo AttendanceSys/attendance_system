@@ -72,6 +72,21 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const SizedBox(height: 24),
+          CircleAvatar(
+            radius: collapsed ? 22 : 42,
+            backgroundColor: const Color(0xFF70C2FF),
+            child: Text(
+              (displayName != null && displayName!.isNotEmpty)
+                  ? displayName![0].toUpperCase()
+                  : 'U',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: collapsed ? 18 : 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
           if (!collapsed)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -79,28 +94,13 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
                 displayName ?? 'User',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 18,
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
                   overflow: TextOverflow.ellipsis,
                 ),
                 textAlign: TextAlign.center,
               ),
             ),
-          if (!collapsed) const SizedBox(height: 10),
-          CircleAvatar(
-            radius: 25,
-            backgroundColor: const Color(0xFF70C2FF),
-            child: Text(
-              (displayName != null && displayName!.isNotEmpty)
-                  ? displayName![0].toUpperCase()
-                  : 'U',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
           const SizedBox(height: 20),
           Expanded(
             child: ListView(

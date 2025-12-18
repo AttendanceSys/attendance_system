@@ -49,8 +49,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   Future<void> _fetchDepartments() async {
     try {
       final teacher = await _fetchTeacherUsername();
-      final snapshot =
-          await FirebaseFirestore.instance.collection('timetables').get();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('timetables')
+          .get();
 
       final filteredDocs = snapshot.docs.where((doc) {
         final data = doc.data();
@@ -266,16 +267,25 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
             if (gridMetaItem is Map && gridMetaItem['cells'] is List) {
               for (var cell in (gridMetaItem['cells'] as List)) {
                 if (cell is Map) {
-                  final course = (cell['course'] ?? '').toString().toLowerCase().trim();
-                  final lec = (cell['lecturer'] ?? '').toString().toLowerCase().trim();
+                  final course = (cell['course'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
+                  final lec = (cell['lecturer'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
                   if (course == lowerSubject) {
-                    if (lec.isEmpty || lec == lowerTeacher || lec.contains(lowerTeacher)) {
+                    if (lec.isEmpty ||
+                        lec == lowerTeacher ||
+                        lec.contains(lowerTeacher)) {
                       return true;
                     }
                   }
                 } else if (cell is String) {
                   final cellStr = cell.toLowerCase();
-                  if (cellStr.contains(lowerSubject) && cellStr.contains(lowerTeacher)) {
+                  if (cellStr.contains(lowerSubject) &&
+                      cellStr.contains(lowerTeacher)) {
                     return true;
                   }
                 }
@@ -290,22 +300,32 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
             if (row is Map && row['cells'] is List) {
               for (var cell in (row['cells'] as List)) {
                 if (cell is Map) {
-                  final course = (cell['course'] ?? '').toString().toLowerCase().trim();
-                  final lec = (cell['lecturer'] ?? '').toString().toLowerCase().trim();
+                  final course = (cell['course'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
+                  final lec = (cell['lecturer'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
                   if (course == lowerSubject) {
-                    if (lec.isEmpty || lec == lowerTeacher || lec.contains(lowerTeacher)) {
+                    if (lec.isEmpty ||
+                        lec == lowerTeacher ||
+                        lec.contains(lowerTeacher)) {
                       return true;
                     }
                   } else {
                     // fallback: sometimes course info is embedded in string fields
                     final cellStr = cell.toString().toLowerCase();
-                    if (cellStr.contains(lowerSubject) && cellStr.contains(lowerTeacher)) {
+                    if (cellStr.contains(lowerSubject) &&
+                        cellStr.contains(lowerTeacher)) {
                       return true;
                     }
                   }
                 } else if (cell is String) {
                   final cellStr = cell.toLowerCase();
-                  if (cellStr.contains(lowerSubject) && cellStr.contains(lowerTeacher)) {
+                  if (cellStr.contains(lowerSubject) &&
+                      cellStr.contains(lowerTeacher)) {
                     return true;
                   }
                 }
@@ -332,7 +352,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   // Find the timetable match that is for today AND whose period/span contains now.
   // Returns the match map including derived spanStartMinutes/spanEndMinutes (ints).
   Future<Map<String, dynamic>?> _findTimetableMatchForNow(
-      String selectedClass, String selectedSubject, String teacher) async {
+    String selectedClass,
+    String selectedSubject,
+    String teacher,
+  ) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('timetables')
         .where('className', isEqualTo: selectedClass)
@@ -362,28 +385,40 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
             for (int cellIndex = 0; cellIndex < cells.length; cellIndex++) {
               final cell = cells[cellIndex];
               if (cell is Map) {
-                final course =
-                    (cell['course'] ?? '').toString().toLowerCase().trim();
-                final lec =
-                    (cell['lecturer'] ?? '').toString().toLowerCase().trim();
+                final course = (cell['course'] ?? '')
+                    .toString()
+                    .toLowerCase()
+                    .trim();
+                final lec = (cell['lecturer'] ?? '')
+                    .toString()
+                    .toLowerCase()
+                    .trim();
                 if (course != lowerSubject) continue;
 
                 // Determine this cell's span start/end minutes from doc spans or grid_meta periods
                 final spans = data['spans'];
                 int? spanStart;
                 int? spanEnd;
-                if (spans is List && cellIndex >= 0 && cellIndex < spans.length) {
+                if (spans is List &&
+                    cellIndex >= 0 &&
+                    cellIndex < spans.length) {
                   final span = spans[cellIndex];
-                  if (span is Map && span['start'] is num && span['end'] is num) {
+                  if (span is Map &&
+                      span['start'] is num &&
+                      span['end'] is num) {
                     spanStart = (span['start'] as num).toInt();
                     spanEnd = (span['end'] as num).toInt();
                   }
                 } else {
                   // fallback to periods array parsing
                   final periods = data['periods'];
-                  if (periods is List && cellIndex >= 0 && cellIndex < periods.length) {
+                  if (periods is List &&
+                      cellIndex >= 0 &&
+                      cellIndex < periods.length) {
                     final periodStr = periods[cellIndex];
-                    final parsed = (periodStr is String) ? _parsePeriodString(periodStr) : null;
+                    final parsed = (periodStr is String)
+                        ? _parsePeriodString(periodStr)
+                        : null;
                     if (parsed != null) {
                       spanStart = parsed[0];
                       spanEnd = parsed[1];
@@ -395,7 +430,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                 if (spanStart != null && spanEnd != null) {
                   if (minutesNow >= spanStart && minutesNow < spanEnd) {
                     // ensure lecturer matches teacher (if present) or allow empty lecturer
-                    if (lec.isEmpty || lec == lowerTeacher || lec.contains(lowerTeacher)) {
+                    if (lec.isEmpty ||
+                        lec == lowerTeacher ||
+                        lec.contains(lowerTeacher)) {
                       return {
                         'doc': doc,
                         'dayIndex': rField,
@@ -412,22 +449,31 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
               } else if (cell is String) {
                 // best-effort: if the string contains subject and teacher, accept it
                 final cellStr = cell.toLowerCase();
-                if (cellStr.contains(lowerSubject) && cellStr.contains(lowerTeacher)) {
+                if (cellStr.contains(lowerSubject) &&
+                    cellStr.contains(lowerTeacher)) {
                   // try to get span from spans/periods like above
                   final spans = data['spans'];
                   int? spanStart;
                   int? spanEnd;
-                  if (spans is List && cellIndex >= 0 && cellIndex < spans.length) {
+                  if (spans is List &&
+                      cellIndex >= 0 &&
+                      cellIndex < spans.length) {
                     final span = spans[cellIndex];
-                    if (span is Map && span['start'] is num && span['end'] is num) {
+                    if (span is Map &&
+                        span['start'] is num &&
+                        span['end'] is num) {
                       spanStart = (span['start'] as num).toInt();
                       spanEnd = (span['end'] as num).toInt();
                     }
                   } else {
                     final periods = data['periods'];
-                    if (periods is List && cellIndex >= 0 && cellIndex < periods.length) {
+                    if (periods is List &&
+                        cellIndex >= 0 &&
+                        cellIndex < periods.length) {
                       final periodStr = periods[cellIndex];
-                      final parsed = (periodStr is String) ? _parsePeriodString(periodStr) : null;
+                      final parsed = (periodStr is String)
+                          ? _parsePeriodString(periodStr)
+                          : null;
                       if (parsed != null) {
                         spanStart = parsed[0];
                         spanEnd = parsed[1];
@@ -489,7 +535,8 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
       if (periodStr is String) {
         final parsed = _parsePeriodString(periodStr);
         if (parsed != null) {
-          return minutesSinceMidnight >= parsed[0] && minutesSinceMidnight < parsed[1];
+          return minutesSinceMidnight >= parsed[0] &&
+              minutesSinceMidnight < parsed[1];
         }
       }
     }
@@ -510,7 +557,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         return DateTime(now.year, now.month, now.day, hour, minute);
       }
 
-      if (periodIndex != null && periods is List && periodIndex >= 0 && periodIndex < periods.length) {
+      if (periodIndex != null &&
+          periods is List &&
+          periodIndex >= 0 &&
+          periodIndex < periods.length) {
         final parsed = _parsePeriodString(periods[periodIndex]);
         if (parsed != null) {
           final startMinutes = parsed[0];
@@ -539,7 +589,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         return DateTime(now.year, now.month, now.day, hour, minute);
       }
 
-      if (periodIndex != null && periods is List && periodIndex >= 0 && periodIndex < periods.length) {
+      if (periodIndex != null &&
+          periods is List &&
+          periodIndex >= 0 &&
+          periodIndex < periods.length) {
         final parsed = _parsePeriodString(periods[periodIndex]);
         if (parsed != null) {
           final endMinutes = parsed[1];
@@ -656,7 +709,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   ) async {
     try {
       final nowUtc = DateTime.now().toUtc();
-      final shortExpiryUtc = nowUtc.add(const Duration(minutes: 1)); // keep short expiry
+      final shortExpiryUtc = nowUtc.add(
+        const Duration(minutes: 1),
+      ); // keep short expiry
 
       final docData = {
         'code': code,
@@ -691,7 +746,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     } catch (e, st) {
       debugPrint('Error saving QR session: $e\n$st');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving QR session: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving QR session: $e')));
       }
     }
   }
@@ -699,33 +756,48 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
+      padding: const EdgeInsets.all(32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             "Generate QR Code",
-            style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
           ),
           const SizedBox(height: 18),
           Wrap(
             spacing: 14,
             runSpacing: 12,
             alignment: WrapAlignment.start,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _dropdown(department, departments, (value) {
-                setState(() => department = value);
-                if (value != null) _fetchClasses(value);
-              }, "Select Department"),
-              _dropdown(className, classes, (value) {
-                setState(() => className = value);
-                if (value != null) _fetchSubjects(value);
-              }, "Select Class"),
               _dropdown(
-                subject,
-                subjects,
-                (value) => setState(() => subject = value),
-                "Select Subject",
+                value: department,
+                items: departments,
+                hint: "Select Department",
+                onChanged: (value) {
+                  setState(() => department = value);
+                  if (value != null) _fetchClasses(value);
+                },
+              ),
+              _dropdown(
+                value: className,
+                items: classes,
+                hint: "Select Class",
+                onChanged: (value) {
+                  setState(() => className = value);
+                  if (value != null) _fetchSubjects(value);
+                },
+              ),
+              _dropdown(
+                value: subject,
+                items: subjects,
+                hint: "Select Subject",
+                onChanged: (value) => setState(() => subject = value),
               ),
               const SizedBox(width: 18),
               ElevatedButton(
@@ -750,7 +822,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Please select department, class and subject.'),
+                          content: Text(
+                            'Please select department, class and subject.',
+                          ),
                         ),
                       );
                     }
@@ -781,7 +855,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
                   // Find timetable match for NOW (today + containing now)
                   final match = await _findTimetableMatchForNow(
-                      className!.trim(), subject!.trim(), teacherUsername.trim());
+                    className!.trim(),
+                    subject!.trim(),
+                    teacherUsername.trim(),
+                  );
 
                   if (match == null) {
                     if (mounted) {
@@ -803,7 +880,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Could not compute period start/end time; cannot set period_ends_at.'),
+                          content: Text(
+                            'Could not compute period start/end time; cannot set period_ends_at.',
+                          ),
                         ),
                       );
                     }
@@ -842,7 +921,12 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                   }
 
                   // Save to qr_generation with both short expiry and period_starts/period_ends
-                  await _saveSessionToFirestore(code, teacherUsername, periodStart, periodEnd);
+                  await _saveSessionToFirestore(
+                    code,
+                    teacherUsername,
+                    periodStart,
+                    periodEnd,
+                  );
                 },
                 child: const Text(
                   "Generate QR Code",
@@ -913,28 +997,47 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     );
   }
 
-  Widget _dropdown(
-    String? value,
-    List<String> items,
-    ValueChanged<String?> onChanged,
-    String hint,
-  ) {
-    return DropdownButton<String>(
-      value: value,
-      items: [
-        DropdownMenuItem(
-          value: null,
-          child: Text(hint, style: const TextStyle(color: Colors.grey)),
+  Widget _dropdown({
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    required String hint,
+    bool isLoading = false,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 130, maxWidth: 240),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 5,
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white,
         ),
-        ...items
-            .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-            .toList(),
-      ],
-      onChanged: onChanged,
-      style: const TextStyle(fontSize: 18, color: Colors.black87),
-      underline: const SizedBox(),
-      borderRadius: BorderRadius.circular(10),
-      dropdownColor: Colors.white,
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String?>(
+            isExpanded: true,
+            value: value,
+            hint: isLoading ? const Text('Loading...') : Text(hint),
+            items: [
+              DropdownMenuItem<String?>(
+                value: null,
+                child: Text(hint, style: const TextStyle(color: Colors.grey)),
+              ),
+              ...items
+                  .map(
+                    (e) => DropdownMenuItem<String?>(value: e, child: Text(e)),
+                  )
+                  .toList(),
+            ],
+            onChanged: onChanged,
+            dropdownColor: Colors.white,
+          ),
+        ),
+      ),
     );
   }
 }

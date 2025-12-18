@@ -19,21 +19,23 @@ class FacultyAdminPage extends StatelessWidget {
         // 0: Dashboard (custom)
         Padding(
           padding: const EdgeInsets.all(32.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-              const Text(
-                "Dashboard",
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                SizedBox(height: 8),
+                Text(
+                  "Dashboard",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 32),
-              DashboardStatsGrid(),
-            ],
+                SizedBox(height: 32),
+                DashboardStatsGrid(),
+              ],
+            ),
           ),
         ),
         // 1: Departments

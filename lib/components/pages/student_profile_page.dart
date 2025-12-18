@@ -1,9 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../screens/login_screen.dart';
 import 'student_view_attendance_page.dart';
 import 'student_scan_attendance_page.dart';
 
-class StudentProfilePage extends StatelessWidget {
+class StudentProfilePage extends StatefulWidget {
   final String name;
   final String className;
   final String semester;
@@ -20,6 +21,100 @@ class StudentProfilePage extends StatelessWidget {
     required this.id,
     required this.avatarLetter,
   });
+
+  @override
+  State<StudentProfilePage> createState() => _StudentProfilePageState();
+}
+
+class _StudentProfilePageState extends State<StudentProfilePage> {
+  late String _semester;
+  bool _loadingSemester = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _semester = widget.semester;
+    if (_semester.trim().isEmpty) {
+      _fetchSemesterFromCourses();
+    }
+  }
+
+  Future<void> _fetchSemesterFromCourses() async {
+    setState(() => _loadingSemester = true);
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final username = widget.id;
+
+      // Try to locate student doc by username or doc id
+      String? classRefId;
+      try {
+        final q = await firestore
+            .collection('students')
+            .where('username', isEqualTo: username)
+            .limit(1)
+            .get();
+        if (q.docs.isNotEmpty) {
+          final data = q.docs.first.data();
+          final classRaw =
+              data['class_ref'] ?? data['classRef'] ?? data['class'];
+          if (classRaw is DocumentReference)
+            classRefId = classRaw.id;
+          else if (classRaw is String) {
+            final s = classRaw;
+            if (s.contains('/')) {
+              final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+              classRefId = parts.isNotEmpty ? parts.last : s;
+            } else {
+              classRefId = s;
+            }
+          }
+        } else {
+          final doc = await firestore
+              .collection('students')
+              .doc(username)
+              .get();
+          if (doc.exists) {
+            final data = doc.data() ?? {};
+            final classRaw =
+                data['class_ref'] ?? data['classRef'] ?? data['class'];
+            if (classRaw is DocumentReference)
+              classRefId = classRaw.id;
+            else if (classRaw is String) {
+              final s = classRaw;
+              if (s.contains('/')) {
+                final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+                classRefId = parts.isNotEmpty ? parts.last : s;
+              } else {
+                classRefId = s;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error resolving student classRef: $e');
+      }
+
+      // If we have a class id, query courses by that class id and take semester
+      if (classRefId != null && classRefId.isNotEmpty) {
+        final courseSnap = await firestore
+            .collection('courses')
+            .where('class', isEqualTo: classRefId)
+            .limit(1)
+            .get();
+        if (courseSnap.docs.isNotEmpty) {
+          final sem = (courseSnap.docs.first.data()['semester'] ?? '')
+              .toString();
+          if (sem.trim().isNotEmpty) {
+            setState(() => _semester = sem.trim());
+          }
+        }
+      }
+    } catch (e, st) {
+      debugPrint('Error fetching semester from courses: $e\n$st');
+    } finally {
+      if (mounted) setState(() => _loadingSemester = false);
+    }
+  }
 
   void _performLogout(BuildContext context) {
     // Close all routes and go to login screen (same behavior as before)
@@ -74,7 +169,7 @@ class StudentProfilePage extends StatelessWidget {
                   radius: 44,
                   backgroundColor: Colors.white,
                   child: Text(
-                    avatarLetter,
+                    widget.avatarLetter,
                     style: const TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -89,7 +184,7 @@ class StudentProfilePage extends StatelessWidget {
 
             // Name and role
             Text(
-              name,
+              widget.id,
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
@@ -111,66 +206,49 @@ class StudentProfilePage extends StatelessWidget {
             // Info cards
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
                 child: Column(
                   children: [
                     _infoCard(
                       icon: Icons.person_outline,
                       iconColor: const Color(0xFF6A46FF),
-                      label: 'Student Name',
-                      value: name,
+                      label: 'Student full Name',
+                      value: widget.name,
                     ),
                     const SizedBox(height: 12),
                     _infoCard(
                       icon: Icons.school_outlined,
                       iconColor: const Color(0xFF6A46FF),
                       label: 'Class',
-                      value: className,
+                      value: widget.className,
                     ),
                     const SizedBox(height: 12),
                     _infoCard(
                       icon: Icons.calendar_today_outlined,
                       iconColor: const Color(0xFF6A46FF),
                       label: 'Semester',
-                      value: semester,
+                      value: _loadingSemester ? 'Loading...' : _semester,
                     ),
                     const SizedBox(height: 12),
                     _infoCard(
                       icon: Icons.person,
                       iconColor: const Color(0xFF6A46FF),
                       label: 'Gender',
-                      value: gender,
+                      value: widget.gender,
                     ),
                     const SizedBox(height: 12),
                     _infoCard(
                       icon: Icons.tag,
                       iconColor: const Color(0xFF6A46FF),
-                      label: 'Student ID',
-                      value: id,
+                      label: 'Student username',
+                      value: widget.id,
                     ),
 
                     const SizedBox(height: 24),
 
-                    // Logout button (same behavior as top-right icon)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.logout, color: Colors.white),
-                        label: const Text(
-                          'Logout',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                        onPressed: () => _performLogout(context),
-                      ),
-                    ),
 
                     const SizedBox(height: 36),
                   ],
@@ -192,7 +270,11 @@ class StudentProfilePage extends StatelessWidget {
               decoration: const BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
-                  BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2)),
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: Offset(0, -2),
+                  ),
                 ],
               ),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -204,7 +286,10 @@ class StudentProfilePage extends StatelessWidget {
                     onTap: () {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (context) => const StudentViewAttendanceMobile()),
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const StudentViewAttendanceMobile(),
+                        ),
                       );
                     },
                     child: Column(
@@ -212,7 +297,10 @@ class StudentProfilePage extends StatelessWidget {
                       children: const [
                         Icon(Icons.menu_book_rounded, color: Colors.black54),
                         SizedBox(height: 6),
-                        Text("View Attendance", style: TextStyle(fontSize: 12, color: Colors.black54)),
+                        Text(
+                          "View Attendance",
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
                       ],
                     ),
                   ),
@@ -222,7 +310,10 @@ class StudentProfilePage extends StatelessWidget {
                     onTap: () {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (context) => const StudentScanAttendancePage()),
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const StudentScanAttendancePage(),
+                        ),
                       );
                     },
                     child: Column(
@@ -230,7 +321,10 @@ class StudentProfilePage extends StatelessWidget {
                       children: const [
                         Icon(Icons.qr_code_scanner, color: Colors.black54),
                         SizedBox(height: 6),
-                        Text("Scan Attendance", style: TextStyle(fontSize: 12, color: Colors.black54)),
+                        Text(
+                          "Scan Attendance",
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
                       ],
                     ),
                   ),
@@ -266,7 +360,11 @@ class StudentProfilePage extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.person, color: Colors.white, size: 30),
+                      child: const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 30,
+                      ),
                     ),
                   ),
                 ],
@@ -292,7 +390,11 @@ class StudentProfilePage extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
-          BoxShadow(color: Colors.black12.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black12.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Row(
@@ -313,12 +415,20 @@ class StudentProfilePage extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(fontSize: 12, color: Colors.black45, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black45,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   value,
-                  style: const TextStyle(fontSize: 15, color: Color(0xFF222238), fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: Color(0xFF222238),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
