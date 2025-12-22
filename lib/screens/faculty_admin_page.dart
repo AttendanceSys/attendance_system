@@ -22,18 +22,23 @@ class FacultyAdminPage extends StatelessWidget {
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 SizedBox(height: 8),
-                Text(
-                  "Dashboard",
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
+                Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Text(
+                      "Dashboard",
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    );
+                  },
                 ),
                 SizedBox(height: 32),
-                DashboardStatsGrid(),
+                const DashboardStatsGrid(),
               ],
             ),
           ),

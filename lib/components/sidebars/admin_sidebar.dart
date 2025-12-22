@@ -1,6 +1,7 @@
 //admin side bar
 
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/session.dart';
 
@@ -67,9 +68,10 @@ class _AdminSidebarState extends State<AdminSidebar> {
     final selectedIndex = widget.selectedIndex;
     final onItemSelected = widget.onItemSelected;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final sidebarColor = isDark
-        ? const Color(0xFF0E1A60)
-        : const Color(0xFF3B4B9B);
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final sidebarColor =
+        palette?.sidebarColor ??
+        (isDark ? const Color(0xFF0E1A60) : const Color(0xFF3B4B9B));
 
     return Container(
       width: collapsed ? 60 : 220,
@@ -79,6 +81,27 @@ class _AdminSidebarState extends State<AdminSidebar> {
         children: [
           const SizedBox(height: 24),
           // Profile Section
+          CircleAvatar(
+            radius: collapsed ? 22 : 42,
+
+            backgroundColor: const Color(0xFF70C2FF),
+
+            child: Text(
+              (displayName != null && displayName!.isNotEmpty)
+                  ? displayName![0].toUpperCase()
+                  : 'U',
+
+              style: TextStyle(
+                color: Colors.white,
+
+                fontSize: collapsed ? 18 : 28,
+
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 14),
           if (!collapsed)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -93,21 +116,7 @@ class _AdminSidebarState extends State<AdminSidebar> {
                 textAlign: TextAlign.center,
               ),
             ),
-          if (!collapsed) const SizedBox(height: 10),
-          CircleAvatar(
-            radius: 25,
-            backgroundColor: const Color(0xFF70C2FF),
-            child: Text(
-              (displayName != null && displayName!.isNotEmpty)
-                  ? displayName![0].toUpperCase()
-                  : 'U',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
+
           const SizedBox(height: 20),
           // Sidebar Items
           Expanded(
@@ -178,9 +187,12 @@ class SidebarItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color selectedBg = isDark
-        ? Colors.white.withOpacity(0.13) // keep dark mode as-is
-        : Colors.white.withOpacity(0.25); // restore brighter light selection
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final Color selectedBg =
+        (palette?.selectedBg ??
+        (isDark
+            ? Colors.white.withOpacity(0.13)
+            : Colors.white.withOpacity(0.25)));
     final Color selectedText = Colors.white;
     final Color unselectedText = Colors.white;
     final Color selectedIcon = Colors.white;
@@ -188,14 +200,16 @@ class SidebarItem extends StatelessWidget {
 
     final overlay = MaterialStateProperty.resolveWith<Color?>((states) {
       if (states.contains(MaterialState.hovered)) {
-        return isDark
-            ? Colors.white.withOpacity(0.10) // keep subtle dark hover
-            : Colors.white.withOpacity(0.20); // restore brighter light hover
+        return palette?.hoverOverlay ??
+            (isDark
+                ? Colors.white.withOpacity(0.10)
+                : Colors.white.withOpacity(0.20));
       }
       if (states.contains(MaterialState.pressed)) {
-        return isDark
-            ? Colors.white.withOpacity(0.16)
-            : Colors.white.withOpacity(0.28);
+        return palette?.pressedOverlay ??
+            (isDark
+                ? Colors.white.withOpacity(0.16)
+                : Colors.white.withOpacity(0.28));
       }
       return null;
     });

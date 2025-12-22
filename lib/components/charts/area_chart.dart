@@ -6,6 +6,10 @@ class AttendanceAreaChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final lineColor = theme.colorScheme.primary;
+    final axisColor = theme.colorScheme.onSurface.withOpacity(0.22);
+    final borderColor = theme.colorScheme.outline.withOpacity(0.28);
     final spots = [
       const FlSpot(0, 30),
       const FlSpot(1, 45),
@@ -18,26 +22,57 @@ class AttendanceAreaChart extends StatelessWidget {
 
     return LineChart(
       LineChartData(
-        gridData: const FlGridData(show: true),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: true,
+          getDrawingHorizontalLine: (value) =>
+              FlLine(color: axisColor, strokeWidth: 1),
+          getDrawingVerticalLine: (value) =>
+              FlLine(color: axisColor, strokeWidth: 1),
+        ),
         titlesData: FlTitlesData(
-          leftTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 40),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              getTitlesWidget: (value, meta) => Text(
+                value.toInt().toString(),
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withOpacity(0.75),
+                  fontSize: 11,
+                ),
+              ),
+            ),
           ),
           bottomTitles: AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 24),
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              getTitlesWidget: (value, meta) => Text(
+                (value + 0.5).toStringAsFixed(1),
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface.withOpacity(0.85),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ),
         ),
-        borderData: FlBorderData(show: true),
+        borderData: FlBorderData(
+          show: true,
+          border: Border.all(color: borderColor),
+        ),
         lineBarsData: [
           LineChartBarData(
             spots: spots,
             isCurved: true,
-            color: Colors.purple,
+            color: lineColor,
             barWidth: 3,
             dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.purple.withOpacity(0.2),
+              color: lineColor.withOpacity(0.2),
             ),
           ),
         ],
@@ -53,6 +88,7 @@ class SystemHealthGauge extends StatelessWidget {
   Widget build(BuildContext context) {
     // Simple radial progress replacement using CustomPaint
     final percent = 0.72; // 72% teachers took attendance this week
+    final theme = Theme.of(context);
     return Center(
       child: SizedBox(
         height: 220,
@@ -63,23 +99,26 @@ class SystemHealthGauge extends StatelessWidget {
             CircularProgressIndicator(
               value: percent,
               strokeWidth: 12,
-              color: Colors.teal,
-              backgroundColor: Colors.teal.withOpacity(0.15),
+              color: theme.colorScheme.primary,
+              backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
             ),
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   '${(percent * 100).round()}%',
-                  style: const TextStyle(
+                  style: theme.textTheme.titleLarge?.copyWith(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Attendance this week',
-                  style: TextStyle(color: Colors.black54),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.7),
+                  ),
                 ),
               ],
             ),

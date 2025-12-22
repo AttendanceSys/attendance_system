@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/lecturer.dart';
 import '../cards/searchBar.dart';
 import '../popup/add_lecturer_popup.dart';
+import '../../theme/super_admin_theme.dart';
 
 class TeachersPage extends StatefulWidget {
   const TeachersPage({super.key});
@@ -265,9 +266,15 @@ class _TeachersPageState extends State<TeachersPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Lecturers",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(
+                context,
+              ).extension<SuperAdminColors>()?.textPrimary,
+            ),
           ),
           const SizedBox(height: 24),
           Row(
@@ -375,7 +382,10 @@ class _TeachersPageState extends State<TeachersPage> {
 
   Widget _buildDesktopTable() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
 
     return SingleChildScrollView(
       scrollDirection: Axis.vertical,
@@ -429,7 +439,10 @@ class _TeachersPageState extends State<TeachersPage> {
 
   Widget _buildMobileTable() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
 
     return Table(
       defaultColumnWidth: const IntrinsicColumnWidth(),

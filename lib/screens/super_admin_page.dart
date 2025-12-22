@@ -11,6 +11,7 @@ import 'package:attendance_system/components/pages/Admin_user_handling_page.dart
 import 'package:attendance_system/components/popup/logout_confirmation_popup.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/session.dart';
+import '../theme/super_admin_theme.dart';
 // Removed global theme controller usage to keep dark mode local to Super Admin
 
 // ---- Logout confirmation popup matching your design ----
@@ -80,12 +81,12 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
       canvasColor: scaffold,
       colorScheme: base.colorScheme.copyWith(
         brightness: Brightness.dark,
-        background: scaffold,
         surface: surface,
         primary: accent,
         onPrimary: Colors.white,
         onSurface: textPrimary,
       ),
+      extensions: <ThemeExtension<dynamic>>[SuperAdminColors.dark()],
       appBarTheme: const AppBarTheme(
         backgroundColor: scaffold,
         foregroundColor: textPrimary,
@@ -130,22 +131,22 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: MaterialStateProperty.all<Color>(accent),
-          foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
-          overlayColor: MaterialStateProperty.all<Color>(overlay),
-          shape: MaterialStateProperty.all(
+          backgroundColor: WidgetStateProperty.all<Color>(accent),
+          foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+          overlayColor: WidgetStateProperty.all<Color>(overlay),
+          shape: WidgetStateProperty.all(
             const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(10)),
             ),
           ),
-          padding: MaterialStateProperty.all(
+          padding: WidgetStateProperty.all(
             const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         ),
       ),
       dataTableTheme: DataTableThemeData(
-        headingRowColor: MaterialStateProperty.all(surfaceHigh),
-        dataRowColor: MaterialStateProperty.all(scaffold),
+        headingRowColor: WidgetStateProperty.all(surfaceHigh),
+        dataRowColor: WidgetStateProperty.all(scaffold),
         headingTextStyle: const TextStyle(
           color: textPrimary,
           fontWeight: FontWeight.w600,
@@ -212,7 +213,7 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
         ? const Color(0xFF0E1A60)
         : const Color(0xFF3B4B9B);
 
-    Widget _themeToggle({Color? color}) {
+    Widget themeToggle({Color? color}) {
       final iconColor = color ?? (_localDark ? Colors.white : Colors.black87);
       final bgColor = _localDark ? const Color(0xFF2E3545) : Colors.white;
       return Container(
@@ -255,7 +256,8 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
                 ),
               ),
               actions: [
-                _themeToggle(color: Theme.of(context).iconTheme.color),
+                // Let icon color be determined by local dark flag or theme after wrapping
+                themeToggle(),
                 IconButton(
                   icon: const Icon(Icons.logout),
                   tooltip: 'Logout',
@@ -351,12 +353,9 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _themeToggle(),
+                  themeToggle(),
                   IconButton(
-                    icon: Icon(
-                      Icons.logout,
-                      color: Theme.of(context).iconTheme.color,
-                    ),
+                    icon: const Icon(Icons.logout),
                     tooltip: 'Logout',
                     onPressed: () => _logout(context),
                   ),

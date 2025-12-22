@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 
 Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
+  final palette = Theme.of(context).extension<SuperAdminColors>();
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final surface =
+      palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
+  final border =
+      palette?.border ?? (isDark ? const Color(0xFF3A404E) : Colors.blue[100]!);
+  final textPrimary =
+      palette?.textPrimary ?? (isDark ? Colors.white : Colors.black87);
+  final accent = palette?.accent ?? const Color(0xFF1991EB);
+
   return showDialog<bool>(
     context: context,
     barrierDismissible: false,
@@ -13,9 +24,9 @@ Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
               ? 340
               : double.infinity,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: surface,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.blue[100]!, width: 2),
+            border: Border.all(color: border, width: 2),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.08),
@@ -28,12 +39,12 @@ Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 "Are you sure you want to logout",
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: textPrimary,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -47,15 +58,15 @@ Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
                     child: OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(false),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF1991EB)),
+                        side: BorderSide(color: accent),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         "Cancel",
                         style: TextStyle(
-                          color: Color(0xFF1991EB),
+                          color: accent,
                           fontWeight: FontWeight.w500,
                           fontSize: 16,
                         ),

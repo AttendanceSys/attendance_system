@@ -16,14 +16,17 @@ class _FacultyActivityBarChartState extends State<FacultyActivityBarChart> {
   final Duration _animDuration = const Duration(milliseconds: 250);
   int _touchedIndex = -1;
   bool _isPlaying = false;
-
-  // Colors tuned for white card backgrounds
-  Color get _barBg => Colors.black12;
-  Color get _barColor => Colors.indigo;
-  Color get _touchedColor => Colors.green;
+  // Theme-driven colors populated in build()
+  late Color _barBg;
+  late Color _barColor;
+  late Color _touchedColor;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    _barBg = theme.colorScheme.onSurface.withOpacity(0.08);
+    _barColor = theme.colorScheme.primary;
+    _touchedColor = theme.colorScheme.secondary;
     return Stack(
       children: [
         Padding(
@@ -31,19 +34,19 @@ class _FacultyActivityBarChartState extends State<FacultyActivityBarChart> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'Monthly',
-                style: TextStyle(
-                  color: Colors.black87,
+                style: theme.textTheme.titleMedium?.copyWith(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Faculty activity sessions (per month)',
-                style: TextStyle(
-                  color: Colors.black54,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.7),
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -69,7 +72,7 @@ class _FacultyActivityBarChartState extends State<FacultyActivityBarChart> {
             child: IconButton(
               icon: Icon(
                 _isPlaying ? Icons.pause : Icons.play_arrow,
-                color: Colors.black87,
+                color: theme.colorScheme.onSurface,
               ),
               onPressed: () {
                 setState(() {
@@ -214,8 +217,8 @@ class _FacultyActivityBarChartState extends State<FacultyActivityBarChart> {
   }
 
   Widget _bottomTitle(double value, TitleMeta meta) {
-    const style = TextStyle(
-      color: Colors.black87,
+    final style = TextStyle(
+      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
       fontWeight: FontWeight.bold,
       fontSize: 11,
     );
@@ -334,6 +337,9 @@ class _DepartmentMetricBarChartState extends State<DepartmentMetricBarChart> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final axisColor = theme.colorScheme.onSurface.withOpacity(0.20);
+    final labelColor = theme.colorScheme.onSurface.withOpacity(0.75);
     return BarChart(
       BarChartData(
         maxY: _maxY,
@@ -342,7 +348,7 @@ class _DepartmentMetricBarChartState extends State<DepartmentMetricBarChart> {
           show: true,
           horizontalInterval: _interval,
           getDrawingHorizontalLine: (value) =>
-              FlLine(color: Colors.black12, strokeWidth: 1),
+              FlLine(color: axisColor, strokeWidth: 1),
         ),
         titlesData: FlTitlesData(
           topTitles: const AxisTitles(
@@ -364,8 +370,8 @@ class _DepartmentMetricBarChartState extends State<DepartmentMetricBarChart> {
                   padding: const EdgeInsets.only(top: 8.0),
                   child: Text(
                     widget.data[index].name,
-                    style: const TextStyle(
-                      color: Colors.black54,
+                    style: TextStyle(
+                      color: labelColor,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -381,16 +387,23 @@ class _DepartmentMetricBarChartState extends State<DepartmentMetricBarChart> {
               interval: _interval,
               getTitlesWidget: (value, meta) => Text(
                 value.toInt().toString(),
-                style: const TextStyle(color: Colors.black45, fontSize: 11),
+                style: TextStyle(
+                  color: labelColor.withOpacity(0.8),
+                  fontSize: 11,
+                ),
               ),
             ),
           ),
         ),
         borderData: FlBorderData(
           show: true,
-          border: const Border(
-            left: BorderSide(color: Colors.black12),
-            bottom: BorderSide(color: Colors.black12),
+          border: Border(
+            left: BorderSide(
+              color: theme.colorScheme.outline.withOpacity(0.25),
+            ),
+            bottom: BorderSide(
+              color: theme.colorScheme.outline.withOpacity(0.25),
+            ),
           ),
         ),
         barTouchData: BarTouchData(

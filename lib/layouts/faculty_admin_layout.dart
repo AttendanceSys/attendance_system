@@ -3,6 +3,8 @@ import '../components/sidebars/faculty_admin_sidebar.dart';
 import '../components/popup/logout_confirmation_popup.dart';
 import '../screens/login_screen.dart';
 import '../components/faculty_dashboard_stats_grid.dart';
+import '../theme/super_admin_theme.dart';
+import '../services/theme_controller.dart';
 
 class FacultyAdminLayout extends StatefulWidget {
   final List<Widget>? customPages;
@@ -16,53 +18,55 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
   int _selectedIndex = 0;
   bool _collapsed = true;
 
-  late final List<Widget> _pages;
-
-  @override
-  void initState() {
-    super.initState();
-    _pages =
-        widget.customPages ??
-        [
-          Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 8),
-                const Text(
-                  'Dashboard',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Expanded(child: DashboardStatsGrid()),
-              ],
+  List<Widget> _buildDefaultPages(Color headerColor) {
+    return [
+      Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            Text(
+              'Dashboard',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: headerColor,
+              ),
             ),
-          ),
-          const Center(child: Text('Departments')),
-          const Center(child: Text('Classes')),
-          const Center(child: Text('Students')),
-          const Center(child: Text('Courses')),
-          const Center(child: Text('Attendance')),
-          const Center(child: Text('TimeTable')),
-          const Center(child: Text('User Handling')),
-        ];
+            const SizedBox(height: 32),
+            Expanded(child: DashboardStatsGrid()),
+          ],
+        ),
+      ),
+      const Center(child: Text('Departments')),
+      const Center(child: Text('Classes')),
+      const Center(child: Text('Students')),
+      const Center(child: Text('Courses')),
+      const Center(child: Text('Attendance')),
+      const Center(child: Text('TimeTable')),
+      const Center(child: Text('User Handling')),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final sidebarColor = const Color(0xFF3B4B9B);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final sidebarColor =
+        palette?.sidebarColor ??
+        (isDark ? const Color(0xFF0E1A60) : const Color(0xFF3B4B9B));
+    final headerColor = palette?.textPrimary ?? Colors.black87;
+    final scaffoldBg = palette?.scaffold;
+    final pages = widget.customPages ?? _buildDefaultPages(headerColor);
 
     return Scaffold(
+      backgroundColor: scaffoldBg,
       appBar: isMobile
           ? AppBar(
               title: const Text('Faculty Admin Panel'),
-              backgroundColor: Colors.indigo.shade100,
+              backgroundColor: palette?.surface ?? Colors.indigo.shade100,
               leading: Builder(
                 builder: (context) => IconButton(
                   icon: const Icon(Icons.menu),
@@ -70,6 +74,16 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                 ),
               ),
               actions: [
+                IconButton(
+                  icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+                  tooltip: isDark
+                      ? 'Switch to light mode'
+                      : 'Switch to dark mode',
+                  onPressed: () {
+                    final next = isDark ? ThemeMode.light : ThemeMode.dark;
+                    ThemeController.setThemeMode(next);
+                  },
+                ),
                 IconButton(
                   icon: const Icon(Icons.logout),
                   tooltip: 'Logout',
@@ -168,7 +182,7 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                       });
                     }
                   },
-                  child: _pages[_selectedIndex],
+                  child: pages[_selectedIndex],
                 ),
               ),
             ],
@@ -178,26 +192,41 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
             Positioned(
               top: 16,
               right: 24,
-              child: IconButton(
-                icon: const Icon(Icons.logout, color: Colors.black87),
-                tooltip: 'Logout',
-                onPressed: () async {
-                  try {
-                    final shouldLogout = await showLogoutConfirmationPopup(
-                      context,
-                    );
-                    if (shouldLogout == true) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const LoginScreen(),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    print("Logout failed: $e");
-                  }
-                },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+                    tooltip: isDark
+                        ? 'Switch to light mode'
+                        : 'Switch to dark mode',
+                    onPressed: () {
+                      final next = isDark ? ThemeMode.light : ThemeMode.dark;
+                      ThemeController.setThemeMode(next);
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.logout),
+                    tooltip: 'Logout',
+                    onPressed: () async {
+                      try {
+                        final shouldLogout = await showLogoutConfirmationPopup(
+                          context,
+                        );
+                        if (shouldLogout == true) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LoginScreen(),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        print("Logout failed: $e");
+                      }
+                    },
+                  ),
+                ],
               ),
             ),
         ],

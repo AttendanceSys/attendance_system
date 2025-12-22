@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 
 class StudentDetailsPanel extends StatefulWidget {
   final String studentId;
@@ -259,7 +260,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                 .where('username', isEqualTo: widget.studentId)
                 .where('session_id', whereIn: sub)
                 .get();
-            for (final ad in q2.docs) countedAttendanceDocIds.add(ad.id);
+            for (final ad in q2.docs) {
+              countedAttendanceDocIds.add(ad.id);
+            }
           }
         }
 
@@ -278,7 +281,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                 .where('username', isEqualTo: widget.studentId)
                 .where('code', whereIn: sub)
                 .get();
-            for (final ad in q3.docs) countedAttendanceDocIds.add(ad.id);
+            for (final ad in q3.docs) {
+              countedAttendanceDocIds.add(ad.id);
+            }
           }
         }
 
@@ -352,7 +357,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                 .where('username', isEqualTo: widget.studentId)
                 .where('session_id', whereIn: sub)
                 .get();
-            for (final ad in q.docs) countedAttendanceDocIds.add(ad.id);
+            for (final ad in q.docs) {
+              countedAttendanceDocIds.add(ad.id);
+            }
           }
         }
 
@@ -371,7 +378,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                 .where('username', isEqualTo: widget.studentId)
                 .where('code', whereIn: sub)
                 .get();
-            for (final ad in q.docs) countedAttendanceDocIds.add(ad.id);
+            for (final ad in q.docs) {
+              countedAttendanceDocIds.add(ad.id);
+            }
           }
         }
 
@@ -408,6 +417,8 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (loading) {
       return Container(
         width: double.infinity,
@@ -455,7 +466,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
 
     return Container(
       width: double.infinity,
-      color: const Color(0xFFF8FAFC),
+      color: palette?.surface,
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -465,10 +476,10 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
               padding: const EdgeInsets.only(left: 6, bottom: 8),
               child: IconButton(
                 onPressed: widget.onBack,
-                icon: const Icon(
+                icon: Icon(
                   Icons.arrow_back_ios_new,
                   size: 18,
-                  color: Color(0xFF2563EB),
+                  color: palette?.accent,
                 ),
                 tooltip: 'Back',
                 splashRadius: 22,
@@ -482,7 +493,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                color: Colors.white,
+                color: palette?.surfaceHigh,
                 shadowColor: Colors.black.withOpacity(0.05),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -498,11 +509,17 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                         children: [
                           CircleAvatar(
                             radius: 28,
-                            backgroundColor: const Color(0xFFE5EDFF),
+                            backgroundColor:
+                                palette?.highlight ??
+                                (isDark
+                                    ? const Color(0xFF2A2F3A)
+                                    : const Color(0xFFE5EDFF)),
                             child: Text(
                               _initials,
-                              style: const TextStyle(
-                                color: Color(0xFF2563EB),
+                              style: TextStyle(
+                                color:
+                                    palette?.textPrimary ??
+                                    (isDark ? Colors.white : Colors.black),
                                 fontWeight: FontWeight.w700,
                                 fontSize: 18,
                               ),
@@ -517,55 +534,55 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                   _displayName ??
                                       widget.studentName ??
                                       widget.studentId,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.w800,
-                                    color: Color(0xFF0F172A),
+                                    color: palette?.textPrimary,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   '@${widget.studentId}',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 14,
-                                    color: Color(0xFF64748B),
+                                    color: palette?.textSecondary,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
                                 const SizedBox(height: 10),
                                 Row(
                                   children: [
-                                    const Icon(
+                                    Icon(
                                       Icons.school_outlined,
                                       size: 18,
-                                      color: Color(0xFF475569),
+                                      color: palette?.textSecondary,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
                                       'Class: ${_displayClass ?? widget.studentClass ?? ''}',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
-                                        color: Color(0xFF475569),
+                                        color: palette?.textSecondary,
                                       ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
                                 Row(
-                                  children: const [
+                                  children: [
                                     Icon(
                                       Icons.menu_book_outlined,
                                       size: 18,
-                                      color: Color(0xFF475569),
+                                      color: palette?.textSecondary,
                                     ),
-                                    SizedBox(width: 6),
+                                    const SizedBox(width: 6),
                                     Text(
                                       'Student Attendance Overview',
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
-                                        color: Color(0xFF475569),
+                                        color: palette?.textSecondary,
                                       ),
                                     ),
                                   ],
@@ -576,14 +593,14 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                      Divider(height: 1, color: palette?.border),
                       const SizedBox(height: 20),
                       Text(
                         'Attendance Summary',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF0F172A),
+                          color: palette?.textPrimary,
                           shadows: [
                             Shadow(
                               color: Colors.black.withOpacity(0.02),
@@ -647,19 +664,21 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                           width: double.infinity,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                            border: Border.all(
+                              color: palette?.border ?? const Color(0xFFE5E7EB),
+                            ),
                           ),
                           child: DataTable(
                             columnSpacing: 48,
                             headingRowHeight: 46,
                             dataRowHeight: 44,
-                            headingRowColor: MaterialStateProperty.all(
-                              const Color(0xFFF1F5F9),
+                            headingRowColor: WidgetStateProperty.all(
+                              palette?.surfaceHigh,
                             ),
-                            dataRowColor: MaterialStateProperty.resolveWith(
-                              (states) => states.contains(MaterialState.hovered)
-                                  ? const Color(0xFFF8FAFC)
-                                  : Colors.white,
+                            dataRowColor: WidgetStateProperty.resolveWith(
+                              (states) => states.contains(WidgetState.hovered)
+                                  ? palette?.overlay
+                                  : palette?.surface,
                             ),
                             columns: const [
                               DataColumn(
@@ -670,7 +689,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15,
-                                      color: Color(0xFF0F172A),
+                                      // color will be set below dynamically
                                     ),
                                   ),
                                 ),
@@ -683,7 +702,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15,
-                                      color: Color(0xFF0F172A),
+                                      // color will be set below dynamically
                                     ),
                                   ),
                                 ),
@@ -696,7 +715,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15,
-                                      color: Color(0xFF0F172A),
+                                      // color will be set below dynamically
                                     ),
                                   ),
                                 ),
@@ -709,7 +728,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15,
-                                      color: Color(0xFF0F172A),
+                                      // color will be set below dynamically
                                     ),
                                   ),
                                 ),
@@ -723,32 +742,33 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                   .toString();
                               final percent = (record["percentage"] ?? "0%")
                                   .toString();
+                              final headerTextColor = palette?.textPrimary;
                               return DataRow(
                                 cells: [
                                   DataCell(
                                     Text(
                                       course,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 14,
-                                        color: Color(0xFF0F172A),
+                                        color: headerTextColor,
                                       ),
                                     ),
                                   ),
                                   DataCell(
                                     Text(
                                       total,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 14,
-                                        color: Color(0xFF1F2937),
+                                        color: headerTextColor,
                                       ),
                                     ),
                                   ),
                                   DataCell(
                                     Text(
                                       present,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 14,
-                                        color: Color(0xFF1F2937),
+                                        color: headerTextColor,
                                       ),
                                     ),
                                   ),

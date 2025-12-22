@@ -170,7 +170,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
 
     // Confirm applying non-empty edits (show before -> after summary) only if changed
     if (_hasChanges) {
-      final display = (String s) => s.isEmpty ? '(empty)' : s;
+      display(String s) => s.isEmpty ? '(empty)' : s;
       final beforeParts = <String>[];
       if (_initialCourse.isNotEmpty) beforeParts.add(_initialCourse);
       if (_initialLecturer.isNotEmpty) beforeParts.add(_initialLecturer);

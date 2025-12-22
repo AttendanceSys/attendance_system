@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user.dart';
 import '../popup/edit_user_popup.dart';
 import '../cards/searchBar.dart';
+import '../../theme/super_admin_theme.dart';
 
 class UserHandlingPage extends StatefulWidget {
   const UserHandlingPage({super.key});
@@ -331,9 +332,10 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                 final visible = _showPasswordById[user.id] ?? false;
 
                 final isDark = Theme.of(context).brightness == Brightness.dark;
-                final highlight = isDark
-                    ? const Color(0xFF2E3545)
-                    : Colors.blue.shade50;
+                final palette = Theme.of(context).extension<SuperAdminColors>();
+                final highlight =
+                    palette?.highlight ??
+                    (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
 
                 return InkWell(
                   onTap: () => _handleRowTap(index),
@@ -355,7 +357,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  visible ? (user.password ?? '') : '••••••••',
+                                  visible ? user.password : '••••••••',
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -399,9 +401,15 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "User Handling",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(
+                context,
+              ).extension<SuperAdminColors>()?.textPrimary,
+            ),
           ),
           const SizedBox(height: 24),
           Row(

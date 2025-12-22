@@ -8,6 +8,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 
 class TimetableCellEditResult {
   final String? cellText;
@@ -126,10 +127,12 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
     try {
       // Try multiple common fields
       QuerySnapshot snap = await col.where('class', isEqualTo: classId).get();
-      if (snap.docs.isEmpty)
+      if (snap.docs.isEmpty) {
         snap = await col.where('class_id', isEqualTo: classId).get();
-      if (snap.docs.isEmpty)
+      }
+      if (snap.docs.isEmpty) {
         snap = await col.where('classId', isEqualTo: classId).get();
+      }
       if (snap.docs.isEmpty) {
         // try matching by DocumentReference if courses use refs
         try {
@@ -205,10 +208,11 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                     t['username'] ??
                     '')
                 .toString();
-        if (tname.isNotEmpty)
+        if (tname.isNotEmpty) {
           return [
             {'id': tid, 'name': tname},
           ];
+        }
       }
 
       // If course doc has 'teachers' array of refs or ids, try to fetch the first
@@ -230,10 +234,11 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                             '')
                         .toString();
                 final tid = tdoc.id;
-                if (tname.isNotEmpty)
+                if (tname.isNotEmpty) {
                   return [
                     {'id': tid, 'name': tname},
                   ];
+                }
               }
             } else if (item is String) {
               final tdoc = await _firestore
@@ -251,10 +256,11 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                             tdata['username'] ??
                             '')
                         .toString();
-                if (tname.isNotEmpty)
+                if (tname.isNotEmpty) {
                   return [
                     {'id': item, 'name': tname},
                   ];
+                }
               }
             }
           } catch (_) {}
@@ -328,8 +334,9 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
           _useCustomLecturer = false;
         }
       }
-      if (_lecturers.isEmpty && widget.lecturers.isEmpty)
+      if (_lecturers.isEmpty && widget.lecturers.isEmpty) {
         _useCustomLecturer = true;
+      }
       _loadingLecturers = false;
     });
   }
@@ -396,8 +403,16 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
         .map((t) => MapEntry(t['id'] ?? '', t['name'] ?? ''))
         .toList();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
     return AlertDialog(
-      title: const Text('Edit Timetable Cell'),
+      backgroundColor: isDark
+          ? (palette?.surfaceHigh ?? const Color(0xFF323746))
+          : null,
+      title: Text(
+        'Edit Timetable Cell',
+        style: isDark ? TextStyle(color: palette?.textPrimary) : null,
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -407,10 +422,29 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
               children: [
                 Expanded(
                   child: InputDecorator(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Course',
-                      border: OutlineInputBorder(),
                       isDense: true,
+                      border: const OutlineInputBorder(),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? (palette?.border ?? const Color(0xFF3A404E))
+                              : const Color(0xFFE5E7EB),
+                        ),
+                      ),
+                      focusedBorder: isDark
+                          ? OutlineInputBorder(
+                              borderSide: BorderSide(
+                                color:
+                                    palette?.accent ?? const Color(0xFF0A1E90),
+                              ),
+                            )
+                          : null,
+                      filled: isDark,
+                      fillColor: isDark
+                          ? (palette?.inputFill ?? const Color(0xFF2B303D))
+                          : null,
                     ),
                     child: _loadingCourses
                         ? const SizedBox(
@@ -422,6 +456,10 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                         : DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               isExpanded: true,
+                              dropdownColor: isDark
+                                  ? (palette?.surface ??
+                                        const Color(0xFF262C3A))
+                                  : null,
                               value:
                                   (_selectedCourseId != null &&
                                       _selectedCourseId!.isNotEmpty)
@@ -429,12 +467,22 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                                   : null,
                               hint: Text(
                                 _selectedCourseName ?? 'Select course',
+                                style: isDark
+                                    ? TextStyle(color: palette?.textSecondary)
+                                    : null,
                               ),
                               items: courseEntries
                                   .map(
                                     (e) => DropdownMenuItem<String>(
                                       value: e.key,
-                                      child: Text(e.value),
+                                      child: Text(
+                                        e.value,
+                                        style: isDark
+                                            ? TextStyle(
+                                                color: palette?.textPrimary,
+                                              )
+                                            : null,
+                                      ),
                                     ),
                                   )
                                   .toList(),
@@ -460,18 +508,40 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
               children: [
                 Expanded(
                   child: InputDecorator(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Lecturer',
-                      border: OutlineInputBorder(),
                       isDense: true,
+                      border: const OutlineInputBorder(),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(
+                          color: isDark
+                              ? (palette?.border ?? const Color(0xFF3A404E))
+                              : const Color(0xFFE5E7EB),
+                        ),
+                      ),
+                      focusedBorder: isDark
+                          ? OutlineInputBorder(
+                              borderSide: BorderSide(
+                                color:
+                                    palette?.accent ?? const Color(0xFF0A1E90),
+                              ),
+                            )
+                          : null,
+                      filled: isDark,
+                      fillColor: isDark
+                          ? (palette?.inputFill ?? const Color(0xFF2B303D))
+                          : null,
                     ),
                     child: _useCustomLecturer
                         ? TextFormField(
                             controller: _customLecturerCtrl,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Enter lecturer name',
                               border: InputBorder.none,
                               isDense: true,
+                              hintStyle: isDark
+                                  ? TextStyle(color: palette?.textSecondary)
+                                  : null,
                             ),
                           )
                         : _loadingLecturers
@@ -484,6 +554,10 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                         : DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
                               isExpanded: true,
+                              dropdownColor: isDark
+                                  ? (palette?.surface ??
+                                        const Color(0xFF262C3A))
+                                  : null,
                               value:
                                   (_selectedLecturerId != null &&
                                       _selectedLecturerId!.isNotEmpty)
@@ -491,12 +565,22 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                                   : null,
                               hint: Text(
                                 _selectedLecturerName ?? 'Select lecturer',
+                                style: isDark
+                                    ? TextStyle(color: palette?.textSecondary)
+                                    : null,
                               ),
                               items: lecturerEntries
                                   .map(
                                     (e) => DropdownMenuItem<String>(
                                       value: e.key,
-                                      child: Text(e.value),
+                                      child: Text(
+                                        e.value,
+                                        style: isDark
+                                            ? TextStyle(
+                                                color: palette?.textPrimary,
+                                              )
+                                            : null,
+                                      ),
                                     ),
                                   )
                                   .toList(),
@@ -530,7 +614,9 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
               alignment: Alignment.centerLeft,
               child: Text(
                 'Save to set cell. Clear to empty the cell. Cancel to keep unchanged.',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDark ? palette?.textSecondary : null,
+                ),
               ),
             ),
           ],
@@ -539,10 +625,28 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(null),
+          style: isDark
+              ? TextButton.styleFrom(foregroundColor: palette?.textSecondary)
+              : null,
           child: const Text('Cancel'),
         ),
-        TextButton(onPressed: _clear, child: const Text('Clear')),
-        ElevatedButton(onPressed: _save, child: const Text('Save')),
+        TextButton(
+          onPressed: _clear,
+          style: isDark
+              ? TextButton.styleFrom(foregroundColor: palette?.accent)
+              : null,
+          child: const Text('Clear'),
+        ),
+        ElevatedButton(
+          onPressed: _save,
+          style: isDark
+              ? ElevatedButton.styleFrom(
+                  backgroundColor: palette?.accent,
+                  foregroundColor: palette?.textPrimary,
+                )
+              : null,
+          child: const Text('Save'),
+        ),
       ],
     );
   }

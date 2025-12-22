@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/faculty.dart';
+import '../../theme/super_admin_theme.dart';
 
 class AddFacultyPopup extends StatefulWidget {
   final Faculty? faculty;
@@ -36,13 +37,39 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
         ? 400
         : double.infinity;
 
+    final palette = Theme.of(context).extension<SuperAdminColors>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final containerBg = isDark ? const Color(0xFF262C3A) : Colors.white;
-    final borderColor = isDark ? const Color(0xFF3A404E) : Colors.blue[100]!;
-    final titleColor = isDark ? const Color(0xFFE6EAF1) : null;
-    final cancelTextColor = isDark ? const Color(0xFFE6EAF1) : Colors.black87;
-    final cancelBorderColor = isDark ? const Color(0xFFE6EAF1) : Colors.black54;
-    final saveBg = isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!;
+    final containerBg =
+        palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
+    final borderColor =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : Colors.blue[100]!);
+    final titleColor =
+        palette?.textPrimary ??
+        (isDark ? const Color(0xFFE6EAF1) : Colors.black87);
+    final cancelTextColor =
+        palette?.textPrimary ??
+        (isDark ? const Color(0xFFE6EAF1) : Colors.black87);
+    final cancelBorderColor =
+        palette?.border ?? (isDark ? const Color(0xFFE6EAF1) : Colors.black54);
+    final saveBg =
+        palette?.accent ??
+        (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final inputFill =
+        palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
+
+    InputDecoration _input(String hint) => InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: inputFill,
+      border: OutlineInputBorder(borderSide: BorderSide(color: borderColor)),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: saveBg, width: 1.4),
+      ),
+    );
 
     return Dialog(
       elevation: 8,
@@ -80,10 +107,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _facultyCode,
-                  decoration: InputDecoration(
-                    hintText: "Faculty Code",
-                    border: isDark ? null : const OutlineInputBorder(),
-                  ),
+                  decoration: _input("Faculty Code"),
                   onChanged: (val) {
                     setState(() => _codeError = null);
                     _facultyCode = val.trim();
@@ -107,10 +131,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _facultyName,
-                  decoration: InputDecoration(
-                    hintText: "Faculty Name",
-                    border: isDark ? null : const OutlineInputBorder(),
-                  ),
+                  decoration: _input("Faculty Name"),
                   onChanged: (val) {
                     setState(() => _nameError = null);
                     _facultyName = val.trim();
@@ -151,7 +172,17 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                     child: TextFormField(
                       decoration: InputDecoration(
                         hintText: "Establishment Date",
-                        border: isDark ? null : const OutlineInputBorder(),
+                        filled: true,
+                        fillColor: inputFill,
+                        border: OutlineInputBorder(
+                          borderSide: BorderSide(color: borderColor),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: borderColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: saveBg, width: 1.4),
+                        ),
                         suffixIcon: const Icon(Icons.calendar_today),
                       ),
                       controller: TextEditingController(

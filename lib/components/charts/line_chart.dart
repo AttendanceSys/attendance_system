@@ -15,6 +15,8 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     return Stack(
       children: [
         AspectRatio(
@@ -38,7 +40,9 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
               'avg',
               style: TextStyle(
                 fontSize: 12,
-                color: showAvg ? Colors.black54 : Colors.black87,
+                color: showAvg
+                    ? onSurface.withOpacity(0.6)
+                    : onSurface.withOpacity(0.9),
               ),
             ),
           ),
@@ -48,7 +52,11 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
   }
 
   Widget _bottomTitle(double value, TitleMeta meta) {
-    const style = TextStyle(fontWeight: FontWeight.bold, fontSize: 12);
+    final style = TextStyle(
+      fontWeight: FontWeight.bold,
+      fontSize: 12,
+      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+    );
     final text = switch (value.toInt()) {
       0 => 'JAN',
       2 => 'MAR',
@@ -64,7 +72,11 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
   }
 
   Widget _leftTitle(double value, TitleMeta meta) {
-    const style = TextStyle(fontWeight: FontWeight.bold, fontSize: 11);
+    final style = TextStyle(
+      fontWeight: FontWeight.bold,
+      fontSize: 11,
+      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+    );
     final text = switch (value.toInt()) {
       1 => '10',
       3 => '30',
@@ -75,6 +87,9 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
   }
 
   LineChartData _mainData() {
+    final theme = Theme.of(context);
+    final axisColor = theme.colorScheme.onSurface.withOpacity(0.25);
+    final borderColor = theme.colorScheme.outline.withOpacity(0.30);
     return LineChartData(
       gridData: FlGridData(
         show: true,
@@ -82,9 +97,9 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
         horizontalInterval: 1,
         verticalInterval: 1,
         getDrawingHorizontalLine: (value) =>
-            const FlLine(color: Color(0xFFB0BEC5), strokeWidth: 1),
+            FlLine(color: axisColor, strokeWidth: 1),
         getDrawingVerticalLine: (value) =>
-            const FlLine(color: Color(0xFFB0BEC5), strokeWidth: 1),
+            FlLine(color: axisColor, strokeWidth: 1),
       ),
       titlesData: FlTitlesData(
         show: true,
@@ -111,7 +126,7 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
       ),
       borderData: FlBorderData(
         show: true,
-        border: Border.all(color: const Color(0xFF37434D)),
+        border: Border.all(color: borderColor),
       ),
       minX: 0,
       maxX: 11,
@@ -145,6 +160,9 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
   }
 
   LineChartData _avgData() {
+    final theme = Theme.of(context);
+    final axisColor = theme.colorScheme.onSurface.withOpacity(0.30);
+    final borderColor = theme.colorScheme.outline.withOpacity(0.35);
     return LineChartData(
       lineTouchData: const LineTouchData(enabled: false),
       gridData: FlGridData(
@@ -153,9 +171,9 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
         verticalInterval: 1,
         horizontalInterval: 1,
         getDrawingVerticalLine: (value) =>
-            const FlLine(color: Color(0xFF37434D), strokeWidth: 1),
+            FlLine(color: axisColor, strokeWidth: 1),
         getDrawingHorizontalLine: (value) =>
-            const FlLine(color: Color(0xFF37434D), strokeWidth: 1),
+            FlLine(color: axisColor, strokeWidth: 1),
       ),
       titlesData: FlTitlesData(
         show: true,
@@ -182,7 +200,7 @@ class _LineGrowthChartState extends State<LineGrowthChart> {
       ),
       borderData: FlBorderData(
         show: true,
-        border: Border.all(color: const Color(0xFF37434D)),
+        border: Border.all(color: borderColor),
       ),
       minX: 0,
       maxX: 11,

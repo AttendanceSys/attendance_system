@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 
-enum AttendanceAlertType { alreadyRecorded, notYourClass, qrExpired, success, info }
+enum AttendanceAlertType {
+  alreadyRecorded,
+  notYourClass,
+  qrExpired,
+  success,
+  info,
+}
 
 class AttendanceAlert {
   // Convenience show methods (all accept optional subject/date/time details)
@@ -10,16 +17,15 @@ class AttendanceAlert {
     String? date,
     String? time,
     VoidCallback? onClose,
-  }) =>
-      _show(
-        context,
-        type: AttendanceAlertType.alreadyRecorded,
-        subject: subject,
-        date: date,
-        time: time,
-        title: 'Already Attendance\nMarked',
-        onClose: onClose,
-      );
+  }) => _show(
+    context,
+    type: AttendanceAlertType.alreadyRecorded,
+    subject: subject,
+    date: date,
+    time: time,
+    title: 'Already Attendance\nMarked',
+    onClose: onClose,
+  );
 
   static Future<void> showNotYourClass(
     BuildContext context, {
@@ -28,17 +34,16 @@ class AttendanceAlert {
     String? time,
     String? details,
     VoidCallback? onClose,
-  }) =>
-      _show(
-        context,
-        type: AttendanceAlertType.notYourClass,
-        subject: subject,
-        date: date,
-        time: time,
-        title: 'Not Your Class',
-        message: details,
-        onClose: onClose,
-      );
+  }) => _show(
+    context,
+    type: AttendanceAlertType.notYourClass,
+    subject: subject,
+    date: date,
+    time: time,
+    title: 'Not Your Class',
+    message: details,
+    onClose: onClose,
+  );
 
   static Future<void> showQrExpired(
     BuildContext context, {
@@ -47,17 +52,16 @@ class AttendanceAlert {
     String? time,
     String? details,
     VoidCallback? onClose,
-  }) =>
-      _show(
-        context,
-        type: AttendanceAlertType.qrExpired,
-        subject: subject,
-        date: date,
-        time: time,
-        title: 'Session Ended',
-        message: details,
-        onClose: onClose,
-      );
+  }) => _show(
+    context,
+    type: AttendanceAlertType.qrExpired,
+    subject: subject,
+    date: date,
+    time: time,
+    title: 'Session Ended',
+    message: details,
+    onClose: onClose,
+  );
 
   static Future<void> showSuccess(
     BuildContext context, {
@@ -66,17 +70,16 @@ class AttendanceAlert {
     String? time,
     Duration autoCloseAfter = const Duration(seconds: 2),
     VoidCallback? onClose,
-  }) =>
-      _show(
-        context,
-        type: AttendanceAlertType.success,
-        subject: subject,
-        date: date,
-        time: time,
-        title: 'Attendance Marked\nSuccessfully',
-        autoCloseAfter: autoCloseAfter,
-        onClose: onClose,
-      );
+  }) => _show(
+    context,
+    type: AttendanceAlertType.success,
+    subject: subject,
+    date: date,
+    time: time,
+    title: 'Attendance Marked\nSuccessfully',
+    autoCloseAfter: autoCloseAfter,
+    onClose: onClose,
+  );
 
   // Generic show function
   static Future<void> _show(
@@ -127,7 +130,7 @@ class _AttendanceAlertDialog extends StatelessWidget {
   final VoidCallback? onClose;
 
   const _AttendanceAlertDialog({
-    Key? key,
+    super.key,
     required this.type,
     this.title,
     this.message,
@@ -135,7 +138,7 @@ class _AttendanceAlertDialog extends StatelessWidget {
     this.date,
     this.time,
     this.onClose,
-  }) : super(key: key);
+  });
 
   Color get _primaryColor {
     switch (type) {
@@ -156,7 +159,8 @@ class _AttendanceAlertDialog extends StatelessWidget {
       case AttendanceAlertType.success:
         return Icons.check;
       case AttendanceAlertType.alreadyRecorded:
-        return Icons.check_circle; // show success-looking icon for already-recorded
+        return Icons
+            .check_circle; // show success-looking icon for already-recorded
       case AttendanceAlertType.notYourClass:
         return Icons.block;
       case AttendanceAlertType.qrExpired:
@@ -202,7 +206,13 @@ class _AttendanceAlertDialog extends StatelessWidget {
     }
   }
 
-  Widget _infoRow(BuildContext c, String label, String? value) {
+  Widget _infoRow(
+    BuildContext c,
+    String label,
+    String? value,
+    Color labelColor,
+    Color valueColor,
+  ) {
     if (value == null || value.trim().isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0, top: 4),
@@ -211,12 +221,20 @@ class _AttendanceAlertDialog extends StatelessWidget {
         children: [
           Text(
             '$label: ',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: labelColor,
+            ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w400),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w400,
+                color: valueColor,
+              ),
             ),
           ),
         ],
@@ -226,14 +244,26 @@ class _AttendanceAlertDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface =
+        palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
+    final textPrimary =
+        palette?.textPrimary ?? (isDark ? Colors.white : Colors.black87);
+    final textSecondary =
+        palette?.textSecondary ??
+        (isDark ? const Color(0xFFB5BDCB) : Colors.black54);
+
     final double screenW = MediaQuery.of(context).size.width;
     final double dialogW = screenW < 420 ? screenW * 0.96 : 380;
-    final double dialogH =
-        MediaQuery.of(context).size.height < 700 ? MediaQuery.of(context).size.height * 0.82 : 520;
+    final double dialogH = MediaQuery.of(context).size.height < 700
+        ? MediaQuery.of(context).size.height * 0.82
+        : 520;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      backgroundColor: surface,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: dialogW, maxHeight: dialogH),
         child: Padding(
@@ -245,10 +275,10 @@ class _AttendanceAlertDialog extends StatelessWidget {
               Text(
                 _effectiveTitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.w700,
-                  color: Colors.black87,
+                  color: textPrimary,
                 ),
               ),
               const SizedBox(height: 18),
@@ -262,11 +292,7 @@ class _AttendanceAlertDialog extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Icon(
-                    _icon,
-                    color: Colors.white,
-                    size: 96,
-                  ),
+                  child: Icon(_icon, color: Colors.white, size: 96),
                 ),
               ),
 
@@ -279,7 +305,7 @@ class _AttendanceAlertDialog extends StatelessWidget {
                   child: Text(
                     _effectiveMessage,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16, color: Colors.black54),
+                    style: TextStyle(fontSize: 16, color: textSecondary),
                   ),
                 ),
 
@@ -290,9 +316,15 @@ class _AttendanceAlertDialog extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 6.0),
                 child: Column(
                   children: [
-                    _infoRow(context, 'Subject', subject),
-                    _infoRow(context, 'Date', date),
-                    _infoRow(context, 'Time', time),
+                    _infoRow(
+                      context,
+                      'Subject',
+                      subject,
+                      textSecondary,
+                      textPrimary,
+                    ),
+                    _infoRow(context, 'Date', date, textSecondary, textPrimary),
+                    _infoRow(context, 'Time', time, textSecondary, textPrimary),
                   ],
                 ),
               ),
@@ -305,16 +337,19 @@ class _AttendanceAlertDialog extends StatelessWidget {
                   const Spacer(),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                      backgroundColor: palette?.accent ?? Colors.blue,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 14,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
                       elevation: 4,
                     ),
                     onPressed: () {
-                      if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+                      if (Navigator.of(context).canPop())
+                        Navigator.of(context).pop();
                       if (onClose != null) onClose!();
                     },
                     child: const Text(

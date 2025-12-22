@@ -2,6 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/department.dart';
 import '../../services/session.dart';
+import '../../theme/super_admin_theme.dart';
 
 class AddDepartmentPopup extends StatefulWidget {
   final Department? department;
@@ -134,6 +135,32 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
         ? 400
         : MediaQuery.of(context).size.width * 0.95;
 
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface =
+        palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
+    final border =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : Colors.blue[100]!);
+    final textPrimary =
+        palette?.textPrimary ?? (isDark ? Colors.white : Colors.black87);
+    final accent =
+        palette?.accent ??
+        (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final inputFill =
+        palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
+
+    InputDecoration _input(String hint) => InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: inputFill,
+      border: OutlineInputBorder(borderSide: BorderSide(color: border)),
+      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: border)),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: accent, width: 1.4),
+      ),
+    );
+
     return Dialog(
       elevation: 8,
       backgroundColor: Colors.transparent,
@@ -141,9 +168,9 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
         child: Container(
           width: dialogWidth,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: surface,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.blue[100]!, width: 2),
+            border: Border.all(color: border, width: 2),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.08),
@@ -163,18 +190,16 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                   widget.department == null
                       ? 'Add Department'
                       : 'Edit Department',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
+                    color: textPrimary,
                   ),
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _code,
-                  decoration: const InputDecoration(
-                    hintText: 'Department Code',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: _input('Department Code'),
                   onChanged: (val) {
                     setState(() => _codeError = null);
                     _code = val;
@@ -198,10 +223,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _name,
-                  decoration: const InputDecoration(
-                    hintText: 'Department Name',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: _input('Department Name'),
                   onChanged: (val) {
                     setState(() => _nameError = null);
                     _name = val;
@@ -228,10 +250,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 _teachers.isEmpty
                     ? DropdownButtonFormField<String>(
                         value: null,
-                        decoration: const InputDecoration(
-                          hintText: 'Head of Department',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: _input('Head of Department'),
                         items: [
                           DropdownMenuItem(
                             value: '',
@@ -250,10 +269,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                       )
                     : DropdownButtonFormField<String>(
                         value: _head,
-                        decoration: const InputDecoration(
-                          hintText: 'Head of Department',
-                          border: OutlineInputBorder(),
-                        ),
+                        decoration: _input('Head of Department'),
                         items: _teachers.map((t) {
                           final id = t['id'] ?? '';
                           final name = t['name'] ?? '';
@@ -281,16 +297,16 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.black54),
+                          side: BorderSide(color: border),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
-                        child: const Text(
+                        child: Text(
                           'Cancel',
                           style: TextStyle(
-                            color: Colors.black87,
+                            color: textPrimary,
                             fontWeight: FontWeight.w500,
                             fontSize: 16,
                           ),
@@ -412,7 +428,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[900],
+                          backgroundColor: accent,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),

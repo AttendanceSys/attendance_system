@@ -67,7 +67,6 @@ class MyApp extends StatelessWidget {
       canvasColor: scaffold,
       colorScheme: base.colorScheme.copyWith(
         brightness: Brightness.dark,
-        background: scaffold,
         surface: surface,
         primary: accent,
         onPrimary: Colors.white,
@@ -86,8 +85,8 @@ class MyApp extends StatelessWidget {
       cardTheme: const CardThemeData(
         color: surface,
         elevation: 0,
-        margin: const EdgeInsets.all(12),
-        shape: const RoundedRectangleBorder(
+        margin: EdgeInsets.all(12),
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
       ),
@@ -117,22 +116,22 @@ class MyApp extends StatelessWidget {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: MaterialStateProperty.all<Color>(accent),
-          foregroundColor: MaterialStateProperty.all<Color>(Colors.white),
-          overlayColor: MaterialStateProperty.all<Color>(overlay),
-          shape: MaterialStateProperty.all(
+          backgroundColor: WidgetStateProperty.all<Color>(accent),
+          foregroundColor: WidgetStateProperty.all<Color>(Colors.white),
+          overlayColor: WidgetStateProperty.all<Color>(overlay),
+          shape: WidgetStateProperty.all(
             const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(10)),
             ),
           ),
-          padding: MaterialStateProperty.all(
+          padding: WidgetStateProperty.all(
             const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           ),
         ),
       ),
       dataTableTheme: DataTableThemeData(
-        headingRowColor: MaterialStateProperty.all(surfaceHigh),
-        dataRowColor: MaterialStateProperty.all(scaffold),
+        headingRowColor: WidgetStateProperty.all(surfaceHigh),
+        dataRowColor: WidgetStateProperty.all(scaffold),
         headingTextStyle: const TextStyle(
           color: textPrimary,
           fontWeight: FontWeight.w600,

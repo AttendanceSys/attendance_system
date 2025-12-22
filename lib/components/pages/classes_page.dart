@@ -4,6 +4,7 @@ import '../../models/classes.dart';
 import '../popup/add_class_popup.dart';
 import '../cards/searchBar.dart';
 import '../../services/session.dart';
+import '../../theme/super_admin_theme.dart';
 
 class ClassesPage extends StatefulWidget {
   const ClassesPage({super.key});
@@ -44,8 +45,9 @@ class _ClassesPageState extends State<ClassesPage> {
   Future<void> _fetchDepartments() async {
     try {
       Query q = departmentsCollection;
-      if (Session.facultyRef != null)
+      if (Session.facultyRef != null) {
         q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
+      }
       final snapshot = await q.get();
       setState(() {
         _departmentNames = Map.fromEntries(
@@ -64,8 +66,9 @@ class _ClassesPageState extends State<ClassesPage> {
   Future<void> _fetchClasses() async {
     try {
       Query q = classesCollection;
-      if (Session.facultyRef != null)
+      if (Session.facultyRef != null) {
         q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
+      }
       final snapshot = await q.get();
       setState(() {
         _classes = snapshot.docs.map((doc) {
@@ -224,18 +227,20 @@ class _ClassesPageState extends State<ClassesPage> {
         'status': sc.status,
         'created_at': FieldValue.serverTimestamp(),
       };
-      if (Session.facultyRef != null)
+      if (Session.facultyRef != null) {
         toWrite['faculty_ref'] = Session.facultyRef;
+      }
       await classesCollection.add(toWrite);
       await _fetchClasses();
       setState(() => _selectedIndex = null);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Class added successfully'),
             backgroundColor: Colors.green,
           ),
         );
+      }
     } catch (e) {
       print('Error adding class: $e');
     }
@@ -310,18 +315,20 @@ class _ClassesPageState extends State<ClassesPage> {
         'status': newSc.status,
         'created_at': FieldValue.serverTimestamp(),
       };
-      if (Session.facultyRef != null)
+      if (Session.facultyRef != null) {
         toUpdate['faculty_ref'] = Session.facultyRef;
+      }
       await classesCollection.doc(oldSc.id).update(toUpdate);
       await _fetchClasses();
       setState(() => _selectedIndex = null);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Class updated successfully'),
             backgroundColor: Colors.green,
           ),
         );
+      }
     } catch (e) {
       print('Error updating class: $e');
     }
@@ -333,13 +340,14 @@ class _ClassesPageState extends State<ClassesPage> {
       await classesCollection.doc(sc.id).delete();
       await _fetchClasses();
       setState(() => _selectedIndex = null);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Class deleted successfully'),
             backgroundColor: Colors.green,
           ),
         );
+      }
     } catch (e) {
       print('Error deleting class: $e');
     }
@@ -366,12 +374,14 @@ class _ClassesPageState extends State<ClassesPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Classes",
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(
+                context,
+              ).extension<SuperAdminColors>()?.textPrimary,
             ),
           ),
           const SizedBox(height: 24),
@@ -479,6 +489,11 @@ class _ClassesPageState extends State<ClassesPage> {
   }
 
   Widget _buildDesktopTable() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(64), // No
@@ -501,9 +516,7 @@ class _ClassesPageState extends State<ClassesPage> {
         for (int index = 0; index < _filteredClasses.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
+              color: _selectedIndex == index ? highlight : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
@@ -535,6 +548,11 @@ class _ClassesPageState extends State<ClassesPage> {
   }
 
   Widget _buildMobileTable() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
     return Table(
       defaultColumnWidth: const IntrinsicColumnWidth(),
       border: TableBorder(
@@ -552,9 +570,7 @@ class _ClassesPageState extends State<ClassesPage> {
         for (int index = 0; index < _filteredClasses.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
+              color: _selectedIndex == index ? highlight : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),

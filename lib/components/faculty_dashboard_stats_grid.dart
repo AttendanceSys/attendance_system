@@ -32,9 +32,8 @@ class DashboardStatsGrid extends StatelessWidget {
         _fetchCount('students'),
       ]),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        final isLoading = !snapshot.hasData;
+        final counts = snapshot.data ?? const [0, 0, 0, 0];
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -90,7 +89,7 @@ class DashboardStatsGrid extends StatelessWidget {
 
                     return _StatsCard(
                       label: labels[index],
-                      value: snapshot.data![index].toString(),
+                      value: counts[index].toString(),
                       icon: icons[index],
                       color: colors[index],
                     );
@@ -99,29 +98,35 @@ class DashboardStatsGrid extends StatelessWidget {
                 const SizedBox(height: 24),
                 // Charts section matching super admin style
                 Row(
-                  children: const [
+                  children: [
                     Expanded(
                       child: _ChartCard(
                         title: 'Growth (Monthly)',
                         height: 220,
-                        child: charts.LineGrowthChart(),
+                        child: isLoading
+                            ? const _ChartLoading()
+                            : const charts.LineGrowthChart(),
                       ),
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: _ChartCard(
                         title: 'Activity Comparison',
                         height: 220,
-                        child: charts.FacultyActivityBarChart(),
+                        child: isLoading
+                            ? const _ChartLoading()
+                            : const charts.FacultyActivityBarChart(),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                const _ChartCard(
+                _ChartCard(
                   title: 'Usage Rate',
                   height: 320,
-                  child: charts.AttendanceAreaChart(),
+                  child: isLoading
+                      ? const _ChartLoading()
+                      : const charts.AttendanceAreaChart(),
                 ),
               ],
             );
@@ -141,25 +146,56 @@ class _ChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withOpacity(isDark ? 0.30 : 0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
+        border: Border.all(
+          color: theme.dividerColor.withOpacity(isDark ? 0.30 : 0.15),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 12),
           SizedBox(height: height ?? 240, child: child),
         ],
+      ),
+    );
+  }
+}
+
+class _ChartLoading extends StatelessWidget {
+  const _ChartLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator.adaptive(
+          strokeWidth: 2.5,
+          valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+        ),
       ),
     );
   }
@@ -183,19 +219,26 @@ class _StatsCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, size) {
         final scale = (size.maxHeight / 130).clamp(0.75, 1.0);
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
 
         return ClipRect(
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(20 * scale),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: theme.shadowColor.withOpacity(isDark ? 0.30 : 0.08),
                   blurRadius: 14,
                   offset: const Offset(0, 4),
                 ),
               ],
+              border: Border.all(
+                color: theme.colorScheme.outline.withOpacity(
+                  isDark ? 0.28 : 0.16,
+                ),
+              ),
             ),
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -217,21 +260,27 @@ class _StatsCard extends StatelessWidget {
                             label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                            style: theme.textTheme.titleMedium?.copyWith(
                               fontSize: 18 * scale,
                               fontWeight: FontWeight.w600,
-                              color: Colors.black87,
+                              color: theme.colorScheme.onSurface,
                             ),
                           ),
                           SizedBox(height: 4 * scale),
                           FittedBox(
                             fit: BoxFit.scaleDown,
-                            child: Text(
-                              value,
-                              style: TextStyle(
-                                fontSize: 34 * scale,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              transitionBuilder: (child, anim) =>
+                                  FadeTransition(opacity: anim, child: child),
+                              child: Text(
+                                value,
+                                key: ValueKey(value),
+                                style: TextStyle(
+                                  fontSize: 34 * scale,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurface,
+                                ),
                               ),
                             ),
                           ),
@@ -244,7 +293,21 @@ class _StatsCard extends StatelessWidget {
                   SizedBox(width: 14 * scale),
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 6 * scale),
-                    child: Icon(icon, size: 38 * scale, color: Colors.black87),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(isDark ? 0.25 : 0.12),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: color.withOpacity(isDark ? 0.35 : 0.18),
+                        ),
+                      ),
+                      padding: EdgeInsets.all(8 * scale),
+                      child: Icon(
+                        icon,
+                        size: 22 * scale,
+                        color: isDark ? color.withOpacity(0.95) : color,
+                      ),
+                    ),
                   ),
                 ],
               ),

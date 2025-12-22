@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 import 'package:attendance_system/services/session.dart';
 import 'student_details_panel.dart';
 import '../cards/searchBar.dart';
@@ -207,8 +208,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   Future<void> _fetchStudentsForSelection() async {
     if (selectedDepartment == null ||
         selectedClass == null ||
-        selectedCourse == null)
+        selectedCourse == null) {
       return;
+    }
 
     setState(() {
       loadingStudents = true;
@@ -260,7 +262,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                 .collection('classes')
                 .where('className', isEqualTo: v)
                 .get();
-            for (final cd in cQ.docs) classDocIds.add(cd.id);
+            for (final cd in cQ.docs) {
+              classDocIds.add(cd.id);
+            }
           } catch (_) {}
         }
         if (classDocIds.isEmpty) {
@@ -271,8 +275,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                 .get();
             for (final cd in classesInDept.docs) {
               final cname = (cd.data()['className'] ?? '').toString();
-              if (cname.isNotEmpty && _looseNameMatch(cname, selectedClass))
+              if (cname.isNotEmpty && _looseNameMatch(cname, selectedClass)) {
                 classDocIds.add(cd.id);
+              }
             }
           } catch (_) {}
         }
@@ -469,12 +474,14 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Attendance',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: Theme.of(
+                    context,
+                  ).extension<SuperAdminColors>()?.textPrimary,
                 ),
               ),
               const SizedBox(height: 16),
@@ -727,11 +734,25 @@ class _DropdownFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const hintStyle = TextStyle(fontSize: 16, color: Color(0xFF6D6D6D));
-    const itemStyle = TextStyle(fontSize: 16, color: Colors.black87);
-    const borderColor = Color(0xFFC7BECF);
-    const borderShape = OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(8)),
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hintStyle = TextStyle(
+      fontSize: 16,
+      color:
+          palette?.textSecondary ??
+          (isDark ? const Color(0xFF9EA5B5) : Colors.black54),
+    );
+    final itemStyle = TextStyle(
+      fontSize: 16,
+      color:
+          palette?.textPrimary ??
+          (isDark ? const Color(0xFFE6EAF1) : Colors.black87),
+    );
+    final borderColor =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : const Color(0xFFC7BECF));
+    final borderShape = OutlineInputBorder(
+      borderRadius: const BorderRadius.all(Radius.circular(8)),
       borderSide: BorderSide(color: borderColor, width: 1.1),
     );
     return ConstrainedBox(
@@ -747,13 +768,17 @@ class _DropdownFilter extends StatelessWidget {
           focusedBorder: borderShape,
           isDense: true,
           filled: true,
-          fillColor: Colors.white,
+          fillColor:
+              palette?.inputFill ??
+              (isDark ? const Color(0xFF2B303D) : Colors.white),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String?>(
             isExpanded: true,
             style: itemStyle,
-            iconEnabledColor: const Color(0xFF6D6D6D),
+            iconEnabledColor:
+                palette?.iconColor ??
+                (isDark ? const Color(0xFFE6EAF1) : const Color(0xFF6D6D6D)),
             value: value,
             hint: Text(isLoading ? 'Loading...' : hint, style: hintStyle),
             items: [
@@ -761,16 +786,17 @@ class _DropdownFilter extends StatelessWidget {
                 value: null,
                 child: Text(hint, style: hintStyle),
               ),
-              ...items
-                  .map(
-                    (item) => DropdownMenuItem<String?>(
-                      value: item,
-                      child: Text(item, style: itemStyle),
-                    ),
-                  )
-                  .toList(),
+              ...items.map(
+                (item) => DropdownMenuItem<String?>(
+                  value: item,
+                  child: Text(item, style: itemStyle),
+                ),
+              ),
             ],
             onChanged: isLoading ? null : onChanged,
+            dropdownColor:
+                palette?.surface ??
+                (isDark ? const Color(0xFF262C3A) : Colors.white),
           ),
         ),
       ),

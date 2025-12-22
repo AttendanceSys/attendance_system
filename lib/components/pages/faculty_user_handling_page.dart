@@ -4,6 +4,7 @@ import '../../models/user.dart';
 import '../../services/session.dart';
 import '../popup/edit_user_popup.dart';
 import '../cards/searchBar.dart';
+import '../../theme/super_admin_theme.dart';
 
 class FacultyUserHandlingPage extends StatefulWidget {
   const FacultyUserHandlingPage({super.key});
@@ -216,47 +217,63 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
 
   Widget _buildScrollableTable({required bool isDesktop}) {
     final rows = _filteredStudents;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
     return Column(
       children: [
         // Header
         Container(
-          color: Colors.grey[100],
+          color: palette?.surfaceHigh,
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           child: Row(
-            children: const [
+            children: [
               Expanded(
                 flex: 1,
                 child: Text(
                   'No',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: palette?.textPrimary,
+                  ),
                 ),
               ),
               Expanded(
                 flex: 3,
                 child: Text(
                   'Username',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: palette?.textPrimary,
+                  ),
                 ),
               ),
               Expanded(
                 flex: 2,
                 child: Text(
                   'Role',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: palette?.textPrimary,
+                  ),
                 ),
               ),
               Expanded(
                 flex: 2,
                 child: Text(
                   'Status',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: palette?.textPrimary,
+                  ),
                 ),
               ),
               Expanded(
                 flex: 3,
                 child: Text(
                   'Password',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: palette?.textPrimary,
+                  ),
                 ),
               ),
             ],
@@ -272,35 +289,67 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
               controller: _scrollController,
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               itemCount: rows.length,
-              separatorBuilder: (_, __) =>
-                  Divider(height: 1, color: Colors.grey.shade300),
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                color: palette?.border ?? Colors.grey.shade300,
+              ),
               itemBuilder: (context, index) {
                 final user = rows[index];
                 final selected = _selectedIndex == index;
                 final visible = _showPasswordById[user.id] ?? false;
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final palette = Theme.of(context).extension<SuperAdminColors>();
+                final highlight =
+                    palette?.highlight ??
+                    (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
 
                 return InkWell(
                   onTap: () => _handleRowTap(index),
                   child: Container(
-                    color: selected ? Colors.blue.shade50 : Colors.transparent,
+                    color: selected ? highlight : Colors.transparent,
                     padding: const EdgeInsets.symmetric(
                       vertical: 12,
                       horizontal: 8,
                     ),
                     child: Row(
                       children: [
-                        Expanded(flex: 1, child: Text('${index + 1}')),
-                        Expanded(flex: 3, child: Text(user.username)),
-                        Expanded(flex: 2, child: Text(user.role)),
-                        Expanded(flex: 2, child: Text(user.status)),
+                        Expanded(
+                          flex: 1,
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(color: palette?.textPrimary),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            user.username,
+                            style: TextStyle(color: palette?.textPrimary),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            user.role,
+                            style: TextStyle(color: palette?.textPrimary),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            user.status,
+                            style: TextStyle(color: palette?.textPrimary),
+                          ),
+                        ),
                         Expanded(
                           flex: 3,
                           child: Row(
                             children: [
                               Expanded(
                                 child: Text(
-                                  visible ? (user.password ?? '') : '••••••••',
+                                  visible ? user.password : '••••••••',
                                   overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: palette?.textPrimary),
                                 ),
                               ),
                               IconButton(
@@ -309,6 +358,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
                                       ? Icons.visibility
                                       : Icons.visibility_off,
                                   size: 20,
+                                  color: palette?.iconColor,
                                 ),
                                 onPressed: () {
                                   setState(() {
@@ -352,12 +402,14 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Faculty User Handling",
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(
+                context,
+              ).extension<SuperAdminColors>()?.textPrimary,
             ),
           ),
           const SizedBox(height: 24),

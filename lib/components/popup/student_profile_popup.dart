@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../screens/login_screen.dart'; // Make sure this import path is correct for your project!
+import '../../theme/super_admin_theme.dart';
 
 class StudentProfilePopup extends StatelessWidget {
   final String name;
@@ -21,9 +22,21 @@ class StudentProfilePopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface =
+        palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
+    final textPrimary =
+        palette?.textPrimary ?? (isDark ? Colors.white : Colors.black87);
+    final textSecondary =
+        palette?.textSecondary ??
+        (isDark ? const Color(0xFFB5BDCB) : Colors.black54);
+    final accent = palette?.accent ?? const Color(0xFF2196F3);
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      insetPadding: EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+      backgroundColor: surface,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 18),
         child: Column(
@@ -34,21 +47,29 @@ class StudentProfilePopup extends StatelessWidget {
               backgroundColor: Colors.lightBlue[400],
               child: Text(
                 avatarLetter,
-                style: TextStyle(fontSize: 72, color: Colors.white, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 72,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            SizedBox(height: 18),
+            const SizedBox(height: 18),
             Text(
               name,
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: textPrimary,
+              ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: 10),
-            infoRow("Class:", className),
-            infoRow("Semester:", semester),
-            infoRow("Gender:", gender),
-            infoRow("ID:", id),
-            SizedBox(height: 20),
+            const SizedBox(height: 10),
+            infoRow("Class:", className, textPrimary, textSecondary),
+            infoRow("Semester:", semester, textPrimary, textSecondary),
+            infoRow("Gender:", gender, textPrimary, textSecondary),
+            infoRow("ID:", id, textPrimary, textSecondary),
+            const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -58,10 +79,18 @@ class StudentProfilePopup extends StatelessWidget {
                   height: 38,
                   child: ElevatedButton.icon(
                     icon: Icon(Icons.logout, size: 20, color: Colors.white),
-                    label: Text("Logout", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                    label: Text(
+                      "Logout",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                      ),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       padding: EdgeInsets.zero,
                     ),
                     onPressed: () {
@@ -80,12 +109,20 @@ class StudentProfilePopup extends StatelessWidget {
                   height: 38,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF2196F3),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      backgroundColor: accent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       padding: EdgeInsets.zero,
                     ),
                     onPressed: () => Navigator.of(context).pop(),
-                    child: Text("OK", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                    child: Text(
+                      "OK",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -96,17 +133,30 @@ class StudentProfilePopup extends StatelessWidget {
     );
   }
 
-  Widget infoRow(String label, String value) {
+  Widget infoRow(
+    String label,
+    String value,
+    Color labelColor,
+    Color valueColor,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: RichText(
         text: TextSpan(
           text: "$label ",
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87, fontSize: 17),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: labelColor,
+            fontSize: 17,
+          ),
           children: [
             TextSpan(
               text: value,
-              style: TextStyle(fontWeight: FontWeight.normal, color: Colors.black87, fontSize: 17),
+              style: TextStyle(
+                fontWeight: FontWeight.normal,
+                color: valueColor,
+                fontSize: 17,
+              ),
             ),
           ],
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/session.dart';
+import '../../theme/super_admin_theme.dart';
 
 class FacultyAdminSidebar extends StatefulWidget {
   final Function(int) onItemSelected;
@@ -64,10 +65,15 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
     final collapsed = widget.collapsed;
     final selectedIndex = widget.selectedIndex;
     final onItemSelected = widget.onItemSelected;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final sidebarColor =
+        palette?.sidebarColor ??
+        (isDark ? const Color(0xFF0E1A60) : const Color(0xFF3B4B9B));
 
     return Container(
       width: collapsed ? 60 : 220,
-      color: const Color(0xFF3B4B9B),
+      color: sidebarColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -188,15 +194,40 @@ class _SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final Color selectedBg =
+        palette?.selectedBg ??
+        (isDark
+            ? Colors.white.withOpacity(0.13)
+            : Colors.white.withOpacity(0.25));
+    final Color iconColor = palette?.iconColor ?? Colors.white;
+    final Color textColor = palette?.textPrimary ?? Colors.white;
+    final overlay = WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.hovered)) {
+        return palette?.hoverOverlay ??
+            (isDark
+                ? Colors.white.withOpacity(0.10)
+                : Colors.white.withOpacity(0.20));
+      }
+      if (states.contains(WidgetState.pressed)) {
+        return palette?.pressedOverlay ??
+            (isDark
+                ? Colors.white.withOpacity(0.16)
+                : Colors.white.withOpacity(0.28));
+      }
+      return null;
+    });
     return Tooltip(
       message: collapsed ? title : "", // Only show tooltip when collapsed
       verticalOffset: 0,
       preferBelow: false,
       waitDuration: const Duration(milliseconds: 300),
       child: Material(
-        color: isSelected ? const Color(0x33FFFFFF) : Colors.transparent,
+        color: isSelected ? selectedBg : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
+          overlayColor: overlay,
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           child: Container(
@@ -206,20 +237,17 @@ class _SidebarItem extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
-              color: isSelected ? const Color(0x33FFFFFF) : Colors.transparent,
+              color: isSelected ? selectedBg : Colors.transparent,
             ),
             child: Row(
               mainAxisAlignment: collapsed
                   ? MainAxisAlignment.center
                   : MainAxisAlignment.start,
               children: [
-                Icon(icon, color: Colors.white, size: 22),
+                Icon(icon, color: iconColor, size: 22),
                 if (!collapsed) ...[
                   const SizedBox(width: 12),
-                  Text(
-                    title,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                  ),
+                  Text(title, style: TextStyle(color: textColor, fontSize: 14)),
                 ],
               ],
             ),

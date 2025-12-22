@@ -6,7 +6,6 @@ import 'package:attendance_system/screens/faculty_admin_page.dart';
 import 'package:attendance_system/screens/teacher_main_page.dart';
 import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/services.dart';
 import '../services/session.dart';
 
 class LoginScreen extends StatefulWidget {

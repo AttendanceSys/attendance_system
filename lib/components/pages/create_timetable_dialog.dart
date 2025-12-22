@@ -5,10 +5,9 @@
 //
 // Save as: lib/components/pages/create_timetable_dialog.dart
 
-import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 import 'package:flutter/services.dart';
 
 /// A single session result (one timetable cell)
@@ -202,10 +201,11 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
           debugPrint(
             'CreateDialog classes query [$tag] -> ${snap.docs.length} docs',
           );
-          if (snap.docs.isNotEmpty)
+          if (snap.docs.isNotEmpty) {
             debugPrint(
               'CreateDialog classes [$tag] first doc: ${snap.docs.first.data()}',
             );
+          }
           return snap.docs;
         } catch (e, st) {
           debugPrint('CreateDialog classes query [$tag] failed: $e\n$st');
@@ -220,31 +220,35 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
           classesCol.where('department_ref', isEqualTo: depIdOrRef),
           'department_ref==DocumentReference',
         );
-        if (docs.isEmpty)
+        if (docs.isEmpty) {
           docs = await tryQuery(
             classesCol.where('department_ref', isEqualTo: depIdOrRef.id),
             'department_ref==DocumentReference.id',
           );
+        }
       } else if (depIdOrRef is String) {
         docs = await tryQuery(
           classesCol.where('department_ref', isEqualTo: depIdOrRef),
           'department_ref==String',
         );
-        if (docs.isEmpty)
+        if (docs.isEmpty) {
           docs = await tryQuery(
             classesCol.where('department_id', isEqualTo: depIdOrRef),
             'department_id==String',
           );
-        if (docs.isEmpty)
+        }
+        if (docs.isEmpty) {
           docs = await tryQuery(
             classesCol.where('department', isEqualTo: depIdOrRef),
             'department==String',
           );
-        if (docs.isEmpty)
+        }
+        if (docs.isEmpty) {
           docs = await tryQuery(
             classesCol.where('department_name', isEqualTo: depIdOrRef),
             'department_name==String',
           );
+        }
       }
 
       final classes = docs.map((d) {
@@ -412,6 +416,8 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     String cancelText = 'No',
     bool destructive = false,
   }) async {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final res = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -420,6 +426,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
+            style: isDark
+                ? TextButton.styleFrom(foregroundColor: palette?.textSecondary)
+                : null,
             child: Text(cancelText),
           ),
           ElevatedButton(
@@ -427,8 +436,13 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
             style: ElevatedButton.styleFrom(
               backgroundColor: destructive
                   ? Colors.red
-                  : Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
+                  : (isDark
+                        ? (palette?.accent ??
+                              Theme.of(context).colorScheme.primary)
+                        : Theme.of(context).colorScheme.primary),
+              foregroundColor: isDark
+                  ? (palette?.textPrimary ?? Colors.white)
+                  : Colors.white,
             ),
             child: Text(confirmText),
           ),
@@ -590,7 +604,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       _spans = result.spans;
       _teachingIndices = result.teachingIndices;
       _recomputeTeachingIndices();
-      for (final s in _sessions) s.periodDropdownIndex = null;
+      for (final s in _sessions) {
+        s.periodDropdownIndex = null;
+      }
     });
   }
 
@@ -624,7 +640,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     if (!ok) return;
 
     int insertAt = 0;
-    while (insertAt < _spans.length && _spans[insertAt].$1 < start) insertAt++;
+    while (insertAt < _spans.length && _spans[insertAt].$1 < start) {
+      insertAt++;
+    }
 
     setState(() {
       _spans.insert(insertAt, (start, end));
@@ -672,7 +690,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       _spans.clear();
       _teachingIndices.clear();
       _inferredPeriodMinutes = null;
-      for (final s in _sessions) s.periodDropdownIndex = null;
+      for (final s in _sessions) {
+        s.periodDropdownIndex = null;
+      }
     });
   }
 
@@ -793,8 +813,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
       '${minutes ~/ 60}:${(minutes % 60).toString().padLeft(2, '0')}';
 
   void _snack(String msg) {
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 
   void _assertIntegrity() {
@@ -809,8 +830,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   List<String> _classesForDepartmentKey(String? dept) {
     if (dept == null || dept.trim().isEmpty) return [];
     final lower = dept.toLowerCase();
-    if (widget.departmentClasses.containsKey(dept))
+    if (widget.departmentClasses.containsKey(dept)) {
       return widget.departmentClasses[dept]!;
+    }
     final matchKey = widget.departmentClasses.keys.firstWhere(
       (k) => k.toLowerCase() == lower,
       orElse: () => '',
@@ -820,10 +842,11 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   }
 
   List<String> get _classesForDepartment {
-    if (_loadedClasses.isNotEmpty)
+    if (_loadedClasses.isNotEmpty) {
       return _loadedClasses
           .map((c) => c['name']?.toString() ?? c['id'].toString())
           .toList();
+    }
     final list = _classesForDepartmentKey(_department);
     if (list.isNotEmpty) return list;
     return widget.departmentClasses.values.expand((e) => e).toList();
@@ -836,26 +859,64 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
     ValueChanged<T?>? onChanged,
     Widget Function(T)? builder,
   }) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecorator(
-      decoration: const InputDecoration(
-        border: OutlineInputBorder(
+      decoration: InputDecoration(
+        border: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(8)),
         ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(8)),
+          borderSide: BorderSide(
+            color: isDark
+                ? (palette?.border ?? const Color(0xFF3A3F4A))
+                : const Color(0xFFE5E7EB),
+          ),
+        ),
+        focusedBorder: isDark
+            ? OutlineInputBorder(
+                borderRadius: const BorderRadius.all(Radius.circular(8)),
+                borderSide: BorderSide(
+                  color: palette?.accent ?? const Color(0xFF7C3AED),
+                ),
+              )
+            : null,
         isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: isDark
+            ? (palette?.inputFill ?? const Color(0xFF2A2F3A))
+            : Colors.white,
       ).copyWith(hintText: hint),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           isExpanded: true,
           value: value,
-          hint: Text(hint),
+          dropdownColor: isDark
+              ? (palette?.surface ?? const Color(0xFF1F2430))
+              : null,
+          style: isDark
+              ? TextStyle(color: palette?.textPrimary ?? Colors.white)
+              : null,
+          hint: isDark
+              ? Text(hint, style: TextStyle(color: palette?.textSecondary))
+              : Text(hint),
           items: items
               .map(
                 (e) => DropdownMenuItem<T>(
                   value: e,
-                  child: builder != null ? builder(e) : Text(e.toString()),
+                  child: builder != null
+                      ? builder(e)
+                      : Text(
+                          e.toString(),
+                          style: isDark
+                              ? TextStyle(color: palette?.textPrimary)
+                              : null,
+                        ),
                 ),
               )
               .toList(),
@@ -892,7 +953,12 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
   Widget build(BuildContext context) {
     final teachingLabels = _teachingLabels;
 
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Dialog(
+      backgroundColor: isDark
+          ? (palette?.surfaceHigh ?? const Color(0xFF1F2430))
+          : null,
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: SafeArea(
@@ -907,18 +973,22 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                   // Header
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Create Time Table Entry',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: isDark ? palette?.textPrimary : null,
                           ),
                         ),
                       ),
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close),
+                        icon: Icon(
+                          Icons.close,
+                          color: isDark ? palette?.iconColor : null,
+                        ),
                         tooltip: 'Close',
                       ),
                     ],
@@ -955,8 +1025,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                                         ?.toString()
                                   : null;
                               if (name != null &&
-                                  name.toLowerCase() == v.toLowerCase())
+                                  name.toLowerCase() == v.toLowerCase()) {
                                 matchedParentArg = true;
+                              }
                             } catch (_) {
                               matchedParentArg = false;
                             }
@@ -970,14 +1041,16 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                               QuerySnapshot snap = await deptCol
                                   .where('name', isEqualTo: v)
                                   .get();
-                              if (snap.docs.isEmpty)
+                              if (snap.docs.isEmpty) {
                                 snap = await deptCol
                                     .where('department_name', isEqualTo: v)
                                     .get();
-                              if (snap.docs.isEmpty)
+                              }
+                              if (snap.docs.isEmpty) {
                                 snap = await deptCol
                                     .where('displayName', isEqualTo: v)
                                     .get();
+                              }
                               if (snap.docs.isNotEmpty) {
                                 depArg = snap.docs.first.reference;
                               } else {
@@ -1053,18 +1126,21 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                             QuerySnapshot csnap = await classesCol
                                 .where('class_name', isEqualTo: v)
                                 .get();
-                            if (csnap.docs.isEmpty)
+                            if (csnap.docs.isEmpty) {
                               csnap = await classesCol
                                   .where('name', isEqualTo: v)
                                   .get();
-                            if (csnap.docs.isEmpty)
+                            }
+                            if (csnap.docs.isEmpty) {
                               csnap = await classesCol
                                   .where('class_id', isEqualTo: v)
                                   .get();
-                            if (csnap.docs.isEmpty)
+                            }
+                            if (csnap.docs.isEmpty) {
                               csnap = await classesCol
                                   .where('department_ref', isEqualTo: v)
                                   .get();
+                            }
                             if (csnap.docs.isNotEmpty) {
                               final d = csnap.docs.first;
                               classDocId = d.id;
@@ -1097,9 +1173,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                                 }
                                 if (teacherVal != null) {
                                   DocumentReference? tref;
-                                  if (teacherVal is DocumentReference)
+                                  if (teacherVal is DocumentReference) {
                                     tref = teacherVal;
-                                  else if (teacherVal is String) {
+                                  } else if (teacherVal is String) {
                                     final s = teacherVal.trim();
                                     try {
                                       tref = s.contains('/')
@@ -1125,14 +1201,16 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                                                   data?['username'] ??
                                                   tdoc.id)
                                               .toString();
-                                      if (mounted)
+                                      if (mounted) {
                                         setState(() {
                                           if (!_availableLecturers.contains(
                                             name,
-                                          ))
+                                          )) {
                                             _availableLecturers.add(name);
+                                          }
                                           _lecturer = name;
                                         });
+                                      }
                                     }
                                   }
                                 }
@@ -1161,45 +1239,76 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                             isEmpty:
                                 (_lecturer == null ||
                                 _lecturer!.trim().isEmpty),
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(
+                            decoration: InputDecoration(
+                              border: const OutlineInputBorder(
                                 borderRadius: BorderRadius.all(
                                   Radius.circular(8),
                                 ),
                               ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: const BorderRadius.all(
+                                  Radius.circular(8),
+                                ),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? (palette?.border ??
+                                            const Color(0xFF3A3F4A))
+                                      : const Color(0xFFE5E7EB),
+                                ),
+                              ),
+                              focusedBorder: isDark
+                                  ? OutlineInputBorder(
+                                      borderRadius: const BorderRadius.all(
+                                        Radius.circular(8),
+                                      ),
+                                      borderSide: BorderSide(
+                                        color:
+                                            palette?.accent ??
+                                            const Color(0xFF7C3AED),
+                                      ),
+                                    )
+                                  : null,
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 22,
                               ),
                               filled: true,
-                              fillColor: Colors.white,
+                              fillColor: isDark
+                                  ? (palette?.inputFill ??
+                                        const Color(0xFF2A2F3A))
+                                  : Colors.white,
                             ).copyWith(hintText: 'Lecturer'),
                             child:
                                 (_lecturer != null &&
                                     _lecturer!.trim().isNotEmpty)
                                 ? Text(
                                     _lecturer!,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 17,
-                                      // fontWeight: FontWeight.w600,
-                                      color: Colors.black,
+                                      color: isDark
+                                          ? (palette?.textPrimary ??
+                                                Colors.white)
+                                          : Colors.black,
                                     ),
                                   )
                                 : const SizedBox.shrink(),
                           )
                         : TextFormField(
                             controller: _lecturerCustomCtrl,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Lecturer',
-                              border: OutlineInputBorder(),
+                              border: const OutlineInputBorder(),
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 10,
                               ),
                               filled: true,
-                              fillColor: Colors.white,
+                              fillColor: isDark
+                                  ? (palette?.inputFill ??
+                                        const Color(0xFF2A2F3A))
+                                  : Colors.white,
                             ),
                           ),
                     _dropdownBox<String>(
@@ -1227,8 +1336,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                                 break;
                               }
                             }
-                            if (f.isNotEmpty)
+                            if (f.isNotEmpty) {
                               found = Map<String, dynamic>.from(f['raw'] ?? {});
+                            }
                           }
 
                           if (found == null) return;
@@ -1253,15 +1363,16 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                           if (teacherVal == null) return;
 
                           DocumentReference? tref;
-                          if (teacherVal is DocumentReference)
+                          if (teacherVal is DocumentReference) {
                             tref = teacherVal;
-                          else if (teacherVal is String) {
+                          } else if (teacherVal is String) {
                             final s = teacherVal.trim();
                             try {
-                              if (s.contains('/'))
+                              if (s.contains('/')) {
                                 tref = _firestore.doc(s);
-                              else
+                              } else {
                                 tref = _firestore.collection('teachers').doc(s);
+                              }
                             } catch (_) {
                               tref = _firestore.collection('teachers').doc(s);
                             }
@@ -1282,8 +1393,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
                           if (mounted) {
                             setState(() {
-                              if (!_availableLecturers.contains(name))
+                              if (!_availableLecturers.contains(name)) {
                                 _availableLecturers.add(name);
+                              }
                               _lecturer = name;
                             });
                           }
@@ -1317,22 +1429,40 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                     children: [
                       TextButton.icon(
                         onPressed: _openFullGenerator,
-                        icon: const Icon(Icons.settings),
+                        icon: Icon(
+                          Icons.settings,
+                          color: isDark
+                              ? (palette?.iconColor ?? Colors.white)
+                              : null,
+                        ),
                         label: Text(
                           _configured
                               ? 'Reconfigure periods'
                               : 'Configure periods',
+                          style: TextStyle(
+                            color: isDark ? palette?.textPrimary : null,
+                          ),
                         ),
                       ),
                       if (_configured)
                         OutlinedButton(
                           onPressed: _appendPeriodOrBreak,
-                          child: const Text('Append period / break'),
+                          child: Text(
+                            'Append period / break',
+                            style: TextStyle(
+                              color: isDark ? palette?.textPrimary : null,
+                            ),
+                          ),
                         ),
                       if (_configured)
                         OutlinedButton(
                           onPressed: _clearGenerated,
-                          child: const Text('Clear structure'),
+                          child: Text(
+                            'Clear structure',
+                            style: TextStyle(
+                              color: isDark ? palette?.textPrimary : null,
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -1346,10 +1476,24 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                         final l = _labels[i];
                         final isBreak = l.toLowerCase().contains('break');
                         return Chip(
-                          label: Text(l, style: const TextStyle(fontSize: 12)),
-                          backgroundColor: isBreak
-                              ? Colors.grey.shade200
-                              : Colors.blue.shade50,
+                          label: Text(
+                            l,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark
+                                  ? (palette?.textPrimary ?? Colors.white)
+                                  : null,
+                            ),
+                          ),
+                          backgroundColor: isDark
+                              ? (isBreak
+                                    ? (palette?.overlay ??
+                                          const Color(0xFF2A2F3A))
+                                    : (palette?.highlight ??
+                                          const Color(0xFF2E2152)))
+                              : (isBreak
+                                    ? Colors.grey.shade200
+                                    : Colors.blue.shade50),
                           materialTapTargetSize:
                               MaterialTapTargetSize.shrinkWrap,
                           visualDensity: VisualDensity.compact,
@@ -1372,9 +1516,15 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                       margin: const EdgeInsets.only(top: 12),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
+                        color: isDark
+                            ? (palette?.overlay ?? const Color(0xFF2A2F3A))
+                            : Colors.amber.shade50,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amber.shade200),
+                        border: Border.all(
+                          color: isDark
+                              ? (palette?.border ?? const Color(0xFF3A3F4A))
+                              : Colors.amber.shade200,
+                        ),
                       ),
                       child: const Text(
                         'Configure (or rely on an existing schedule) before adding sessions. You can later append new periods or breaks without recreating everything.',
@@ -1387,12 +1537,13 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                   // Sessions
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Sessions',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
+                            color: isDark ? palette?.textPrimary : null,
                           ),
                         ),
                       ),
@@ -1461,11 +1612,22 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
+                        style: isDark
+                            ? TextButton.styleFrom(
+                                foregroundColor: palette?.textSecondary,
+                              )
+                            : null,
                         child: const Text('Cancel'),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
                         onPressed: _save,
+                        style: isDark
+                            ? ElevatedButton.styleFrom(
+                                backgroundColor: palette?.accent,
+                                foregroundColor: palette?.textPrimary,
+                              )
+                            : null,
                         child: const Text('Save'),
                       ),
                     ],
@@ -1666,8 +1828,16 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return AlertDialog(
-      title: const Text('Configure Periods'),
+      backgroundColor: isDark
+          ? (palette?.surfaceHigh ?? const Color(0xFF1F2430))
+          : null,
+      title: Text(
+        'Configure Periods',
+        style: isDark ? TextStyle(color: palette?.textPrimary) : null,
+      ),
       content: SizedBox(
         width: 600,
         child: SingleChildScrollView(
@@ -1679,17 +1849,43 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                     context: context,
                     initialTime: _toTimeOfDay(_dayStart),
                   );
-                  if (picked != null)
+                  if (picked != null) {
                     setState(
                       () => _dayStart = picked.hour * 60 + picked.minute,
                     );
+                  }
                 },
                 child: InputDecorator(
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Day start',
-                    border: OutlineInputBorder(),
+                    labelStyle: isDark
+                        ? TextStyle(color: palette?.textSecondary)
+                        : null,
+                    border: const OutlineInputBorder(),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? (Theme.of(
+                                    context,
+                                  ).extension<SuperAdminColors>()?.border ??
+                                  const Color(0xFF3A3F4A))
+                            : const Color(0xFFE5E7EB),
+                      ),
+                    ),
+                    focusedBorder:
+                        Theme.of(context).brightness == Brightness.dark
+                        ? OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).extension<SuperAdminColors>()?.accent ??
+                                  const Color(0xFF7C3AED),
+                            ),
+                          )
+                        : null,
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 10,
                     ),
@@ -1697,8 +1893,17 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(_fmt(_dayStart)),
-                      const Icon(Icons.access_time, size: 18),
+                      Text(
+                        _fmt(_dayStart),
+                        style: isDark
+                            ? TextStyle(color: palette?.textPrimary)
+                            : null,
+                      ),
+                      Icon(
+                        Icons.access_time,
+                        size: 18,
+                        color: isDark ? palette?.iconColor : null,
+                      ),
                     ],
                   ),
                 ),
@@ -1708,11 +1913,37 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                 children: [
                   Expanded(
                     child: InputDecorator(
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Period duration',
-                        border: OutlineInputBorder(),
+                        labelStyle: isDark
+                            ? TextStyle(color: palette?.textSecondary)
+                            : null,
+                        border: const OutlineInputBorder(),
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: BorderSide(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? (Theme.of(
+                                        context,
+                                      ).extension<SuperAdminColors>()?.border ??
+                                      const Color(0xFF3A3F4A))
+                                : const Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        focusedBorder:
+                            Theme.of(context).brightness == Brightness.dark
+                            ? OutlineInputBorder(
+                                borderSide: BorderSide(
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).extension<SuperAdminColors>()?.accent ??
+                                      const Color(0xFF7C3AED),
+                                ),
+                              )
+                            : null,
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
+                        contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 10,
                         ),
@@ -1720,6 +1951,9 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
                           isExpanded: true,
+                          dropdownColor: isDark
+                              ? (palette?.surface ?? const Color(0xFF262C3A))
+                              : null,
                           value: _useCustom
                               ? null
                               : (_presetDurations.contains(_periodMinutes)
@@ -1729,13 +1963,23 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                             _useCustom
                                 ? 'Custom (${_periodMinutes}m)'
                                 : '${_periodMinutes}m',
+                            style: isDark
+                                ? TextStyle(color: palette?.textSecondary)
+                                : null,
                           ),
                           items:
                               _presetDurations
                                   .map(
                                     (m) => DropdownMenuItem<int>(
                                       value: m,
-                                      child: Text('$m min'),
+                                      child: Text(
+                                        '$m min',
+                                        style: isDark
+                                            ? TextStyle(
+                                                color: palette?.textPrimary,
+                                              )
+                                            : null,
+                                      ),
                                     ),
                                   )
                                   .toList()
@@ -1765,26 +2009,33 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                     Expanded(
                       child: TextFormField(
                         initialValue: _customDuration.toString(),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Custom minutes',
-                          border: OutlineInputBorder(),
+                          labelStyle: isDark
+                              ? TextStyle(color: palette?.textSecondary)
+                              : null,
+                          border: const OutlineInputBorder(),
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 10,
                           ),
                         ),
+                        style: isDark
+                            ? TextStyle(color: palette?.textPrimary)
+                            : null,
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           FilteringTextInputFormatter.digitsOnly,
                         ],
                         onChanged: (v) {
                           final n = int.tryParse(v.trim());
-                          if (n != null && n > 0)
+                          if (n != null && n > 0) {
                             setState(() {
                               _customDuration = n;
                               _periodMinutes = n;
                             });
+                          }
                         },
                       ),
                     ),
@@ -1792,32 +2043,42 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                   Expanded(
                     child: TextFormField(
                       initialValue: _periodCount.toString(),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Number of periods',
-                        border: OutlineInputBorder(),
+                        labelStyle: isDark
+                            ? TextStyle(color: palette?.textSecondary)
+                            : null,
+                        border: const OutlineInputBorder(),
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
+                        contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 10,
                         ),
                       ),
+                      style: isDark
+                          ? TextStyle(color: palette?.textPrimary)
+                          : null,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       onChanged: (v) {
                         final n = int.tryParse(v.trim());
-                        if (n != null && n >= 1 && n <= 40)
+                        if (n != null && n >= 1 && n <= 40) {
                           setState(() => _periodCount = n);
+                        }
                       },
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 18),
-              const Align(
+              Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'Breaks (optional)',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? palette?.textPrimary : null,
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -1830,11 +2091,39 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                       children: [
                         Expanded(
                           child: InputDecorator(
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'After period #',
-                              border: OutlineInputBorder(),
+                              labelStyle: isDark
+                                  ? TextStyle(color: palette?.textSecondary)
+                                  : null,
+                              border: const OutlineInputBorder(),
+                              enabledBorder: OutlineInputBorder(
+                                borderSide: BorderSide(
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? (Theme.of(context)
+                                                .extension<SuperAdminColors>()
+                                                ?.border ??
+                                            const Color(0xFF3A3F4A))
+                                      : const Color(0xFFE5E7EB),
+                                ),
+                              ),
+                              focusedBorder:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? OutlineInputBorder(
+                                      borderSide: BorderSide(
+                                        color:
+                                            Theme.of(context)
+                                                .extension<SuperAdminColors>()
+                                                ?.accent ??
+                                            const Color(0xFF7C3AED),
+                                      ),
+                                    )
+                                  : null,
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 10,
                               ),
@@ -1843,12 +2132,28 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                               child: DropdownButton<int>(
                                 isExpanded: true,
                                 value: b.after,
-                                hint: const Text('Choose'),
+                                dropdownColor: isDark
+                                    ? (palette?.surface ??
+                                          const Color(0xFF262C3A))
+                                    : null,
+                                hint: Text(
+                                  'Choose',
+                                  style: isDark
+                                      ? TextStyle(color: palette?.textSecondary)
+                                      : null,
+                                ),
                                 items: _afterPeriodOptions
                                     .map(
                                       (n) => DropdownMenuItem<int>(
                                         value: n,
-                                        child: Text('$n'),
+                                        child: Text(
+                                          '$n',
+                                          style: isDark
+                                              ? TextStyle(
+                                                  color: palette?.textPrimary,
+                                                )
+                                              : null,
+                                        ),
                                       ),
                                     )
                                     .toList(),
@@ -1861,15 +2166,21 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         Expanded(
                           child: TextFormField(
                             initialValue: b.minutes?.toString() ?? '',
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Break minutes',
-                              border: OutlineInputBorder(),
+                              labelStyle: isDark
+                                  ? TextStyle(color: palette?.textSecondary)
+                                  : null,
+                              border: const OutlineInputBorder(),
                               isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 10,
                               ),
                             ),
+                            style: isDark
+                                ? TextStyle(color: palette?.textPrimary)
+                                : null,
                             keyboardType: TextInputType.number,
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
@@ -1887,8 +2198,9 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
                         if (i > 0)
                           IconButton(
                             onPressed: () {
-                              if (_breaks.length > 1)
+                              if (_breaks.length > 1) {
                                 setState(() => _breaks.removeAt(i));
+                              }
                             },
                             icon: const Icon(
                               Icons.close,
@@ -1919,9 +2231,29 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
+          style: Theme.of(context).brightness == Brightness.dark
+              ? TextButton.styleFrom(
+                  foregroundColor: Theme.of(
+                    context,
+                  ).extension<SuperAdminColors>()?.textSecondary,
+                )
+              : null,
           child: const Text('Cancel'),
         ),
-        ElevatedButton(onPressed: _generate, child: const Text('Generate')),
+        ElevatedButton(
+          onPressed: _generate,
+          style: Theme.of(context).brightness == Brightness.dark
+              ? ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(
+                    context,
+                  ).extension<SuperAdminColors>()?.accent,
+                  foregroundColor: Theme.of(
+                    context,
+                  ).extension<SuperAdminColors>()?.textPrimary,
+                )
+              : null,
+          child: const Text('Generate'),
+        ),
       ],
     );
   }
@@ -1934,9 +2266,17 @@ class _PeriodGeneratorDialogState extends State<_PeriodGeneratorDialog> {
       width: double.infinity,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.blueGrey.shade50,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? (Theme.of(context).extension<SuperAdminColors>()?.overlay ??
+                  const Color(0xFF2A2F3A))
+            : Colors.blueGrey.shade50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blueGrey.shade100),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? (Theme.of(context).extension<SuperAdminColors>()?.border ??
+                    const Color(0xFF3A3F4A))
+              : Colors.blueGrey.shade100,
+        ),
       ),
       child: const Text(
         'Rules:\n'
@@ -2012,11 +2352,12 @@ class _AddPeriodDialogState extends State<_AddPeriodDialog> {
                   context: context,
                   initialTime: initial,
                 );
-                if (picked != null)
+                if (picked != null) {
                   setState(() {
                     startPicker = picked;
                     error = null;
                   });
+                }
               },
               child: InputDecorator(
                 decoration: const InputDecoration(

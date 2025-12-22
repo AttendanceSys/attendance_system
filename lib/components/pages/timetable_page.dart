@@ -16,10 +16,11 @@ import 'dart:convert';
 // - Safe cell editing that avoids null-derefs and persists edits to Firestore.
 // - Replace your existing lib/components/pages/timetable_page.dart with this file.
 
-import 'dart:convert';
+// duplicate removed
 import '../cards/searchBar.dart';
 
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -65,7 +66,7 @@ class _TimetablePageState extends State<TimetablePage> {
   String? selectedCourse;
 
   bool editingEnabled = false;
-  _UndoState? _lastUndo;
+  // _lastUndo removed (unused)
 
   final List<String> seedPeriods = const [
     "7:30 - 9:20",
@@ -89,7 +90,7 @@ class _TimetablePageState extends State<TimetablePage> {
   bool _loadingDeps = false;
   bool _loadingClasses = false;
   bool _loadingTeachers = false;
-  bool _loadingCourses = false;
+  // removed _loadingCourses (unused under strict analyzer)
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final CollectionReference timetablesCollection = FirebaseFirestore.instance
@@ -140,7 +141,7 @@ class _TimetablePageState extends State<TimetablePage> {
         (d) => (d['id']?.toString() ?? '') == s,
         orElse: () => <String, dynamic>{},
       );
-      if (found is Map && found.isNotEmpty) {
+      if (found.isNotEmpty) {
         final n = (found['name']?.toString() ?? '').trim();
         if (n.isNotEmpty) return n;
       }
@@ -168,7 +169,7 @@ class _TimetablePageState extends State<TimetablePage> {
         (c) => (c['id']?.toString() ?? '') == s,
         orElse: () => <String, dynamic>{},
       );
-      if (found is Map && found.isNotEmpty) {
+      if (found.isNotEmpty) {
         final n = (found['name']?.toString() ?? '').trim();
         if (n.isNotEmpty) return n;
       }
@@ -194,7 +195,7 @@ class _TimetablePageState extends State<TimetablePage> {
         (d) => (d['id']?.toString() ?? '') == s,
         orElse: () => <String, dynamic>{},
       );
-      if (found is Map && found.isNotEmpty) {
+      if (found.isNotEmpty) {
         final n = (found['name']?.toString() ?? '').trim();
         if (n.isNotEmpty) return n;
       }
@@ -209,7 +210,7 @@ class _TimetablePageState extends State<TimetablePage> {
         (c) => (c['id']?.toString() ?? '') == s,
         orElse: () => <String, dynamic>{},
       );
-      if (found is Map && found.isNotEmpty) {
+      if (found.isNotEmpty) {
         final n = (found['name']?.toString() ?? '').trim();
         if (n.isNotEmpty) return n;
       }
@@ -274,7 +275,7 @@ class _TimetablePageState extends State<TimetablePage> {
             return false;
           }, orElse: () => <String, dynamic>{});
 
-          if (candidate is Map && candidate.isNotEmpty) {
+          if (candidate.isNotEmpty) {
             // set selected department and load its classes automatically
             setState(() {
               selectedDepartment = candidate['id'] as String?;
@@ -418,7 +419,7 @@ class _TimetablePageState extends State<TimetablePage> {
 
     try {
       Query query = _firestore.collection('classes');
-      final String? depIdStr = depArg == null ? null : depArg.toString();
+      final String? depIdStr = depArg?.toString();
       final String? depRefId = depArg is DocumentReference ? depArg.id : null;
       final String? depRefPath = depArg is DocumentReference
           ? depArg.path
@@ -523,7 +524,6 @@ class _TimetablePageState extends State<TimetablePage> {
   Future<void> _loadCoursesForClass(dynamic classArg) async {
     if (!mounted) return;
     setState(() {
-      _loadingCourses = true;
       _coursesForSelectedClass = [];
     });
 
@@ -566,7 +566,7 @@ class _TimetablePageState extends State<TimetablePage> {
       debugPrint('loadCoursesForClass error: $e\n$st');
       if (mounted) setState(() => _coursesForSelectedClass = []);
     } finally {
-      if (mounted) setState(() => _loadingCourses = false);
+      // no-op
     }
   }
 
@@ -716,10 +716,11 @@ class _TimetablePageState extends State<TimetablePage> {
       }
     } catch (e, st) {
       debugPrint('Error loading timetable doc (timetables): $e\n$st');
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error loading timetable: $e')));
+      }
     }
 
     // Load courses for the selected class for edit dialog dropdowns
@@ -729,7 +730,7 @@ class _TimetablePageState extends State<TimetablePage> {
           (c) => (c['id']?.toString() ?? '') == clsId,
           orElse: () => <String, dynamic>{},
         );
-        if (classMap is Map && classMap.isNotEmpty) {
+        if (classMap.isNotEmpty) {
           await _loadCoursesForClass(classMap['id']);
         } else {
           await _loadCoursesForClass(classDisplay);
@@ -749,10 +750,11 @@ class _TimetablePageState extends State<TimetablePage> {
     List<String> periods;
     try {
       final rawPeriods = data['periods'];
-      if (rawPeriods is List)
+      if (rawPeriods is List) {
         periods = rawPeriods.map((e) => e?.toString() ?? '').toList();
-      else
+      } else {
         periods = List<String>.from(seedPeriods);
+      }
     } catch (_) {
       periods = List<String>.from(seedPeriods);
     }
@@ -804,14 +806,14 @@ class _TimetablePageState extends State<TimetablePage> {
           }
         }
       } else if (gridRaw is List && gridRaw.every((e) => e is List)) {
-        grid = (gridRaw as List)
+        grid = (gridRaw)
             .map<List<String>>(
               (r) => (r as List).map((c) => c?.toString() ?? '').toList(),
             )
             .toList();
       } else if (gridRaw is List && gridRaw.every((e) => e is String)) {
         try {
-          grid = (gridRaw as List).map<List<String>>((s) {
+          grid = (gridRaw).map<List<String>>((s) {
             final parsed = jsonDecode(s as String);
             return (parsed as List).map((c) => c.toString()).toList();
           }).toList();
@@ -989,16 +991,18 @@ class _TimetablePageState extends State<TimetablePage> {
 
     try {
       await ref.set(data, SetOptions(merge: true));
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Timetable saved')));
+      }
     } catch (e, st) {
       debugPrint('Error saving timetable: $e\n$st');
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error saving timetable: $e')));
+      }
     }
   }
 
@@ -1194,16 +1198,18 @@ class _TimetablePageState extends State<TimetablePage> {
 
       await batch.commit();
       await _loadTimetableDoc();
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Timetable entries applied')),
         );
+      }
     } catch (e, st) {
       debugPrint('Error applying payload: $e\n$st');
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error applying entries: $e')));
+      }
     }
   }
 
@@ -1354,34 +1360,34 @@ class _TimetablePageState extends State<TimetablePage> {
         ? _displayNameForClassCached(selectedClass!)
         : null;
 
-    List<String>? _copyPeriods(List<String>? p) =>
+    List<String>? copyPeriods(List<String>? p) =>
         p == null ? null : List<String>.from(p, growable: true);
 
     if (depDisplay != null && clsDisplay != null) {
       final p = classPeriods[depDisplay]?[clsDisplay];
-      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+      if (p != null && p.isNotEmpty) return copyPeriods(p)!;
     }
 
     if (selectedDepartment != null && clsDisplay != null) {
       final p = classPeriods[selectedDepartment!]?[clsDisplay];
-      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+      if (p != null && p.isNotEmpty) return copyPeriods(p)!;
     }
 
     if (depDisplay != null && selectedClass != null) {
       final p = classPeriods[depDisplay]?[selectedClass!];
-      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+      if (p != null && p.isNotEmpty) return copyPeriods(p)!;
     }
 
     if (selectedDepartment != null && selectedClass != null) {
       final p = classPeriods[selectedDepartment!]?[selectedClass!];
-      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+      if (p != null && p.isNotEmpty) return copyPeriods(p)!;
     }
 
     if (depDisplay != null && clsDisplay != null) {
       final sDep = _sanitizeForId(depDisplay);
       final sCls = _sanitizeForId(clsDisplay);
       final p = classPeriods[sDep]?[sCls];
-      if (p != null && p.isNotEmpty) return _copyPeriods(p)!;
+      if (p != null && p.isNotEmpty) return copyPeriods(p)!;
     }
 
     if (selectedDepartment != null) {
@@ -1394,16 +1400,16 @@ class _TimetablePageState extends State<TimetablePage> {
                 _displayNameForClassCached(selectedClass!),
               ) ??
               _findKeyIgnoreCase(map, selectedClass);
-          if (found != null) return _copyPeriods(map[found])!;
+          if (found != null) return copyPeriods(map[found])!;
         }
-        return _copyPeriods(map.values.first)!;
+        return copyPeriods(map.values.first)!;
       }
     }
 
     if (classPeriods.isNotEmpty) {
       final firstDep = classPeriods.keys.first;
       final firstMap = classPeriods[firstDep]!;
-      if (firstMap.isNotEmpty) return _copyPeriods(firstMap.values.first)!;
+      if (firstMap.isNotEmpty) return copyPeriods(firstMap.values.first)!;
     }
 
     return List<String>.from(seedPeriods, growable: true);
@@ -1428,10 +1434,11 @@ class _TimetablePageState extends State<TimetablePage> {
       if (mounted) setState(() => editingEnabled = false);
     } catch (e, st) {
       debugPrint('Error in _handleSelectionChangeSafe: $e\n$st');
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to load timetable.')),
         );
+      }
     }
   }
 
@@ -1467,7 +1474,7 @@ class _TimetablePageState extends State<TimetablePage> {
       if (depSeen.add(dd.toLowerCase())) depList.add(dd);
     }
 
-    List<String> _buildClassCandidates(Map classesMap) {
+    List<String> buildClassCandidates(Map classesMap) {
       final candidates = <String>[];
       if (selectedClass != null) {
         final selCls = selectedClass!.trim();
@@ -1491,7 +1498,7 @@ class _TimetablePageState extends State<TimetablePage> {
     for (final depKey in depList) {
       final classesMap = timetableData[depKey];
       if (classesMap == null) continue;
-      final classCandidates = _buildClassCandidates(classesMap);
+      final classCandidates = buildClassCandidates(classesMap);
       for (final c in classCandidates) {
         final matched = _findKeyIgnoreCase(classesMap, c);
         if (matched != null) {
@@ -1508,12 +1515,13 @@ class _TimetablePageState extends State<TimetablePage> {
       debugPrint(
         'Edit cell: no grid found for selection dep="$selectedDepartment" cls="$selectedClass"',
       );
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Timetable not loaded for the selected class.'),
           ),
         );
+      }
       return;
     }
 
@@ -1569,10 +1577,11 @@ class _TimetablePageState extends State<TimetablePage> {
 
     setState(() {
       if (dayIndex >= grid!.length) {
-        while (grid.length <= dayIndex)
+        while (grid.length <= dayIndex) {
           grid.add(
             List<String>.filled(periodsForClass.length, '', growable: true),
           );
+        }
       }
       if (periodIndex >= grid[dayIndex].length) {
         grid[dayIndex].addAll(
@@ -1588,10 +1597,12 @@ class _TimetablePageState extends State<TimetablePage> {
       final depDisplayCached = selectedDepartment != null
           ? _displayNameForDeptCached(selectedDepartment!)
           : null;
-      if (depDisplayCached != null && depDisplayCached.isNotEmpty)
+      if (depDisplayCached != null && depDisplayCached.isNotEmpty) {
         depWriteKeys.add(depDisplayCached);
-      if (depDisplayCached != null)
+      }
+      if (depDisplayCached != null) {
         depWriteKeys.add(_sanitizeForId(depDisplayCached));
+      }
 
       final classWriteKeys = <String>{};
       if (foundClassKey != null) classWriteKeys.add(foundClassKey);
@@ -1599,10 +1610,12 @@ class _TimetablePageState extends State<TimetablePage> {
       final classDisplayCached = selectedClass != null
           ? _displayNameForClassCached(selectedClass!)
           : null;
-      if (classDisplayCached != null && classDisplayCached.isNotEmpty)
+      if (classDisplayCached != null && classDisplayCached.isNotEmpty) {
         classWriteKeys.add(classDisplayCached);
-      if (classDisplayCached != null)
+      }
+      if (classDisplayCached != null) {
         classWriteKeys.add(_sanitizeForId(classDisplayCached));
+      }
 
       for (final dk in depWriteKeys) {
         timetableData.putIfAbsent(dk, () => {});
@@ -1640,10 +1653,11 @@ class _TimetablePageState extends State<TimetablePage> {
         await _saveTimetableDocToFirestore(selectedDepartment!, selectedClass!);
       } catch (e, st) {
         debugPrint('Error saving timetable after edit: $e\n$st');
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text('Error saving timetable: $e')));
+        }
       }
     }
   }
@@ -1661,7 +1675,7 @@ class _TimetablePageState extends State<TimetablePage> {
     final depId = selectedDepartment!;
     final classId = selectedClass!;
 
-    Future<bool> _deleteDocById(String docId) async {
+    Future<bool> deleteDocById(String docId) async {
       try {
         final ref = timetablesCollection.doc(docId);
         final snap = await ref.get();
@@ -1679,7 +1693,7 @@ class _TimetablePageState extends State<TimetablePage> {
 
     // 1) Try preferred doc id from display names
     final preferredId = _docIdFromDisplayNames(depDisplay, classDisplay);
-    deleted = await _deleteDocById(preferredId);
+    deleted = await deleteDocById(preferredId);
 
     // 2) If not found, try a query with multiple field combinations
     if (!deleted) {
@@ -1708,7 +1722,7 @@ class _TimetablePageState extends State<TimetablePage> {
           final snap = await q.get();
           if (snap.docs.isNotEmpty) {
             final id = snap.docs.first.id;
-            deleted = await _deleteDocById(id);
+            deleted = await deleteDocById(id);
           }
         } catch (e, st) {
           debugPrint('delete query failed: $e\n$st');
@@ -1729,7 +1743,7 @@ class _TimetablePageState extends State<TimetablePage> {
       const SnackBar(content: Text('Timetable deleted successfully')),
     );
 
-    void _clearCacheKey(String depKey, String classKey) {
+    void clearCacheKey(String depKey, String classKey) {
       timetableData[depKey]?.remove(classKey);
       if (timetableData[depKey]?.isEmpty == true) timetableData.remove(depKey);
       classPeriods[depKey]?.remove(classKey);
@@ -1742,11 +1756,11 @@ class _TimetablePageState extends State<TimetablePage> {
     final classSan = _sanitizeForId(classDisplay);
 
     setState(() {
-      _clearCacheKey(depDisplay, classDisplay);
-      _clearCacheKey(depDisplay, classId);
-      _clearCacheKey(depId, classDisplay);
-      _clearCacheKey(depId, classId);
-      _clearCacheKey(depSan, classSan);
+      clearCacheKey(depDisplay, classDisplay);
+      clearCacheKey(depDisplay, classId);
+      clearCacheKey(depId, classDisplay);
+      clearCacheKey(depId, classId);
+      clearCacheKey(depSan, classSan);
 
       editingEnabled = false;
     });
@@ -2024,6 +2038,8 @@ class _TimetablePageState extends State<TimetablePage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final grid = currentTimetable;
     final periodsForClass = currentPeriods;
     final showLecturerList =
@@ -2043,12 +2059,12 @@ class _TimetablePageState extends State<TimetablePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Time Table',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: isDark ? palette?.textPrimary : null,
                 ),
               ),
               const SizedBox(height: 16),
@@ -2065,6 +2081,12 @@ class _TimetablePageState extends State<TimetablePage> {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   ElevatedButton.icon(
+                    style: isDark
+                        ? ElevatedButton.styleFrom(
+                            backgroundColor: palette?.accent,
+                            foregroundColor: palette?.textPrimary,
+                          )
+                        : null,
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('Create Time Table'),
                     onPressed: () async {
@@ -2096,9 +2118,10 @@ class _TimetablePageState extends State<TimetablePage> {
                             (c) => c['id'] == selectedClass,
                             orElse: () => <String, dynamic>{},
                           );
-                          if (classMap.isNotEmpty)
+                          if (classMap.isNotEmpty) {
                             initialClassName = (classMap['name'] as String?)
                                 ?.toString();
+                          }
                         } catch (_) {
                           initialClassName = null;
                         }
@@ -2139,18 +2162,30 @@ class _TimetablePageState extends State<TimetablePage> {
                   SizedBox(
                     height: 36,
                     child: OutlinedButton.icon(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.refresh,
                         size: 18,
-                        color: Colors.purple,
+                        color: isDark
+                            ? (palette?.accent ?? const Color(0xFF7C3AED))
+                            : Colors.purple,
                       ),
-                      label: const Text(
+                      label: Text(
                         'Reload',
-                        style: TextStyle(color: Colors.purple),
+                        style: TextStyle(
+                          color: isDark
+                              ? (palette?.accent ?? const Color(0xFF7C3AED))
+                              : Colors.purple,
+                        ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.purple),
-                        foregroundColor: Colors.purple,
+                        side: BorderSide(
+                          color: isDark
+                              ? (palette?.accent ?? const Color(0xFF7C3AED))
+                              : Colors.purple,
+                        ),
+                        foregroundColor: isDark
+                            ? (palette?.accent ?? const Color(0xFF7C3AED))
+                            : Colors.purple,
                       ),
                       onPressed: () async {
                         setState(() {
@@ -2176,7 +2211,10 @@ class _TimetablePageState extends State<TimetablePage> {
                     height: 36,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: isDark
+                            ? (palette?.accent ?? Colors.green)
+                            : Colors.green,
+                        foregroundColor: Colors.white,
                       ),
                       onPressed: !canEdit
                           ? null
@@ -2185,9 +2223,11 @@ class _TimetablePageState extends State<TimetablePage> {
                             ),
                       child: Text(
                         editingEnabled ? "Done" : "Edit",
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
-                          color: Colors.white,
+                          color: isDark
+                              ? (palette?.textPrimary ?? Colors.white)
+                              : Colors.white,
                         ),
                       ),
                     ),
@@ -2241,7 +2281,10 @@ class _TimetablePageState extends State<TimetablePage> {
                   IconButton(
                     tooltip: 'Export PDF',
                     onPressed: canExport ? _exportPdfFlow : null,
-                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    icon: Icon(
+                      Icons.picture_as_pdf_outlined,
+                      color: isDark ? palette?.iconColor : null,
+                    ),
                   ),
                 ],
               ),
@@ -2265,23 +2308,77 @@ class _TimetablePageState extends State<TimetablePage> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: isDark
+                                ? (palette?.border ?? const Color(0xFF3A3F4A))
+                                : const Color(0xFFE5E7EB),
+                          ),
                         ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: isDark
+                                ? (palette?.border ?? const Color(0xFF3A3F4A))
+                                : const Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        focusedBorder: isDark
+                            ? OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                  color:
+                                      palette?.accent ??
+                                      const Color(0xFF7C3AED),
+                                ),
+                              )
+                            : null,
                         isDense: true,
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: isDark
+                            ? (palette?.inputFill ?? const Color(0xFF2A2F3A))
+                            : Colors.white,
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
+                          dropdownColor: isDark
+                              ? (palette?.surface ?? const Color(0xFF1F2430))
+                              : null,
+                          style: isDark
+                              ? TextStyle(
+                                  color: palette?.textPrimary ?? Colors.white,
+                                )
+                              : null,
                           hint: _loadingDeps
-                              ? const Text('Loading...')
-                              : const Text('Department'),
+                              ? (isDark
+                                    ? Text(
+                                        'Loading...',
+                                        style: TextStyle(
+                                          color: palette?.textSecondary,
+                                        ),
+                                      )
+                                    : const Text('Loading...'))
+                              : (isDark
+                                    ? Text(
+                                        'Department',
+                                        style: TextStyle(
+                                          color: palette?.textSecondary,
+                                        ),
+                                      )
+                                    : const Text('Department')),
                           isExpanded: true,
                           value: selectedDepartment,
                           items: _departments
                               .map(
                                 (d) => DropdownMenuItem<String>(
                                   value: d['id'] as String,
-                                  child: Text(d['name'] as String),
+                                  child: isDark
+                                      ? Text(
+                                          d['name'] as String,
+                                          style: TextStyle(
+                                            color: palette?.textPrimary,
+                                          ),
+                                        )
+                                      : Text(d['name'] as String),
                                 ),
                               )
                               .toList(),
@@ -2302,16 +2399,18 @@ class _TimetablePageState extends State<TimetablePage> {
                                 orElse: () => <String, dynamic>{},
                               );
                               if (found.isNotEmpty &&
-                                  found['ref'] is DocumentReference)
+                                  found['ref'] is DocumentReference) {
                                 loaderArg = found['ref'];
-                              else
+                              } else {
                                 loaderArg = v;
+                              }
                             } catch (_) {
                               loaderArg = v;
                             }
 
-                            if (loaderArg != null)
+                            if (loaderArg != null) {
                               await _loadClassesForDepartment(loaderArg);
+                            }
                             // ensure teachers reflect current session/faculty
                             await _loadTeachers();
                             await _handleSelectionChangeSafe();
@@ -2334,23 +2433,77 @@ class _TimetablePageState extends State<TimetablePage> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: isDark
+                                ? (palette?.border ?? const Color(0xFF3A3F4A))
+                                : const Color(0xFFE5E7EB),
+                          ),
                         ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: isDark
+                                ? (palette?.border ?? const Color(0xFF3A3F4A))
+                                : const Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        focusedBorder: isDark
+                            ? OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                  color:
+                                      palette?.accent ??
+                                      const Color(0xFF7C3AED),
+                                ),
+                              )
+                            : null,
                         isDense: true,
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: isDark
+                            ? (palette?.inputFill ?? const Color(0xFF2A2F3A))
+                            : Colors.white,
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
+                          dropdownColor: isDark
+                              ? (palette?.surface ?? const Color(0xFF1F2430))
+                              : null,
+                          style: isDark
+                              ? TextStyle(
+                                  color: palette?.textPrimary ?? Colors.white,
+                                )
+                              : null,
                           hint: _loadingClasses
-                              ? const Text('Loading...')
-                              : const Text('Class'),
+                              ? (isDark
+                                    ? Text(
+                                        'Loading...',
+                                        style: TextStyle(
+                                          color: palette?.textSecondary,
+                                        ),
+                                      )
+                                    : const Text('Loading...'))
+                              : (isDark
+                                    ? Text(
+                                        'Class',
+                                        style: TextStyle(
+                                          color: palette?.textSecondary,
+                                        ),
+                                      )
+                                    : const Text('Class')),
                           isExpanded: true,
                           value: selectedClass,
                           items: _classes
                               .map(
                                 (c) => DropdownMenuItem<String>(
                                   value: c['id'] as String,
-                                  child: Text(c['name'] as String),
+                                  child: isDark
+                                      ? Text(
+                                          c['name'] as String,
+                                          style: TextStyle(
+                                            color: palette?.textPrimary,
+                                          ),
+                                        )
+                                      : Text(c['name'] as String),
                                 ),
                               )
                               .toList(),
@@ -2386,23 +2539,77 @@ class _TimetablePageState extends State<TimetablePage> {
                         ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: isDark
+                                ? (palette?.border ?? const Color(0xFF3A3F4A))
+                                : const Color(0xFFE5E7EB),
+                          ),
                         ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: isDark
+                                ? (palette?.border ?? const Color(0xFF3A3F4A))
+                                : const Color(0xFFE5E7EB),
+                          ),
+                        ),
+                        focusedBorder: isDark
+                            ? OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                  color:
+                                      palette?.accent ??
+                                      const Color(0xFF7C3AED),
+                                ),
+                              )
+                            : null,
                         isDense: true,
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: isDark
+                            ? (palette?.inputFill ?? const Color(0xFF2A2F3A))
+                            : Colors.white,
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
+                          dropdownColor: isDark
+                              ? (palette?.surface ?? const Color(0xFF1F2430))
+                              : null,
+                          style: isDark
+                              ? TextStyle(
+                                  color: palette?.textPrimary ?? Colors.white,
+                                )
+                              : null,
                           hint: _loadingTeachers
-                              ? const Text('Loading...')
-                              : const Text('Lecturer'),
+                              ? (isDark
+                                    ? Text(
+                                        'Loading...',
+                                        style: TextStyle(
+                                          color: palette?.textSecondary,
+                                        ),
+                                      )
+                                    : const Text('Loading...'))
+                              : (isDark
+                                    ? Text(
+                                        'Lecturer',
+                                        style: TextStyle(
+                                          color: palette?.textSecondary,
+                                        ),
+                                      )
+                                    : const Text('Lecturer')),
                           isExpanded: true,
                           value: selectedLecturer,
                           items: _teachers
                               .map(
                                 (t) => DropdownMenuItem<String>(
                                   value: t['name'] as String,
-                                  child: Text(t['name'] as String),
+                                  child: isDark
+                                      ? Text(
+                                          t['name'] as String,
+                                          style: TextStyle(
+                                            color: palette?.textPrimary,
+                                          ),
+                                        )
+                                      : Text(t['name'] as String),
                                 ),
                               )
                               .toList(),
@@ -2420,7 +2627,9 @@ class _TimetablePageState extends State<TimetablePage> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isDark
+                        ? (palette?.surfaceHigh ?? const Color(0xFF1F2430))
+                        : Colors.white,
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
@@ -2448,7 +2657,11 @@ class _TimetablePageState extends State<TimetablePage> {
                                       child: Text(
                                         'No sessions found for this lecturer in the selected department.',
                                         style: TextStyle(
-                                          color: Colors.grey.shade600,
+                                          color:
+                                              palette?.textSecondary ??
+                                              (isDark
+                                                  ? Colors.grey.shade400
+                                                  : Colors.grey.shade600),
                                         ),
                                         textAlign: TextAlign.center,
                                       ),
@@ -2460,7 +2673,13 @@ class _TimetablePageState extends State<TimetablePage> {
                             : Center(
                                 child: Text(
                                   'Please select Department and Class to view the timetable.',
-                                  style: TextStyle(color: Colors.grey.shade600),
+                                  style: TextStyle(
+                                    color:
+                                        palette?.textSecondary ??
+                                        (isDark
+                                            ? Colors.grey.shade400
+                                            : Colors.grey.shade600),
+                                  ),
                                   textAlign: TextAlign.center,
                                 ),
                               ))
@@ -2558,8 +2777,9 @@ class _TimetablePageState extends State<TimetablePage> {
           final raw = exportGrid[d][p].trim();
           if (raw.isEmpty) continue;
           if (raw.toLowerCase() == 'break' ||
-              periods[p].toLowerCase().contains('break'))
+              periods[p].toLowerCase().contains('break')) {
             continue;
+          }
           final parts = raw.split('\n');
           final lecturer = parts.length > 1
               ? parts.sublist(1).join(' ').trim().toLowerCase()
@@ -2616,7 +2836,7 @@ class _TimetablePageState extends State<TimetablePage> {
     await Printing.layoutPdf(
       onLayout: (format) async => pdf.save(),
       name:
-          'timetable_${depKey}${classKey}${lecturerSuffix}${dateStr.replaceAll(':', '-')}.pdf',
+          'timetable_$depKey$classKey$lecturerSuffix${dateStr.replaceAll(':', '-')}.pdf',
     );
   }
 
@@ -2940,26 +3160,72 @@ class _LecturerListView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final headerStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
-      fontWeight: FontWeight.bold,
-      color: Colors.grey[700],
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cellStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: palette?.textPrimary ?? (isDark ? Colors.white : Colors.black),
     );
-    final cellStyle = Theme.of(context).textTheme.bodyMedium;
 
     return Column(
       children: [
         Container(
           decoration: BoxDecoration(
-            color: Colors.grey.shade200,
+            color:
+                palette?.surfaceHigh ??
+                (isDark ? const Color(0xFF1F2430) : Colors.grey.shade200),
             borderRadius: BorderRadius.circular(8),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
-            children: const [
-              Expanded(flex: 1, child: Text('Day')),
-              Expanded(flex: 2, child: Text('Time')),
-              Expanded(flex: 2, child: Text('Class')),
-              Expanded(flex: 3, child: Text('Course')),
+            children: [
+              Expanded(
+                flex: 1,
+                child: Text(
+                  'Day',
+                  style: isDark
+                      ? TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: palette?.textSecondary ?? Colors.grey.shade400,
+                        )
+                      : const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Time',
+                  style: isDark
+                      ? TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: palette?.textSecondary ?? Colors.grey.shade400,
+                        )
+                      : const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Class',
+                  style: isDark
+                      ? TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: palette?.textSecondary ?? Colors.grey.shade400,
+                        )
+                      : const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Course',
+                  style: isDark
+                      ? TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: palette?.textSecondary ?? Colors.grey.shade400,
+                        )
+                      : const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
         ),
@@ -2967,7 +3233,12 @@ class _LecturerListView extends StatelessWidget {
         Expanded(
           child: ListView.separated(
             itemCount: slots.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              color: isDark
+                  ? (palette?.border ?? const Color(0xFF2D3340))
+                  : const Color(0xFFE5E7EB),
+            ),
             itemBuilder: (context, index) {
               final s = slots[index];
               return Padding(
@@ -3026,9 +3297,15 @@ class _TimetableGrid extends StatelessWidget {
     const double headerHeight = 50.0;
     const double dividerHeight = 1.0;
 
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final highlightShape = RoundedRectangleBorder(
       side: BorderSide(
-        color: editing ? const Color(0xFF3B4B9B) : Colors.transparent,
+        color: editing
+            ? (isDark
+                  ? (palette?.accent ?? const Color(0xFF3B4B9B))
+                  : const Color(0xFF3B4B9B))
+            : Colors.transparent,
       ),
     );
 
@@ -3161,7 +3438,7 @@ class _TimetableGrid extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ),
                 const Divider(height: dividerHeight),
@@ -3385,17 +3662,4 @@ class _TimetableGrid extends StatelessWidget {
 
 enum _ExportChoice { entireClass }
 
-class _UndoState {
-  final String depKey;
-  final String classKey;
-  final String? sectionKey;
-  final Map<String, List<String>> classPeriodsCopy;
-  final Map<String, List<List<String>>> timetableCopy;
-  _UndoState({
-    required this.depKey,
-    required this.classKey,
-    required this.sectionKey,
-    required this.classPeriodsCopy,
-    required this.timetableCopy,
-  });
-}
+// _UndoState removed (unused)

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 import '../../services/session.dart';
 
 class Student {
@@ -31,7 +32,7 @@ class Student {
 }
 
 class TeacherAttendancePage extends StatefulWidget {
-  const TeacherAttendancePage({Key? key}) : super(key: key);
+  const TeacherAttendancePage({super.key});
 
   @override
   State<TeacherAttendancePage> createState() => _TeacherAttendancePageState();
@@ -76,7 +77,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
   // --------------------------
   // Helpers
   // --------------------------
-  String? _stringFrom(dynamic v) => v == null ? null : v.toString();
+  String? _stringFrom(dynamic v) => v?.toString();
 
   Timestamp? _parseTimestampField(dynamic tsField) {
     if (tsField == null) return null;
@@ -131,8 +132,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                   final lec = (cell['lecturer'] ?? '').toString().toLowerCase();
                   if (lec.contains(teacher.toLowerCase())) return true;
                 } else if (cell is String) {
-                  if (cell.toLowerCase().contains(teacher.toLowerCase()))
+                  if (cell.toLowerCase().contains(teacher.toLowerCase())) {
                     return true;
+                  }
                 }
               }
             }
@@ -144,8 +146,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
             if (row is Map && row['cells'] is List) {
               for (final cell in row['cells']) {
                 if (cell is String &&
-                    cell.toLowerCase().contains(teacher.toLowerCase()))
+                    cell.toLowerCase().contains(teacher.toLowerCase())) {
                   return true;
+                }
                 if (cell is Map) {
                   final lec = (cell['lecturer'] ?? '').toString().toLowerCase();
                   if (lec.contains(teacher.toLowerCase())) return true;
@@ -424,7 +427,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                 .collection('classes')
                 .where('className', isEqualTo: v)
                 .get();
-            for (final cd in cQ.docs) classDocIds.add(cd.id);
+            for (final cd in cQ.docs) {
+              classDocIds.add(cd.id);
+            }
           } catch (_) {}
         }
         if (classDocIds.isEmpty) {
@@ -818,7 +823,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
             });
           }
         } else {
-          for (final doc in q.docs) batch.delete(doc.reference);
+          for (final doc in q.docs) {
+            batch.delete(doc.reference);
+          }
         }
       }
 
@@ -851,12 +858,14 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Attendance',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(
+                context,
+              ).extension<SuperAdminColors>()?.textPrimary,
             ),
           ),
           const SizedBox(height: 18),
@@ -1080,6 +1089,10 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
     required String hint,
     bool isLoading = false,
   }) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final hintStyle = TextStyle(color: palette?.textSecondary);
+    final itemStyle = TextStyle(color: palette?.textPrimary);
+    final borderColor = palette?.border ?? const Color(0xFFC7BECF);
     return Container(
       constraints: const BoxConstraints(minWidth: 130, maxWidth: 240),
       child: InputDecorator(
@@ -1088,29 +1101,36 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
             horizontal: 12,
             vertical: 5,
           ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: borderColor, width: 1.1),
+          ),
           isDense: true,
           filled: true,
-          fillColor: Colors.white,
+          fillColor: palette?.inputFill ?? Colors.white,
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String?>(
             isExpanded: true,
             value: value,
-            hint: isLoading ? const Text('Loading...') : Text(hint),
+            hint: isLoading
+                ? Text('Loading...', style: hintStyle)
+                : Text(hint, style: hintStyle),
             items: [
               DropdownMenuItem<String?>(
                 value: null,
-                child: Text(hint, style: const TextStyle(color: Colors.grey)),
+                child: Text(hint, style: hintStyle),
               ),
-              ...items
-                  .map(
-                    (e) => DropdownMenuItem<String?>(value: e, child: Text(e)),
-                  )
-                  .toList(),
+              ...items.map(
+                (e) => DropdownMenuItem<String?>(
+                  value: e,
+                  child: Text(e, style: itemStyle),
+                ),
+              ),
             ],
             onChanged: onChanged,
-            dropdownColor: Colors.white,
+            dropdownColor: palette?.surface ?? Colors.white,
+            iconEnabledColor: palette?.iconColor,
           ),
         ),
       ),

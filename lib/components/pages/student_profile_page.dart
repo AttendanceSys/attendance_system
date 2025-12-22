@@ -57,9 +57,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
           final data = q.docs.first.data();
           final classRaw =
               data['class_ref'] ?? data['classRef'] ?? data['class'];
-          if (classRaw is DocumentReference)
+          if (classRaw is DocumentReference) {
             classRefId = classRaw.id;
-          else if (classRaw is String) {
+          } else if (classRaw is String) {
             final s = classRaw;
             if (s.contains('/')) {
               final parts = s.split('/').where((p) => p.isNotEmpty).toList();
@@ -77,9 +77,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
             final data = doc.data() ?? {};
             final classRaw =
                 data['class_ref'] ?? data['classRef'] ?? data['class'];
-            if (classRaw is DocumentReference)
+            if (classRaw is DocumentReference) {
               classRefId = classRaw.id;
-            else if (classRaw is String) {
+            } else if (classRaw is String) {
               final s = classRaw;
               if (s.contains('/')) {
                 final parts = s.split('/').where((p) => p.isNotEmpty).toList();

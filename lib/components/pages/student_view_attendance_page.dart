@@ -108,7 +108,7 @@ class _StudentViewAttendanceMobileState
       final studentData = studentDoc.data() ?? {};
       _studentData = studentData;
       _studentDocId = studentDoc.id;
-      debugPrint('Loaded student profile (${_studentDocId}): $studentData');
+      debugPrint('Loaded student profile ($_studentDocId): $studentData');
 
       // Determine className/class_ref
       String? studentClassName =
@@ -123,7 +123,7 @@ class _StudentViewAttendanceMobileState
       }
 
       // Resolve className if missing
-      if ((studentClassName == null || studentClassName.isEmpty) &&
+      if ((studentClassName.isEmpty) &&
           (studentClassRefId != null)) {
         final resolved = await _resolveClassNameFromClassRef(studentClassRefId);
         if (resolved != null) {
@@ -136,7 +136,7 @@ class _StudentViewAttendanceMobileState
 
       debugPrint('Using studentClassName="$studentClassName" classRef=$studentClassRefId');
 
-      final normalizedStudentClassName = (studentClassName != null && studentClassName.isNotEmpty)
+      final normalizedStudentClassName = (studentClassName.isNotEmpty)
           ? studentClassName.toLowerCase()
           : null;
 
@@ -160,7 +160,9 @@ class _StudentViewAttendanceMobileState
               .get();
           debugPrint('qr_generation by class_ref (string) returned ${q2.docs.length} docs');
           final existingIds = sessionDocs.map((d) => d.id).toSet();
-          for (final d in q2.docs) if (!existingIds.contains(d.id)) sessionDocs.add(d);
+          for (final d in q2.docs) {
+            if (!existingIds.contains(d.id)) sessionDocs.add(d);
+          }
 
           final classRefDoc = firestore.doc('classes/$studentClassRefId');
           final q3 = await firestore
@@ -169,7 +171,9 @@ class _StudentViewAttendanceMobileState
               .get();
           debugPrint('qr_generation by class_ref (ref) returned ${q3.docs.length} docs');
           final existingIds2 = sessionDocs.map((d) => d.id).toSet();
-          for (final d in q3.docs) if (!existingIds2.contains(d.id)) sessionDocs.add(d);
+          for (final d in q3.docs) {
+            if (!existingIds2.contains(d.id)) sessionDocs.add(d);
+          }
         } catch (e) {
           debugPrint('Error querying by class_ref: $e');
         }
@@ -177,7 +181,9 @@ class _StudentViewAttendanceMobileState
 
       // Deduplicate and extract
       final Map<String, QueryDocumentSnapshot<Map<String, dynamic>>> unique = {};
-      for (final d in sessionDocs) unique[d.id] = d;
+      for (final d in sessionDocs) {
+        unique[d.id] = d;
+      }
       var sessionsData = unique.values.map((d) => d.data()).toList();
       debugPrint('Sessions found from primary queries: ${sessionsData.length}');
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 
 class SuccessPopup extends StatelessWidget {
   final String subject;
@@ -14,11 +15,23 @@ class SuccessPopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface =
+        palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
+    final textPrimary =
+        palette?.textPrimary ?? (isDark ? Colors.white : Colors.black87);
+    final textSecondary =
+        palette?.textSecondary ??
+        (isDark ? const Color(0xFFB5BDCB) : Colors.black54);
+    final accent = palette?.accent ?? const Color(0xFF2196F3);
+
     final double screenWidth = MediaQuery.of(context).size.width;
     final double dialogWidth = screenWidth < 400 ? screenWidth * 0.95 : 340;
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+      backgroundColor: surface,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: dialogWidth),
         child: Padding(
@@ -27,13 +40,13 @@ class SuccessPopup extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Text(
+              Text(
                 'Attendance Marked\nSuccessfully',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: textPrimary,
                 ),
               ),
               const SizedBox(height: 18),
@@ -46,16 +59,16 @@ class SuccessPopup extends StatelessWidget {
                 child: const Icon(Icons.check, color: Colors.white, size: 48),
               ),
               const SizedBox(height: 18),
-              infoRow('Subject:', subject),
-              infoRow('Date:', date),
-              infoRow('Time:', time),
+              infoRow('Subject:', subject, textPrimary, textSecondary),
+              infoRow('Date:', date, textPrimary, textSecondary),
+              infoRow('Time:', time, textPrimary, textSecondary),
               const SizedBox(height: 18),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   style: TextButton.styleFrom(
-                    backgroundColor: Color(0xFF2196F3),
+                    backgroundColor: accent,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -77,7 +90,12 @@ class SuccessPopup extends StatelessWidget {
     );
   }
 
-  Widget infoRow(String label, String value) {
+  Widget infoRow(
+    String label,
+    String value,
+    Color labelColor,
+    Color valueColor,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
@@ -85,13 +103,21 @@ class SuccessPopup extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: labelColor,
+            ),
           ),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.normal, fontSize: 16),
+              style: TextStyle(
+                fontWeight: FontWeight.normal,
+                fontSize: 16,
+                color: valueColor,
+              ),
             ),
           ),
         ],

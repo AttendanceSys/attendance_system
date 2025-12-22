@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/student.dart';
 import '../../services/session.dart';
+import '../../theme/super_admin_theme.dart';
 
 class AddStudentPopup extends StatefulWidget {
   final Student? student;
@@ -21,7 +22,6 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
   String? _gender;
   String? _departmentId;
   String? _classId;
-  bool _editingClassInactive = false;
 
   List<Map<String, String>> _departments = [];
   List<Map<String, String>> _classes = [];
@@ -196,7 +196,6 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
       if (mounted) {
         setState(() {
           _classes = items;
-          _editingClassInactive = editingClassInactive;
           if (editingClassInactive) {
             _departmentId = null;
           }
@@ -264,6 +263,32 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
     final double dialogWidth = MediaQuery.of(context).size.width > 600
         ? 400
         : MediaQuery.of(context).size.width * 0.95;
+
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface =
+        palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
+    final border =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : Colors.blue[100]!);
+    final textPrimary =
+        palette?.textPrimary ?? (isDark ? Colors.white : Colors.black87);
+    final accent =
+        palette?.accent ??
+        (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final inputFill =
+        palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
+
+    InputDecoration _input(String hint) => InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: inputFill,
+      border: OutlineInputBorder(borderSide: BorderSide(color: border)),
+      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: border)),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: accent, width: 1.4),
+      ),
+    );
     return Dialog(
       elevation: 8,
       backgroundColor: Colors.transparent,
@@ -271,9 +296,9 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
         child: Container(
           width: dialogWidth,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: surface,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.blue[100]!, width: 2),
+            border: Border.all(color: border, width: 2),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.08),
@@ -292,9 +317,10 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                 children: [
                   Text(
                     widget.student == null ? 'Add Student' : 'Edit Student',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
+                      color: textPrimary,
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -305,10 +331,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: TextFormField(
                           initialValue: _username,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            hintText: 'Username',
-                          ),
+                          decoration: _input('Username'),
                           onChanged: (v) => setState(() => _username = v),
                           validator: (v) {
                             final value = v?.trim() ?? '';
@@ -325,10 +348,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: TextFormField(
                           initialValue: _fullname,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            hintText: 'Full name',
-                          ),
+                          decoration: _input('Full name'),
                           onChanged: (v) => setState(() => _fullname = v),
                           validator: (v) {
                             final value = v?.trim() ?? '';
@@ -354,10 +374,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _gender,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            hintText: 'Gender',
-                          ),
+                          decoration: _input('Gender'),
                           items: ['Male', 'Female']
                               .map(
                                 (g) =>
@@ -373,10 +390,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _departmentId,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            hintText: 'Department',
-                          ),
+                          decoration: _input('Department'),
                           isExpanded: true,
                           items: _departments
                               .map(
@@ -401,10 +415,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
 
                   DropdownButtonFormField<String>(
                     value: _classId,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Class',
-                    ),
+                    decoration: _input('Class'),
                     items: _filteredClassesByDepartment
                         .map(
                           (c) => DropdownMenuItem(
@@ -422,7 +433,17 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                     initialValue: _password,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
+                      border: OutlineInputBorder(
+                        borderSide: BorderSide(color: border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: accent, width: 1.4),
+                      ),
+                      filled: true,
+                      fillColor: inputFill,
                       hintText: 'Password',
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -452,16 +473,16 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                         child: OutlinedButton(
                           onPressed: () => Navigator.of(context).pop(),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.black54),
+                            side: BorderSide(color: border),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
                             minimumSize: const Size(90, 40),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Cancel',
                             style: TextStyle(
-                              color: Colors.black87,
+                              color: textPrimary,
                               fontWeight: FontWeight.w500,
                               fontSize: 16,
                             ),
@@ -473,11 +494,12 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                         height: 40,
                         child: ElevatedButton(
                           onPressed: () async {
-                            if (_formKey.currentState!.validate())
+                            if (_formKey.currentState!.validate()) {
                               await _save();
+                            }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue[900],
+                            backgroundColor: accent,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),

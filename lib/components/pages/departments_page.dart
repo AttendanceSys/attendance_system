@@ -4,6 +4,7 @@ import '../../models/department.dart';
 import '../../services/session.dart';
 import '../popup/add_department_popup.dart';
 import '../cards/searchBar.dart';
+import '../../theme/super_admin_theme.dart';
 
 class DepartmentsPage extends StatefulWidget {
   const DepartmentsPage({super.key});
@@ -63,8 +64,9 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
   Future<void> _fetchDepartments() async {
     try {
       Query q = departmentsCollection;
-      if (Session.facultyRef != null)
+      if (Session.facultyRef != null) {
         q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
+      }
       final snapshot = await q.get();
       setState(() {
         _departments = snapshot.docs.map((doc) {
@@ -240,12 +242,14 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Departments",
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(
+                context,
+              ).extension<SuperAdminColors>()?.textPrimary,
             ),
           ),
           const SizedBox(height: 24),
@@ -353,6 +357,11 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
   }
 
   Widget _buildDesktopTable() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
     return Table(
       columnWidths: const {
         0: FixedColumnWidth(64), // No
@@ -377,9 +386,7 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
         for (int index = 0; index < _filteredDepartments.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
+              color: _selectedIndex == index ? highlight : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
@@ -419,6 +426,11 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
   }
 
   Widget _buildMobileTable() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
     return Table(
       defaultColumnWidth: const IntrinsicColumnWidth(),
       border: TableBorder(
@@ -437,9 +449,7 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
         for (int index = 0; index < _filteredDepartments.length; index++)
           TableRow(
             decoration: BoxDecoration(
-              color: _selectedIndex == index
-                  ? Colors.blue.shade50
-                  : Colors.transparent,
+              color: _selectedIndex == index ? highlight : Colors.transparent,
             ),
             children: [
               _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),

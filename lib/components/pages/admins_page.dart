@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/admin.dart';
 import '../popup/add_admin_popup.dart';
 import '../cards/searchBar.dart';
+import '../../theme/super_admin_theme.dart';
 
 class AdminsPage extends StatefulWidget {
   const AdminsPage({super.key});
@@ -74,10 +75,11 @@ class _AdminsPageState extends State<AdminsPage> {
               // try to extract last path segment if a path was stored
               if (s.contains('/')) {
                 final parts = s.split('/').where((p) => p.isNotEmpty).toList();
-                if (parts.isNotEmpty)
+                if (parts.isNotEmpty) {
                   facultyId = parts.last;
-                else
+                } else {
                   facultyId = s;
+                }
               } else {
                 facultyId = s;
               }
@@ -279,9 +281,15 @@ class _AdminsPageState extends State<AdminsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Admins",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(
+                context,
+              ).extension<SuperAdminColors>()?.textPrimary,
+            ),
           ),
           const SizedBox(height: 24),
           Row(
@@ -392,7 +400,10 @@ class _AdminsPageState extends State<AdminsPage> {
 
   Widget _buildDesktopTable() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
 
     return Table(
       columnWidths: const {
@@ -440,7 +451,10 @@ class _AdminsPageState extends State<AdminsPage> {
 
   Widget _buildMobileTable() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
 
     return Table(
       defaultColumnWidth: const IntrinsicColumnWidth(),

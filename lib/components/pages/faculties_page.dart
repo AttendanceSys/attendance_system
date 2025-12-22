@@ -5,6 +5,7 @@ import '../../models/faculty.dart';
 import '../popup/add_faculty_popup.dart';
 import '../cards/searchBar.dart';
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 
 class FacultiesPage extends StatefulWidget {
   const FacultiesPage({super.key});
@@ -198,9 +199,6 @@ class _FacultiesPageState extends State<FacultiesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
-
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isDesktop = screenWidth > 800;
 
@@ -210,9 +208,15 @@ class _FacultiesPageState extends State<FacultiesPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          const Text(
+          Text(
             "Faculties",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(
+                context,
+              ).extension<SuperAdminColors>()?.textPrimary,
+            ),
           ),
           const SizedBox(height: 24),
           Row(
@@ -323,7 +327,10 @@ class _FacultiesPageState extends State<FacultiesPage> {
 
   Widget _buildDesktopTable() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
 
     return Table(
       columnWidths: const {
@@ -373,7 +380,10 @@ class _FacultiesPageState extends State<FacultiesPage> {
 
   Widget _buildMobileTable() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final highlight = isDark ? const Color(0xFF2E3545) : Colors.blue.shade50;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final highlight =
+        palette?.highlight ??
+        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
 
     return Table(
       defaultColumnWidth: const IntrinsicColumnWidth(),

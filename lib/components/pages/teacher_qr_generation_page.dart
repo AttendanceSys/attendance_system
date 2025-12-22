@@ -16,6 +16,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../theme/super_admin_theme.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/session.dart';
@@ -760,12 +761,14 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "Generate QR Code",
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(
+                context,
+              ).extension<SuperAdminColors>()?.textPrimary,
             ),
           ),
           const SizedBox(height: 18),
@@ -1004,6 +1007,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     required String hint,
     bool isLoading = false,
   }) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final hintStyle = TextStyle(color: palette?.textSecondary);
+    final itemStyle = TextStyle(color: palette?.textPrimary);
+    final borderColor = palette?.border ?? const Color(0xFFC7BECF);
     return Container(
       constraints: const BoxConstraints(minWidth: 130, maxWidth: 240),
       child: InputDecorator(
@@ -1012,29 +1019,36 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
             horizontal: 12,
             vertical: 5,
           ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: borderColor, width: 1.1),
+          ),
           isDense: true,
           filled: true,
-          fillColor: Colors.white,
+          fillColor: palette?.inputFill ?? Colors.white,
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String?>(
             isExpanded: true,
             value: value,
-            hint: isLoading ? const Text('Loading...') : Text(hint),
+            hint: isLoading
+                ? Text('Loading...', style: hintStyle)
+                : Text(hint, style: hintStyle),
             items: [
               DropdownMenuItem<String?>(
                 value: null,
-                child: Text(hint, style: const TextStyle(color: Colors.grey)),
+                child: Text(hint, style: hintStyle),
               ),
-              ...items
-                  .map(
-                    (e) => DropdownMenuItem<String?>(value: e, child: Text(e)),
-                  )
-                  .toList(),
+              ...items.map(
+                (e) => DropdownMenuItem<String?>(
+                  value: e,
+                  child: Text(e, style: itemStyle),
+                ),
+              ),
             ],
             onChanged: onChanged,
-            dropdownColor: Colors.white,
+            dropdownColor: palette?.surface ?? Colors.white,
+            iconEnabledColor: palette?.iconColor,
           ),
         ),
       ),
