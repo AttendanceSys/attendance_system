@@ -35,47 +35,48 @@ class AdminDashboardStatsGrid extends StatelessWidget {
         final adminsCount = snapshot.data![1];
         final lecturersCount = snapshot.data![2];
 
+        final labels = ["Faculties", "Admins", "Lecturers"];
+        final icons = [
+          Icons.account_tree_outlined,
+          Icons.groups,
+          Icons.school_outlined,
+        ];
+        final colors = [
+          const Color(0xFFB9EEB6),
+          const Color(0xFFF7B345),
+          const Color(0xFF31B9C1),
+        ];
+        final values = [
+          facultiesCount.toString(),
+          adminsCount.toString(),
+          lecturersCount.toString(),
+        ];
+
         return LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-
             int crossAxis;
             if (width < 550) {
-              crossAxis = 1; // Mobile
+              crossAxis = 1;
             } else if (width < 900) {
-              crossAxis = 2; // Tablet Portrait
+              crossAxis = 2;
             } else if (width < 1300) {
-              crossAxis = 3; // Tablet Landscape
+              crossAxis = 3;
             } else {
-              crossAxis = 4; // Desktop
+              crossAxis = 4;
             }
-
-            final labels = ["Faculties", "Admins", "Lecturers"];
-            final icons = [
-              Icons.account_tree_outlined,
-              Icons.groups,
-              Icons.school_outlined,
-            ];
-            final colors = [
-              const Color(0xFFB9EEB6),
-              const Color(0xFFF7B345),
-              const Color(0xFF31B9C1),
-            ];
-            final values = [
-              facultiesCount.toString(),
-              adminsCount.toString(),
-              lecturersCount.toString(),
-            ];
-
             return GridView.builder(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               itemCount: labels.length,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: crossAxis,
                 crossAxisSpacing: 22,
-                mainAxisSpacing: 22,
-                childAspectRatio: 1.4,
+                mainAxisSpacing: 16,
+                mainAxisExtent: 90,
               ),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              primary: false,
               itemBuilder: (context, index) {
                 return _StatsCard(
                   label: labels[index],
@@ -109,74 +110,88 @@ class _StatsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, size) {
-        final scale = (size.maxHeight / 180).clamp(0.75, 1.0);
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        final bgColor = isDark
-            ? (Theme.of(context).cardTheme.color ??
-                  Theme.of(context).colorScheme.surface)
-            : Colors.white;
-        final textColor =
-            Theme.of(context).textTheme.bodyMedium?.color ??
-            (isDark ? Colors.white : Colors.black87);
+        final scale = (size.maxHeight / 130).clamp(0.75, 1.0);
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
 
         return ClipRect(
           child: Container(
             decoration: BoxDecoration(
-              color: bgColor,
+              color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(20 * scale),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: theme.shadowColor.withOpacity(isDark ? 0.30 : 0.08),
                   blurRadius: 14,
                   offset: const Offset(0, 4),
                 ),
               ],
+              border: Border.all(
+                color: theme.colorScheme.outline.withOpacity(
+                  isDark ? 0.28 : 0.16,
+                ),
+              ),
             ),
             child: Padding(
-              padding: EdgeInsets.all(16 * scale),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: EdgeInsets.symmetric(
+                horizontal: 22 * scale,
+                vertical: 12 * scale,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // ICON BADGE
-                  Container(
-                    padding: EdgeInsets.all(12 * scale),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(icon, size: 30 * scale, color: color),
-                  ),
-
-                  SizedBox(height: 14 * scale),
-
-                  // LABEL
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 16 * scale,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                  ),
-
-                  SizedBox(height: 10 * scale),
-
-                  // VALUE — FittedBox prevents overflow
+                  // LEFT: LABEL + VALUE
                   Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomLeft,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          value,
-                          style: TextStyle(
-                            fontSize: 38 * scale,
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: 6 * scale),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontSize: 18 * scale,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface,
+                            ),
                           ),
+                          SizedBox(height: 4 * scale),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              value,
+                              style: TextStyle(
+                                fontSize: 34 * scale,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // RIGHT: ICON
+                  SizedBox(width: 14 * scale),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6 * scale),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(isDark ? 0.25 : 0.12),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: color.withOpacity(isDark ? 0.35 : 0.18),
                         ),
+                      ),
+                      padding: EdgeInsets.all(8 * scale),
+                      child: Icon(
+                        icon,
+                        size: 22 * scale,
+                        color: isDark ? color.withOpacity(0.95) : color,
                       ),
                     ),
                   ),
