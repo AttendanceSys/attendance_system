@@ -93,6 +93,8 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                         context,
                       );
                       if (shouldLogout == true) {
+                        // Reset theme to light mode on logout
+                        ThemeController.setThemeMode(ThemeMode.light);
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(
@@ -214,6 +216,8 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                           context,
                         );
                         if (shouldLogout == true) {
+                          // Reset theme to light mode on logout
+                          ThemeController.setThemeMode(ThemeMode.light);
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(

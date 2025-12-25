@@ -150,7 +150,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
-    InputDecoration _input(String hint) => InputDecoration(
+    InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
@@ -199,7 +199,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _code,
-                  decoration: _input('Department Code'),
+                  decoration: input('Department Code'),
                   onChanged: (val) {
                     setState(() => _codeError = null);
                     _code = val;
@@ -223,7 +223,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _name,
-                  decoration: _input('Department Name'),
+                  decoration: input('Department Name'),
                   onChanged: (val) {
                     setState(() => _nameError = null);
                     _name = val;
@@ -250,7 +250,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 _teachers.isEmpty
                     ? DropdownButtonFormField<String>(
                         value: null,
-                        decoration: _input('Head of Department'),
+                        decoration: input('Head of Department'),
                         items: [
                           DropdownMenuItem(
                             value: '',
@@ -269,7 +269,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                       )
                     : DropdownButtonFormField<String>(
                         value: _head,
-                        decoration: _input('Head of Department'),
+                        decoration: input('Head of Department'),
                         items: _teachers.map((t) {
                           final id = t['id'] ?? '';
                           final name = t['name'] ?? '';

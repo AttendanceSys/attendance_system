@@ -130,7 +130,6 @@ class _AttendanceAlertDialog extends StatelessWidget {
   final VoidCallback? onClose;
 
   const _AttendanceAlertDialog({
-    super.key,
     required this.type,
     this.title,
     this.message,
@@ -348,8 +347,9 @@ class _AttendanceAlertDialog extends StatelessWidget {
                       elevation: 4,
                     ),
                     onPressed: () {
-                      if (Navigator.of(context).canPop())
+                      if (Navigator.of(context).canPop()) {
                         Navigator.of(context).pop();
+                      }
                       if (onClose != null) onClose!();
                     },
                     child: const Text(

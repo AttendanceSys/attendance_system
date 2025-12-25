@@ -1,6 +1,7 @@
+import '../../services/theme_controller.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../theme/super_admin_theme.dart';
+import '../../theme/teacher_theme.dart';
 import '../../services/session.dart';
 
 class Student {
@@ -39,6 +40,27 @@ class TeacherAttendancePage extends StatefulWidget {
 }
 
 class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
+  Widget _themeToggleButton() {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.themeMode,
+      builder: (context, mode, _) {
+        final isDark = mode == ThemeMode.dark;
+        return IconButton(
+          icon: Icon(
+            isDark ? Icons.light_mode : Icons.dark_mode,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+          tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+          onPressed: () {
+            ThemeController.setThemeMode(
+              isDark ? ThemeMode.light : ThemeMode.dark,
+            );
+          },
+        );
+      },
+    );
+  }
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Dropdown selections
@@ -853,6 +875,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
   // --------------------------
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -865,7 +888,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
               fontWeight: FontWeight.bold,
               color: Theme.of(
                 context,
-              ).extension<SuperAdminColors>()?.textPrimary,
+              ).extension<TeacherThemeColors>()?.textPrimary,
             ),
           ),
           const SizedBox(height: 18),
@@ -936,29 +959,38 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
 
           // Header
           Container(
-            color: Colors.grey[100],
+            color: Theme.of(context).colorScheme.surface,
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             child: Row(
-              children: const [
+              children: [
                 Expanded(
                   flex: 1,
                   child: Text(
                     'No',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ),
                 Expanded(
                   flex: 2,
                   child: Text(
                     'username',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ),
                 Expanded(
                   flex: 4,
                   child: Text(
                     'full Name',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ),
                 Expanded(
@@ -966,7 +998,10 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                   child: Text(
                     'Status',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ),
               ],
@@ -987,17 +1022,25 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                     ),
                   )
                 : students.isEmpty
-                ? const Center(child: Text('No students found.'))
+                ? Center(
+                    child: Text(
+                      'No students found.',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  )
                 : ListView.separated(
                     itemCount: students.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, index) {
                       final s = students[index];
-                      return Container(
-                        key: ValueKey(s.username),
+                      // Render only the student row here, not the header or theme toggle
+                      // ...existing student row rendering code...
+                      return Padding(
                         padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 8,
+                          vertical: 8,
+                          horizontal: 16,
                         ),
                         child: Row(
                           children: [
@@ -1006,18 +1049,25 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                             Expanded(flex: 4, child: Text(s.name)),
                             Expanded(
                               flex: 2,
-                              child: Center(
-                                child: Switch(
-                                  value: s.present,
-                                  onChanged: (v) {
-                                    setState(() {
-                                      s.present = v;
-                                    });
-                                  },
-                                  activeColor: Colors.green,
-                                  inactiveThumbColor: Colors.redAccent,
-                                  inactiveTrackColor: Colors.red[200],
-                                ),
+                              child: Switch(
+                                value: s.present,
+                                onChanged: (val) {
+                                  setState(() => s.present = val);
+                                },
+                                activeColor: Colors.green,
+                                inactiveTrackColor: Colors.red[200],
+                                // Always use a visible thumb color
+                                thumbColor:
+                                    MaterialStateProperty.resolveWith<Color>((
+                                      states,
+                                    ) {
+                                      if (states.contains(
+                                        MaterialState.selected,
+                                      )) {
+                                        return Colors.white;
+                                      }
+                                      return Colors.white;
+                                    }),
                               ),
                             ),
                           ],
@@ -1089,7 +1139,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
     required String hint,
     bool isLoading = false,
   }) {
-    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
     final hintStyle = TextStyle(color: palette?.textSecondary);
     final itemStyle = TextStyle(color: palette?.textPrimary);
     final borderColor = palette?.border ?? const Color(0xFFC7BECF);
@@ -1107,7 +1157,8 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
           ),
           isDense: true,
           filled: true,
-          fillColor: palette?.inputFill ?? Colors.white,
+          fillColor:
+              palette?.inputFill ?? Theme.of(context).colorScheme.surface,
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String?>(
@@ -1129,8 +1180,10 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
               ),
             ],
             onChanged: onChanged,
-            dropdownColor: palette?.surface ?? Colors.white,
-            iconEnabledColor: palette?.iconColor,
+            dropdownColor:
+                palette?.surface ?? Theme.of(context).colorScheme.surface,
+            iconEnabledColor:
+                palette?.iconColor ?? Theme.of(context).iconTheme.color,
           ),
         ),
       ),

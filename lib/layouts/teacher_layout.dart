@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../components/sidebars/teacher_sidebar.dart';
+import '../services/theme_controller.dart';
+import '../components/popup/logout_confirmation_popup.dart';
+import '../screens/login_screen.dart';
 
 class TeacherLayout extends StatefulWidget {
   const TeacherLayout({super.key});
@@ -32,6 +35,47 @@ class _TeacherLayoutState extends State<TeacherLayout> {
                   onPressed: () => Scaffold.of(context).openDrawer(),
                 ),
               ),
+              actions: [
+                ValueListenableBuilder<ThemeMode>(
+                  valueListenable: ThemeController.themeMode,
+                  builder: (context, mode, _) {
+                    final isDark = mode == ThemeMode.dark;
+                    return IconButton(
+                      icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+                      tooltip: isDark
+                          ? 'Switch to light mode'
+                          : 'Switch to dark mode',
+                      onPressed: () {
+                        final next = isDark ? ThemeMode.light : ThemeMode.dark;
+                        ThemeController.setThemeMode(next);
+                      },
+                    );
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout),
+                  tooltip: 'Logout',
+                  onPressed: () async {
+                    try {
+                      final shouldLogout = await showLogoutConfirmationPopup(
+                        context,
+                      );
+                      if (shouldLogout == true) {
+                        // Reset theme to light mode on logout
+                        ThemeController.setThemeMode(ThemeMode.light);
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LoginScreen(),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      print("Logout failed: $e");
+                    }
+                  },
+                ),
+              ],
             )
           : null,
       drawer: isMobile
@@ -47,28 +91,83 @@ class _TeacherLayoutState extends State<TeacherLayout> {
               ),
             )
           : null,
-      body: Row(
+      body: Stack(
         children: [
+          Row(
+            children: [
+              if (!isMobile)
+                Container(
+                  color: sidebarColor,
+                  child: TeacherSidebar(
+                    selectedIndex: _selectedIndex,
+                    onItemSelected: (index) {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                    },
+                  ),
+                ),
+              if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {},
+                  child: _pages[_selectedIndex],
+                ),
+              ),
+            ],
+          ),
           if (!isMobile)
-            Container(
-              color: sidebarColor,
-              child: TeacherSidebar(
-                selectedIndex: _selectedIndex,
-                onItemSelected: (index) {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
-                },
+            Positioned(
+              top: 16,
+              right: 24,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ValueListenableBuilder<ThemeMode>(
+                    valueListenable: ThemeController.themeMode,
+                    builder: (context, mode, _) {
+                      final isDark = mode == ThemeMode.dark;
+                      return IconButton(
+                        icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+                        tooltip: isDark
+                            ? 'Switch to light mode'
+                            : 'Switch to dark mode',
+                        onPressed: () {
+                          final next = isDark
+                              ? ThemeMode.light
+                              : ThemeMode.dark;
+                          ThemeController.setThemeMode(next);
+                        },
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.logout),
+                    tooltip: 'Logout',
+                    onPressed: () async {
+                      try {
+                        final shouldLogout = await showLogoutConfirmationPopup(
+                          context,
+                        );
+                        if (shouldLogout == true) {
+                          // Reset theme to light mode on logout
+                          ThemeController.setThemeMode(ThemeMode.light);
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LoginScreen(),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        print("Logout failed: $e");
+                      }
+                    },
+                  ),
+                ],
               ),
             ),
-          if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: () {},
-              child: _pages[_selectedIndex],
-            ),
-          ),
         ],
       ),
     );

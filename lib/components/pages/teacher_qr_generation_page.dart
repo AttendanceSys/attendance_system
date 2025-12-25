@@ -1,3 +1,4 @@
+import '../../services/theme_controller.dart';
 // TeacherQRGenerationPage — save generated QR session to Firestore (qr_generation collection)
 //
 // Updates in this version:
@@ -20,6 +21,7 @@ import '../../theme/super_admin_theme.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/session.dart';
+import '../../theme/teacher_theme.dart';
 
 class TeacherQRGenerationPage extends StatefulWidget {
   const TeacherQRGenerationPage({super.key});
@@ -30,6 +32,30 @@ class TeacherQRGenerationPage extends StatefulWidget {
 }
 
 class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
+  bool get isDarkMode => Theme.of(context).brightness == Brightness.dark;
+  Widget _themeToggleButton() {
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
+    final iconColor = palette?.iconColor ?? Colors.black87;
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.themeMode,
+      builder: (context, mode, _) {
+        final isDark = mode == ThemeMode.dark;
+        return IconButton(
+          icon: Icon(
+            isDark ? Icons.light_mode : Icons.dark_mode,
+            color: iconColor,
+          ),
+          tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+          onPressed: () {
+            ThemeController.setThemeMode(
+              isDark ? ThemeMode.light : ThemeMode.dark,
+            );
+          },
+        );
+      },
+    );
+  }
+
   String? department;
   String? className;
   String? subject;
@@ -756,20 +782,26 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "Generate QR Code",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(
-                context,
-              ).extension<SuperAdminColors>()?.textPrimary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Text(
+                "Generate QR Code",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(
+                    context,
+                  ).extension<SuperAdminColors>()?.textPrimary,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 18),
           Wrap(
@@ -799,13 +831,17 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
               _dropdown(
                 value: subject,
                 items: subjects,
+
+                // call this color please color: isDarkMode ? Colors.white : Colors.grey[100],
                 hint: "Select Subject",
                 onChanged: (value) => setState(() => subject = value),
               ),
               const SizedBox(width: 18),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2196F3),
+                  backgroundColor: isDarkMode
+                      ? Theme.of(context).colorScheme.primary
+                      : const Color(0xFF2196F3),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
                     vertical: 16,
@@ -951,12 +987,17 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(14),
-                      color: Colors.grey[100],
+                      color: isDarkMode
+                          ? const Color.fromARGB(255, 143, 139, 139)
+                          : Colors.white,
                       border: Border.all(color: Colors.grey[300]!, width: 2),
                     ),
-                    child: const Text(
+                    child: Text(
                       "No QR Code generated yet.",
-                      style: TextStyle(color: Colors.grey, fontSize: 18),
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.grey,
+                        fontSize: 18,
+                      ),
                     ),
                   )
                 : Column(
@@ -1025,7 +1066,8 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
           ),
           isDense: true,
           filled: true,
-          fillColor: palette?.inputFill ?? Colors.white,
+          fillColor:
+              palette?.inputFill ?? Theme.of(context).colorScheme.surface,
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String?>(
@@ -1047,8 +1089,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
               ),
             ],
             onChanged: onChanged,
-            dropdownColor: palette?.surface ?? Colors.white,
-            iconEnabledColor: palette?.iconColor,
+            dropdownColor:
+                palette?.surface ?? Theme.of(context).colorScheme.surface,
+            iconEnabledColor:
+                palette?.iconColor ?? Theme.of(context).iconTheme.color,
           ),
         ),
       ),

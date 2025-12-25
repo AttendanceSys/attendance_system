@@ -279,7 +279,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
-    InputDecoration _input(String hint) => InputDecoration(
+    InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
@@ -327,7 +327,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   const SizedBox(height: 24),
                   TextFormField(
                     initialValue: _courseCode,
-                    decoration: _input('Course code (e.g. MTH101)'),
+                    decoration: input('Course code (e.g. MTH101)'),
                     onChanged: (v) =>
                         setState(() => _courseCode = v.toUpperCase()),
                     validator: (v) {
@@ -350,7 +350,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   const SizedBox(height: 16),
                   TextFormField(
                     initialValue: _courseName,
-                    decoration: _input('Course name'),
+                    decoration: input('Course name'),
                     onChanged: (v) => setState(() => _courseName = v),
                     validator: (v) {
                       final value = v?.trim() ?? '';
@@ -369,7 +369,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   // Department dropdown (replaces faculty)
                   DropdownButtonFormField<String>(
                     value: _departmentId,
-                    decoration: _input('Department'),
+                    decoration: input('Department'),
                     items: _departments
                         .map(
                           (d) => DropdownMenuItem(
@@ -391,7 +391,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   _teachers.isEmpty
                       ? DropdownButtonFormField<String>(
                           value: null,
-                          decoration: _input('Lecturer'),
+                          decoration: input('Lecturer'),
                           items: [
                             DropdownMenuItem(
                               value: '',
@@ -407,7 +407,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                         )
                       : DropdownButtonFormField<String>(
                           value: _lecturerId,
-                          decoration: _input('Lecturer'),
+                          decoration: input('Lecturer'),
                           items: _teachers
                               .map(
                                 (t) => DropdownMenuItem(
@@ -422,7 +422,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   // Class dropdown - filtered by selected department
                   DropdownButtonFormField<String>(
                     value: _classId,
-                    decoration: _input('Class'),
+                    decoration: input('Class'),
                     items: _classes
                         .where(
                           (c) =>
@@ -441,7 +441,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: _semester,
-                    decoration: _input('Semester'),
+                    decoration: input('Semester'),
                     items: List.generate(15, (i) => (i + 1).toString())
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),

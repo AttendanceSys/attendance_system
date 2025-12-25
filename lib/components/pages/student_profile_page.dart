@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../screens/login_screen.dart';
 import 'student_view_attendance_page.dart';
 import 'student_scan_attendance_page.dart';
+import '../../components/student_bottom_nav_bar.dart';
 
 class StudentProfilePage extends StatefulWidget {
   final String name;
@@ -30,6 +31,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   late String _semester;
   bool _loadingSemester = false;
 
+  // 🔹 Appearance state
+  final ValueNotifier<bool> _isDarkMode = ValueNotifier<bool>(false);
+
   @override
   void initState() {
     super.initState();
@@ -39,395 +43,286 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     }
   }
 
+  @override
+  void dispose() {
+    _isDarkMode.dispose();
+    super.dispose();
+  }
+
   Future<void> _fetchSemesterFromCourses() async {
     setState(() => _loadingSemester = true);
     try {
       final firestore = FirebaseFirestore.instance;
       final username = widget.id;
 
-      // Try to locate student doc by username or doc id
       String? classRefId;
-      try {
-        final q = await firestore
-            .collection('students')
-            .where('username', isEqualTo: username)
-            .limit(1)
-            .get();
-        if (q.docs.isNotEmpty) {
-          final data = q.docs.first.data();
-          final classRaw =
-              data['class_ref'] ?? data['classRef'] ?? data['class'];
-          if (classRaw is DocumentReference) {
-            classRefId = classRaw.id;
-          } else if (classRaw is String) {
-            final s = classRaw;
-            if (s.contains('/')) {
-              final parts = s.split('/').where((p) => p.isNotEmpty).toList();
-              classRefId = parts.isNotEmpty ? parts.last : s;
-            } else {
-              classRefId = s;
-            }
-          }
-        } else {
-          final doc = await firestore
-              .collection('students')
-              .doc(username)
-              .get();
-          if (doc.exists) {
-            final data = doc.data() ?? {};
-            final classRaw =
-                data['class_ref'] ?? data['classRef'] ?? data['class'];
-            if (classRaw is DocumentReference) {
-              classRefId = classRaw.id;
-            } else if (classRaw is String) {
-              final s = classRaw;
-              if (s.contains('/')) {
-                final parts = s.split('/').where((p) => p.isNotEmpty).toList();
-                classRefId = parts.isNotEmpty ? parts.last : s;
-              } else {
-                classRefId = s;
-              }
-            }
-          }
+
+      final q = await firestore
+          .collection('students')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+
+      if (q.docs.isNotEmpty) {
+        final data = q.docs.first.data();
+        final raw = data['class_ref'] ?? data['classRef'] ?? data['class'];
+        if (raw is DocumentReference) {
+          classRefId = raw.id;
+        } else if (raw is String) {
+          classRefId = raw.split('/').last;
         }
-      } catch (e) {
-        debugPrint('Error resolving student classRef: $e');
       }
 
-      // If we have a class id, query courses by that class id and take semester
-      if (classRefId != null && classRefId.isNotEmpty) {
+      if (classRefId != null) {
         final courseSnap = await firestore
             .collection('courses')
             .where('class', isEqualTo: classRefId)
             .limit(1)
             .get();
+
         if (courseSnap.docs.isNotEmpty) {
-          final sem = (courseSnap.docs.first.data()['semester'] ?? '')
-              .toString();
-          if (sem.trim().isNotEmpty) {
-            setState(() => _semester = sem.trim());
-          }
+          _semester =
+              courseSnap.docs.first.data()['semester']?.toString() ?? '';
         }
       }
-    } catch (e, st) {
-      debugPrint('Error fetching semester from courses: $e\n$st');
-    } finally {
-      if (mounted) setState(() => _loadingSemester = false);
-    }
+    } catch (_) {}
+    if (mounted) setState(() => _loadingSemester = false);
   }
 
-  void _performLogout(BuildContext context) {
-    // Close all routes and go to login screen (same behavior as before)
+  void _logout() {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
+      (_) => false,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          'Profile',
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
-        ),
-        // <-- Added logout action on the top-right (purple icon)
-        actions: [
-          IconButton(
-            onPressed: () => _performLogout(context),
-            icon: const Icon(Icons.logout_rounded),
-            color: const Color(0xFF6A46FF),
-            tooltip: 'Logout',
-          ),
-          const SizedBox(width: 6),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 18),
-            // Avatar with soft shadow
-            Center(
-              child: Material(
-                elevation: 8,
-                shape: const CircleBorder(),
-                color: Colors.white,
-                child: CircleAvatar(
-                  radius: 44,
-                  backgroundColor: Colors.white,
-                  child: Text(
-                    widget.avatarLetter,
-                    style: const TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: _isDarkMode,
+      builder: (context, darkMode, child) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: darkMode ? ThemeData.dark() : ThemeData.light(),
+          home: Scaffold(
+            backgroundColor:
+                darkMode ? Colors.grey[900] : const Color(0xFFF7F8FA),
+
+            // ================= APP BAR =================
+            appBar: AppBar(
+              backgroundColor: darkMode ? Colors.grey[850] : Colors.white,
+              elevation: 0.5,
+              centerTitle: true,
+              leading: IconButton(
+                icon: Icon(Icons.arrow_back_ios,
+                    color: darkMode ? Colors.white70 : Colors.black87),
+                onPressed: () => Navigator.pop(context),
+              ),
+              title: Text(
+                'Profile',
+                style: TextStyle(
+                  color: darkMode ? Colors.white70 : Colors.black87,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Name and role
-            Text(
-              widget.id,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF222238),
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Student',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.black45,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            // Info cards
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
+              actions: [
+                IconButton(
+                  onPressed: _logout,
+                  icon: Icon(Icons.logout_rounded,
+                      color: darkMode ? Colors.purple[200] : const Color(0xFF6A46FF)),
                 ),
-                child: Column(
-                  children: [
-                    _infoCard(
-                      icon: Icons.person_outline,
-                      iconColor: const Color(0xFF6A46FF),
-                      label: 'Student full Name',
-                      value: widget.name,
-                    ),
-                    const SizedBox(height: 12),
-                    _infoCard(
-                      icon: Icons.school_outlined,
-                      iconColor: const Color(0xFF6A46FF),
-                      label: 'Class',
-                      value: widget.className,
-                    ),
-                    const SizedBox(height: 12),
-                    _infoCard(
-                      icon: Icons.calendar_today_outlined,
-                      iconColor: const Color(0xFF6A46FF),
-                      label: 'Semester',
-                      value: _loadingSemester ? 'Loading...' : _semester,
-                    ),
-                    const SizedBox(height: 12),
-                    _infoCard(
-                      icon: Icons.person,
-                      iconColor: const Color(0xFF6A46FF),
-                      label: 'Gender',
-                      value: widget.gender,
-                    ),
-                    const SizedBox(height: 12),
-                    _infoCard(
-                      icon: Icons.tag,
-                      iconColor: const Color(0xFF6A46FF),
-                      label: 'Student username',
-                      value: widget.id,
-                    ),
-
-                    const SizedBox(height: 24),
-
-
-                    const SizedBox(height: 36),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-
-      // Bottom navigation with a right-floating purple profile button (to visually match provided design)
-      bottomNavigationBar: SizedBox(
-        height: 86,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              height: 86,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 8,
-                    offset: Offset(0, -2),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  // View Attendance
-                  InkWell(
-                    onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const StudentViewAttendanceMobile(),
-                        ),
-                      );
-                    },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.menu_book_rounded, color: Colors.black54),
-                        SizedBox(height: 6),
-                        Text(
-                          "View Attendance",
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Scan Attendance (center)
-                  InkWell(
-                    onTap: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const StudentScanAttendancePage(),
-                        ),
-                      );
-                    },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.qr_code_scanner, color: Colors.black54),
-                        SizedBox(height: 6),
-                        Text(
-                          "Scan Attendance",
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // spacer for right-floating button overlap
-                  const SizedBox(width: 56),
-                ],
-              ),
+              ],
             ),
 
-            // Right-floating purple profile button (overlaps nav, matches design)
-            Positioned(
-              right: 18,
-              top: -28,
+            // ================= BODY =================
+            body: SafeArea(
+              bottom: false,
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  GestureDetector(
-                    onTap: () {
-                      // Already on profile page - no-op or you can add edit profile
-                    },
-                    child: Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6A46FF),
-                        borderRadius: BorderRadius.circular(32),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF6A46FF).withOpacity(0.28),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
+                  const SizedBox(height: 20),
+
+                  // Avatar
+                  CircleAvatar(
+                    radius: 42,
+                    backgroundColor: darkMode ? Colors.grey[800] : Colors.white,
+                    child: Text(
+                      widget.avatarLetter,
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                        color: darkMode ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Name
+                  Text(
+                    widget.name,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: darkMode ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    'Student',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: darkMode ? Colors.white38 : Colors.black45,
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Profile cards
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        children: [
+                          _profileTile(
+                              icon: Icons.person_outline,
+                              title: 'Student Name',
+                              value: widget.name,
+                              darkMode: darkMode),
+                          _profileTile(
+                              icon: Icons.school_outlined,
+                              title: 'Class',
+                              value: widget.className,
+                              darkMode: darkMode),
+                          _profileTile(
+                              icon: Icons.calendar_today_outlined,
+                              title: 'Semester',
+                              value:
+                                  _loadingSemester ? 'Loading...' : _semester,
+                              darkMode: darkMode),
+                          _profileTile(
+                              icon: Icons.person,
+                              title: 'Gender',
+                              value: widget.gender,
+                              darkMode: darkMode),
+                          _profileTile(
+                              icon: Icons.badge_outlined,
+                              title: 'Student Username',
+                              value: widget.id,
+                              darkMode: darkMode),
+                          // 🔹 Appearance Switch
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: darkMode ? Colors.grey[850] : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: darkMode
+                                      ? Colors.grey[700]!
+                                      : Colors.grey.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.dark_mode,
+                                    color: Color(0xFF6A46FF)),
+                                const SizedBox(width: 12),
+                                const Expanded(
+                                  child: Text(
+                                    'Appearance',
+                                    style: TextStyle(
+                                      
+                                      fontSize: 12,
+                                      color: Colors.black45,
+                                    ),
+                                    
+                                  ),
+                                ),
+                                Switch(
+                                  value: darkMode,
+                                  activeColor: const Color(0xFF6A46FF),
+                                  onChanged: (val) => _isDarkMode.value = val,
+                                )
+                              ],
+                            ),
                           ),
+                          const SizedBox(height: 24),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.person,
-                        color: Colors.white,
-                        size: 30,
-                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
+
+            // ================= NAV BAR =================
+            bottomNavigationBar: SafeArea(
+              child: StudentBottomNavBar(
+                currentIndex: 2,
+                onTap: (index) {
+                  if (index == 0) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const StudentViewAttendanceMobile(),
+                      ),
+                    );
+                  } else if (index == 1) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const StudentScanAttendancePage(),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _infoCard({
+  // ================= PROFILE TILE =================
+  Widget _profileTile({
     required IconData icon,
-    required Color iconColor,
-    required String label,
+    required String title,
     required String value,
+    required bool darkMode,
   }) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: darkMode ? Colors.grey[850] : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(
+            color: darkMode ? Colors.grey[700]! : Colors.grey.shade200),
       ),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: iconColor, size: 20),
-          ),
+          Icon(icon, color: const Color(0xFF6A46FF), size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
-                  style: const TextStyle(
+                  title,
+                  style: TextStyle(
                     fontSize: 12,
-                    color: Colors.black45,
-                    fontWeight: FontWeight.w600,
+                    color: darkMode ? Colors.white38 : Colors.black45,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   value,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    color: Color(0xFF222238),
-                    fontWeight: FontWeight.w700,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: darkMode ? Colors.white70 : Colors.black87,
                   ),
                 ),
               ],

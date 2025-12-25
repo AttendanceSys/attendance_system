@@ -63,7 +63,7 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
-    InputDecoration _input(String hint) => InputDecoration(
+    InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
@@ -112,7 +112,7 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _username,
-                  decoration: _input("Username"),
+                  decoration: input("Username"),
                   onChanged: (val) {
                     setState(() => _usernameError = null);
                     _username = val.trim();
@@ -137,7 +137,7 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _teacherName,
-                  decoration: _input("Lecturer Name"),
+                  decoration: input("Lecturer Name"),
                   onChanged: (val) {
                     setState(() => _nameError = null);
                     _teacherName = val.trim();
@@ -162,7 +162,7 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _facultyId,
-                  decoration: _input("Faculty"),
+                  decoration: input("Faculty"),
                   items: widget.facultyNames
                       .map(
                         (name) =>

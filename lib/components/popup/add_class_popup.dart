@@ -124,7 +124,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
-    InputDecoration _input(String hint) {
+    InputDecoration input(String hint) {
       return InputDecoration(
         hintText: hint,
         filled: true,
@@ -175,7 +175,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _baseName,
-                  decoration: _input("Base Class Name (e.g. B3SC)"),
+                  decoration: input("Base Class Name (e.g. B3SC)"),
                   onChanged: (val) {
                     final upper = val.toUpperCase();
                     setState(() => _baseName = upper);
@@ -200,7 +200,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _department,
-                  decoration: _input("Department"),
+                  decoration: input("Department"),
                   items: _departments.map((d) {
                     return DropdownMenuItem(
                       value: d['id'],
@@ -214,7 +214,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _section,
-                  decoration: _input("Section"),
+                  decoration: input("Section"),
                   items: _sections
                       .map(
                         (sec) => DropdownMenuItem(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../services/session.dart';
+import '../../theme/teacher_theme.dart';
 
 class TeacherSidebar extends StatefulWidget {
   final Function(int) onItemSelected;
@@ -76,10 +77,14 @@ class _TeacherSidebarState extends State<TeacherSidebar> {
     final collapsed = widget.collapsed;
     final selectedIndex = widget.selectedIndex;
     final onItemSelected = widget.onItemSelected;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sidebarColor = isDark
+        ? const Color(0xFF0E1A60)
+        : const Color(0xFF3B4B9B);
 
     return Container(
       width: collapsed ? 60 : 220,
-      color: const Color(0xFF3B4B9B),
+      color: sidebarColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -162,7 +167,13 @@ class SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color selectedBg = Colors.white.withOpacity(0.13);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
+    final Color selectedBg =
+        (palette?.selectedBg ??
+        (isDark
+            ? Colors.white.withOpacity(0.13)
+            : Colors.white.withOpacity(0.25)));
     final Color selectedText = Colors.white;
     final Color unselectedText = Colors.white;
     final Color selectedIcon = Colors.white;

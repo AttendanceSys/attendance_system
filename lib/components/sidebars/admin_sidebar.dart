@@ -198,14 +198,14 @@ class SidebarItem extends StatelessWidget {
     final Color selectedIcon = Colors.white;
     final Color unselectedIcon = Colors.white;
 
-    final overlay = MaterialStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(MaterialState.hovered)) {
+    final overlay = WidgetStateProperty.resolveWith<Color?>((states) {
+      if (states.contains(WidgetState.hovered)) {
         return palette?.hoverOverlay ??
             (isDark
                 ? Colors.white.withOpacity(0.10)
                 : Colors.white.withOpacity(0.20));
       }
-      if (states.contains(MaterialState.pressed)) {
+      if (states.contains(WidgetState.pressed)) {
         return palette?.pressedOverlay ??
             (isDark
                 ? Colors.white.withOpacity(0.16)

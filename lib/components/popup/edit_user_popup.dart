@@ -51,7 +51,7 @@ class _EditUserPopupState extends State<EditUserPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
-    InputDecoration _input(String hint) => InputDecoration(
+    InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
@@ -100,7 +100,7 @@ class _EditUserPopupState extends State<EditUserPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _username,
-                  decoration: _input("Username"),
+                  decoration: input("Username"),
                   validator: (val) {
                     final value = val?.trim() ?? '';
                     if (value.isEmpty) return "Enter username";

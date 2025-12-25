@@ -38,7 +38,7 @@ class _AddUserPopupState extends State<AddUserPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
-    InputDecoration _input(String hint) => InputDecoration(
+    InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
@@ -84,14 +84,14 @@ class _AddUserPopupState extends State<AddUserPopup> {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  decoration: _input("Username"),
+                  decoration: input("Username"),
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter username" : null,
                   onChanged: (val) => _username = val,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  decoration: _input("Password"),
+                  decoration: input("Password"),
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter password" : null,
                   obscureText: true,
@@ -99,7 +99,7 @@ class _AddUserPopupState extends State<AddUserPopup> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  decoration: _input("Role"),
+                  decoration: input("Role"),
                   items: ['teacher', 'admin', 'student', 'super_admin']
                       .map(
                         (role) =>
@@ -112,7 +112,7 @@ class _AddUserPopupState extends State<AddUserPopup> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  decoration: _input("Status"),
+                  decoration: input("Status"),
                   items: ['active', 'inactive', 'disabled']
                       .map(
                         (status) => DropdownMenuItem(
@@ -127,7 +127,7 @@ class _AddUserPopupState extends State<AddUserPopup> {
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
-                  decoration: _input("Faculty ID (optional)"),
+                  decoration: input("Faculty ID (optional)"),
                   onChanged: (val) => _facultyId = val,
                 ),
                 const SizedBox(height: 24),

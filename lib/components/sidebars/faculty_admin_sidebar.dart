@@ -70,6 +70,7 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
     final sidebarColor =
         palette?.sidebarColor ??
         (isDark ? const Color(0xFF0E1A60) : const Color(0xFF3B4B9B));
+        
 
     return Container(
       width: collapsed ? 60 : 220,

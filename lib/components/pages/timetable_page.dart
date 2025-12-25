@@ -2166,25 +2166,25 @@ class _TimetablePageState extends State<TimetablePage> {
                         Icons.refresh,
                         size: 18,
                         color: isDark
-                            ? (palette?.accent ?? const Color(0xFF7C3AED))
+                            ? (palette?.accent ?? const Color(0xFFFFFFFF))
                             : Colors.purple,
                       ),
                       label: Text(
                         'Reload',
                         style: TextStyle(
                           color: isDark
-                              ? (palette?.accent ?? const Color(0xFF7C3AED))
+                              ? (palette?.accent ?? const Color(0xFFFFFFFF))
                               : Colors.purple,
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(
                           color: isDark
-                              ? (palette?.accent ?? const Color(0xFF7C3AED))
+                              ? (palette?.accent ?? const Color(0xFFFFFFFF))
                               : Colors.purple,
                         ),
                         foregroundColor: isDark
-                            ? (palette?.accent ?? const Color(0xFF7C3AED))
+                            ? (palette?.accent ?? const Color(0xFFFFFFFF))
                             : Colors.purple,
                       ),
                       onPressed: () async {
@@ -2283,7 +2283,7 @@ class _TimetablePageState extends State<TimetablePage> {
                     onPressed: canExport ? _exportPdfFlow : null,
                     icon: Icon(
                       Icons.picture_as_pdf_outlined,
-                      color: isDark ? palette?.iconColor : null,
+                      color: isDark ? Colors.white : palette?.iconColor,
                     ),
                   ),
                 ],

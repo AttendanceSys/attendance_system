@@ -49,7 +49,7 @@ class _AddEditAttendancePopupState extends State<AddEditAttendancePopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
-    InputDecoration _input(String hint) => InputDecoration(
+    InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
@@ -98,7 +98,7 @@ class _AddEditAttendancePopupState extends State<AddEditAttendancePopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _studentName,
-                  decoration: _input("Student Name"),
+                  decoration: input("Student Name"),
                   onChanged: (val) => _studentName = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter student name" : null,
@@ -106,7 +106,7 @@ class _AddEditAttendancePopupState extends State<AddEditAttendancePopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _department,
-                  decoration: _input("Department"),
+                  decoration: input("Department"),
                   onChanged: (val) => _department = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter department" : null,
@@ -114,7 +114,7 @@ class _AddEditAttendancePopupState extends State<AddEditAttendancePopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _className,
-                  decoration: _input("Class"),
+                  decoration: input("Class"),
                   onChanged: (val) => _className = val,
                   validator: (val) =>
                       val == null || val.isEmpty ? "Enter class" : null,

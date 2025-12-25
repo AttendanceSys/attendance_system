@@ -58,7 +58,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
-    InputDecoration _input(String hint) => InputDecoration(
+    InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
@@ -107,7 +107,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _facultyCode,
-                  decoration: _input("Faculty Code"),
+                  decoration: input("Faculty Code"),
                   onChanged: (val) {
                     setState(() => _codeError = null);
                     _facultyCode = val.trim();
@@ -131,7 +131,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _facultyName,
-                  decoration: _input("Faculty Name"),
+                  decoration: input("Faculty Name"),
                   onChanged: (val) {
                     setState(() => _nameError = null);
                     _facultyName = val.trim();

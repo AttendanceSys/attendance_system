@@ -63,7 +63,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
-    InputDecoration _input(String hint) => InputDecoration(
+    InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
@@ -112,7 +112,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _username,
-                  decoration: _input("Username"),
+                  decoration: input("Username"),
                   onChanged: (val) {
                     setState(() => _usernameError = null);
                     _username = val.trim();
@@ -137,7 +137,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _fullName,
-                  decoration: _input("Full Name"),
+                  decoration: input("Full Name"),
                   onChanged: (val) {
                     setState(() => _fullNameError = null);
                     _fullName = val.trim();
@@ -165,7 +165,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _facultyId,
-                  decoration: _input("Faculty Name"),
+                  decoration: input("Faculty Name"),
                   items: widget.facultyNames
                       .map(
                         (name) =>

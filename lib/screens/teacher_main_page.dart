@@ -4,6 +4,8 @@ import '../components/pages/teacher_qr_generation_page.dart';
 import '../components/pages/teacher_attendance_page.dart';
 import '../components/popup/logout_confirmation_popup.dart'; // <-- reusable popup
 import 'login_screen.dart';
+import '../services/theme_controller.dart';
+import '../theme/teacher_theme.dart';
 
 class TeacherMainPage extends StatefulWidget {
   const TeacherMainPage({super.key});
@@ -15,6 +17,7 @@ class TeacherMainPage extends StatefulWidget {
 class _TeacherMainPageState extends State<TeacherMainPage> {
   int selectedIndex = 0;
   bool collapsed = true;
+  // Removed local dark mode state, use global ThemeController
 
   final List<Widget> pages = const [
     TeacherQRGenerationPage(),
@@ -47,9 +50,42 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final sidebarColor = const Color(0xFF3B4B9B);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sidebarColor = isDark
+        ? const Color(0xFF0E1A60)
+        : const Color(0xFF3B4B9B);
 
-    return Scaffold(
+    Widget themeSwitchButton({Color? color}) {
+      return Builder(
+        builder: (context) {
+          final palette = Theme.of(context).extension<TeacherThemeColors>();
+          return ValueListenableBuilder<ThemeMode>(
+            valueListenable: ThemeController.themeMode,
+            builder: (context, mode, _) {
+              final isDark = mode == ThemeMode.dark;
+              final icon = isDark ? Icons.light_mode : Icons.dark_mode;
+              final tooltip = isDark
+                  ? 'Switch to light mode'
+                  : 'Switch to dark mode';
+              final iconColor = isDark
+                  ? Colors.white
+                  : (color ?? palette?.iconColor ?? Colors.black87);
+              return IconButton(
+                icon: Icon(icon, color: iconColor),
+                tooltip: tooltip,
+                onPressed: () {
+                  ThemeController.setThemeMode(
+                    isDark ? ThemeMode.light : ThemeMode.dark,
+                  );
+                },
+              );
+            },
+          );
+        },
+      );
+    }
+
+    final scaffold = Scaffold(
       appBar: isMobile
           ? AppBar(
               title: const Text('Teacher Panel'),
@@ -61,10 +97,32 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
                 ),
               ),
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  tooltip: 'Logout',
-                  onPressed: () => _logout(context),
+                Builder(
+                  builder: (context) {
+                    final palette = Theme.of(
+                      context,
+                    ).extension<TeacherThemeColors>();
+                    final iconColor = palette?.iconColor ?? Colors.black87;
+                    return Row(
+                      children: [
+                        themeSwitchButton(color: iconColor),
+                        ValueListenableBuilder<ThemeMode>(
+                          valueListenable: ThemeController.themeMode,
+                          builder: (context, mode, _) {
+                            final isDark = mode == ThemeMode.dark;
+                            final logoutIconColor = isDark
+                                ? Colors.white
+                                : iconColor;
+                            return IconButton(
+                              icon: Icon(Icons.logout, color: logoutIconColor),
+                              tooltip: 'Logout',
+                              onPressed: () => _logout(context),
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             )
@@ -134,19 +192,45 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
               ),
             ],
           ),
-          // Desktop/Tablet logout button
+          // Desktop/Tablet theme switch and logout button
           if (!isMobile)
             Positioned(
               top: 16,
               right: 24,
-              child: IconButton(
-                icon: const Icon(Icons.logout, color: Colors.black87),
-                tooltip: 'Logout',
-                onPressed: () => _logout(context),
+              child: Builder(
+                builder: (context) {
+                  final palette = Theme.of(
+                    context,
+                  ).extension<TeacherThemeColors>();
+                  final iconColor = palette?.iconColor ?? Colors.black87;
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      themeSwitchButton(color: iconColor),
+                      ValueListenableBuilder<ThemeMode>(
+                        valueListenable: ThemeController.themeMode,
+                        builder: (context, mode, _) {
+                          final isDark = mode == ThemeMode.dark;
+                          final logoutIconColor = isDark
+                              ? Colors.white
+                              : iconColor;
+                          return IconButton(
+                            icon: Icon(Icons.logout, color: logoutIconColor),
+                            tooltip: 'Logout',
+                            onPressed: () => _logout(context),
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
         ],
       ),
     );
+
+    // Use only global ThemeController for theme
+    return scaffold;
   }
 }

@@ -1440,7 +1440,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                               ? 'Reconfigure periods'
                               : 'Configure periods',
                           style: TextStyle(
-                            color: isDark ? palette?.textPrimary : null,
+                            color: isDark ? Colors.white : palette?.textPrimary,
                           ),
                         ),
                       ),
@@ -1614,7 +1614,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                         onPressed: () => Navigator.of(context).pop(),
                         style: isDark
                             ? TextButton.styleFrom(
-                                foregroundColor: palette?.textSecondary,
+                                foregroundColor: isDark
+                                    ? Colors.white
+                                    : palette?.textSecondary,
                               )
                             : null,
                         child: const Text('Cancel'),

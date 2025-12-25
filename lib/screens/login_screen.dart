@@ -7,6 +7,7 @@ import 'package:attendance_system/screens/teacher_main_page.dart';
 import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/session.dart';
+import '../services/theme_controller.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,14 +35,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // Shared text styles
-  static const TextStyle _headerStyle = TextStyle(
+  static const TextStyle _headerStyleLight = TextStyle(
     color: Colors.black87,
     fontSize: 28,
     fontWeight: FontWeight.bold,
   );
-
-  static const TextStyle _subtitleStyle = TextStyle(
+  static const TextStyle _headerStyleDark = TextStyle(
+    color: Color(0xFFE6EAF1),
+    fontSize: 28,
+    fontWeight: FontWeight.bold,
+  );
+  static const TextStyle _subtitleStyleLight = TextStyle(
     color: Colors.black54,
+    fontSize: 14,
+  );
+  static const TextStyle _subtitleStyleDark = TextStyle(
+    color: Color(0xFF9EA5B5),
     fontSize: 14,
   );
 
@@ -213,37 +222,93 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: isMobile
-              ? const LinearGradient(
-                  colors: [Color(0xFF9D83D7), Color(0xFFB39AF6)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : const LinearGradient(
-                  colors: [Color(0xFFF5F8FB), Color(0xFFF1F6FB)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+    // Use ValueListenableBuilder to react to theme changes for the whole login page
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.themeMode,
+      builder: (context, themeMode, _) {
+        final isDark = themeMode == ThemeMode.dark;
+        return Scaffold(
+          body: Stack(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  gradient: isDark
+                      ? const LinearGradient(
+                          colors: [Color(0xFF23283A), Color(0xFF181C2A)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : (isMobile
+                            ? const LinearGradient(
+                                colors: [Color(0xFF9D83D7), Color(0xFFB39AF6)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : const LinearGradient(
+                                colors: [Color(0xFFF5F8FB), Color(0xFFF1F6FB)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )),
                 ),
-        ),
-        child: Center(
-          child: isMobile ? _buildMobileForm(context) : _buildWebForm(context),
-        ),
-      ),
+                child: Center(
+                  child: isMobile
+                      ? _buildMobileForm(context)
+                      : _buildWebForm(context),
+                ),
+              ),
+              Positioned(
+                top: isMobile ? 32 : 48,
+                right: isMobile ? 32 : 48,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(24),
+                    onTap: () {
+                      ThemeController.themeMode.value = isDark
+                          ? ThemeMode.light
+                          : ThemeMode.dark;
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.black26 : Colors.white70,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black12,
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        isDark
+                            ? Icons.wb_sunny_outlined
+                            : Icons.nightlight_round,
+                        color: isDark ? Colors.yellow[700] : Colors.indigo,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Widget _buildMobileForm(BuildContext context) {
+    final themeMode = ThemeController.themeMode.value;
+    final isDark = themeMode == ThemeMode.dark;
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
       child: Center(
         child: Container(
           constraints: const BoxConstraints(maxWidth: 420),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF262C3A) : Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -259,11 +324,15 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const SizedBox(height: 4),
-                Text("LOGIN", style: _headerStyle, textAlign: TextAlign.center),
+                Text(
+                  "LOGIN",
+                  style: isDark ? _headerStyleDark : _headerStyleLight,
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 18),
                 Text(
                   "Welcome Please enter your details to log in.",
-                  style: _subtitleStyle,
+                  style: isDark ? _subtitleStyleDark : _subtitleStyleLight,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 18),
@@ -276,6 +345,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   onSubmitted: (_) =>
                       FocusScope.of(context).requestFocus(_passwordFocus),
                   autofillHints: const [AutofillHints.username],
+                  isDark: isDark,
                 ),
                 const SizedBox(height: 14),
                 _buildStyledInput(
@@ -286,6 +356,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   focusNode: _passwordFocus,
                   onSubmitted: (_) => _handleLogin(),
                   autofillHints: const [AutofillHints.password],
+                  isDark: isDark,
                 ),
                 const SizedBox(height: 20),
                 if (_errorMessage != null)
@@ -336,6 +407,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildWebForm(BuildContext context) {
+    final themeMode = ThemeController.themeMode.value;
+    final isDark = themeMode == ThemeMode.dark;
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
@@ -345,7 +418,7 @@ class _LoginScreenState extends State<LoginScreen> {
             width: 460,
             padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 34),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isDark ? const Color(0xFF262C3A) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
@@ -359,11 +432,14 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text("LOGIN", style: _headerStyle),
+                  Text(
+                    "LOGIN",
+                    style: isDark ? _headerStyleDark : _headerStyleLight,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     "Welcome Please enter your details to log in.",
-                    style: _subtitleStyle,
+                    style: isDark ? _subtitleStyleDark : _subtitleStyleLight,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
@@ -375,8 +451,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     focusNode: _usernameFocus,
                     onSubmitted: (_) =>
                         FocusScope.of(context).requestFocus(_passwordFocus),
-                    filledColor: const Color(0xFFF7F9FB),
+                    filledColor: isDark
+                        ? const Color(0xFF2B303D)
+                        : const Color(0xFFF7F9FB),
                     autofillHints: const [AutofillHints.username],
+                    isDark: isDark,
                   ),
                   const SizedBox(height: 14),
                   _buildStyledInput(
@@ -386,8 +465,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     isPassword: true,
                     focusNode: _passwordFocus,
                     onSubmitted: (_) => _handleLogin(),
-                    filledColor: const Color(0xFFF7F9FB),
+                    filledColor: isDark
+                        ? const Color(0xFF2B303D)
+                        : const Color(0xFFF7F9FB),
                     autofillHints: const [AutofillHints.password],
+                    isDark: isDark,
                   ),
                   const SizedBox(height: 18),
                   if (_errorMessage != null)
@@ -443,28 +525,31 @@ class _LoginScreenState extends State<LoginScreen> {
     void Function(String)? onSubmitted,
     Color? filledColor,
     List<String>? autofillHints,
+    bool isDark = false,
   }) {
-    final inputFill = filledColor ?? Colors.white;
+    final inputFill =
+        filledColor ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
     final bool showObscure = isPassword ? _obscurePassword : false;
-
+    final textColor = isDark ? const Color(0xFFE6EAF1) : Colors.black87;
+    final hintTextColor = isDark ? const Color(0xFF9EA5B5) : Colors.black45;
     return TextField(
       controller: controller,
       obscureText: showObscure,
-      style: const TextStyle(color: Colors.black87, fontSize: 16),
+      style: TextStyle(color: textColor, fontSize: 16),
       focusNode: focusNode,
       onSubmitted: onSubmitted,
       autofillHints: autofillHints,
       decoration: InputDecoration(
         filled: true,
         fillColor: inputFill,
-        prefixIcon: Icon(icon, color: Colors.black45),
+        prefixIcon: Icon(icon, color: hintTextColor),
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.black45),
+        hintStyle: TextStyle(color: hintTextColor),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
                   _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.black45,
+                  color: hintTextColor,
                 ),
                 onPressed: () {
                   setState(() {
@@ -475,11 +560,19 @@ class _LoginScreenState extends State<LoginScreen> {
             : null,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.black12.withOpacity(0.04)),
+          borderSide: BorderSide(
+            color: isDark
+                ? const Color(0xFF3A404E)
+                : Colors.black12.withOpacity(0.04),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.black12.withOpacity(0.04)),
+          borderSide: BorderSide(
+            color: isDark
+                ? const Color(0xFFE6EAF1)
+                : Colors.black12.withOpacity(0.04),
+          ),
         ),
         contentPadding: const EdgeInsets.symmetric(
           vertical: 14,

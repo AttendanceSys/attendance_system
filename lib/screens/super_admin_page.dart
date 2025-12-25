@@ -9,8 +9,7 @@ import 'package:attendance_system/components/pages/faculties_page.dart';
 import 'package:attendance_system/components/pages/lecturer_page.dart';
 import 'package:attendance_system/components/pages/Admin_user_handling_page.dart';
 import 'package:attendance_system/components/popup/logout_confirmation_popup.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../services/session.dart';
+import '../services/theme_controller.dart';
 import '../theme/super_admin_theme.dart';
 // Removed global theme controller usage to keep dark mode local to Super Admin
 
@@ -27,41 +26,7 @@ class SuperAdminPage extends StatefulWidget {
 class _SuperAdminPageState extends State<SuperAdminPage> {
   int _selectedIndex = 0;
   bool _collapsed = true;
-  bool _localDark = false; // Dark mode local to SuperAdmin only
-
-  String _prefKeyForUser() {
-    final user = Session.username ?? 'default';
-    return 'superadmin_dark_$user';
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _restoreThemePreference();
-  }
-
-  Future<void> _restoreThemePreference() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getBool(_prefKeyForUser());
-      if (saved != null) {
-        setState(() {
-          _localDark = saved;
-        });
-      }
-    } catch (_) {
-      // ignore storage errors
-    }
-  }
-
-  Future<void> _persistThemePreference() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_prefKeyForUser(), _localDark);
-    } catch (_) {
-      // ignore storage errors
-    }
-  }
+  // Removed local dark mode state and logic. Use global ThemeController only.
 
   ThemeData _superAdminDarkTheme(ThemeData base) {
     const scaffold = Color(0xFF1F2431);
@@ -207,15 +172,17 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
   @override
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
-    final isDark = _localDark; // use local dark flag only for SuperAdmin
+    final isDark =
+        ThemeController.themeMode.value ==
+        ThemeMode.dark; // use global theme controller
     final isMobile = MediaQuery.of(context).size.width < 600;
     final sidebarColor = isDark
         ? const Color(0xFF0E1A60)
         : const Color(0xFF3B4B9B);
 
     Widget themeToggle({Color? color}) {
-      final iconColor = color ?? (_localDark ? Colors.white : Colors.black87);
-      final bgColor = _localDark ? const Color(0xFF2E3545) : Colors.white;
+      final iconColor = color ?? (isDark ? Colors.white : Colors.black87);
+      final bgColor = isDark ? const Color(0xFF2E3545) : Colors.white;
       return Container(
         decoration: BoxDecoration(
           color: bgColor,
@@ -230,15 +197,14 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
         ),
         child: IconButton(
           icon: Icon(
-            _localDark ? Icons.light_mode : Icons.dark_mode,
+            isDark ? Icons.light_mode : Icons.dark_mode,
             color: iconColor,
           ),
-          tooltip: _localDark ? 'Switch to light mode' : 'Switch to dark mode',
+          tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
           onPressed: () {
-            setState(() {
-              _localDark = !_localDark; // toggle only for this page
-            });
-            _persistThemePreference();
+            ThemeController.setThemeMode(
+              isDark ? ThemeMode.light : ThemeMode.dark,
+            );
           },
         ),
       );
@@ -369,7 +335,6 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
     if (isDark) {
       return Theme(data: _superAdminDarkTheme(baseTheme), child: scaffold);
     }
-
     return scaffold;
   }
 }

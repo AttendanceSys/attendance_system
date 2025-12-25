@@ -6,6 +6,7 @@ import '../../services/session.dart';
 import '../../components/popup/attendance_alert.dart';
 import 'student_view_attendance_page.dart';
 import 'student_profile_page.dart';
+import '../../components/student_bottom_nav_bar.dart';
 
 class StudentScanAttendancePage extends StatefulWidget {
   const StudentScanAttendancePage({super.key});
@@ -682,21 +683,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
               ),
             ),
 
-            BottomNavigationBar(
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.menu_book_rounded),
-                  label: 'View Attendance',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.qr_code_scanner),
-                  label: 'Scan',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline),
-                  label: 'Profile',
-                ),
-              ],
+            StudentBottomNavBar(
               currentIndex: 1,
               onTap: (index) {
                 if (index == 0) {
