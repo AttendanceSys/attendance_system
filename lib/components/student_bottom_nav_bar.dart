@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'student_theme.dart';
+import 'student_theme_controller.dart';
 
 class StudentBottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -12,10 +14,9 @@ class StudentBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Exact colors from your UI images
-    const Color primaryPurple = Color(0xFF6C4DFF); 
-    const Color unselectedGrey = Color(0xFF636E72); 
-    const Color borderColor = Color(0xFFE0E0E0);
+    final brightness = StudentThemeController.instance.brightness;
+    final Color navBgColor = StudentTheme.background(brightness);
+    final Color navBorderColor = StudentTheme.border(brightness);
 
     final List<Map<String, dynamic>> items = [
       {'icon': Icons.article_outlined, 'label': 'View Attendance'},
@@ -23,61 +24,74 @@ class StudentBottomNavBar extends StatelessWidget {
       {'icon': Icons.person_outline_rounded, 'label': 'Profile'},
     ];
 
-    return Container(
-      height: 100, // Fixed height to prevent UI jumping
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          top: BorderSide(color: borderColor, width: 1),
-        ),
-      ),
-      child: Row(
-        children: List.generate(items.length, (index) {
-          final bool isSelected = currentIndex == index;
-
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onTap(index),
-              behavior: HitTestBehavior.opaque,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Animated Purple Circle Container
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeInOut,
-                    width: isSelected ? 54 : 30, // Expands when selected
-                    height: isSelected ? 54 : 30,
-                    decoration: BoxDecoration(
-                      color: isSelected ? primaryPurple : Colors.transparent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      items[index]['icon'],
-                      size: isSelected ? 30 : 26, // Icon grows when selected
-                      color: isSelected ? Colors.white : unselectedGrey,
-                    ),
-                  ),
-                  
-                  // Label logic: Hidden when selected to match images
-                  if (!isSelected) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      items[index]['label'],
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: unselectedGrey,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+    return AnimatedBuilder(
+      animation: StudentThemeController.instance,
+      builder: (context, _) {
+        final brightness = StudentThemeController.instance.brightness;
+        final Color navBgColor = StudentTheme.background(brightness);
+        final Color navBorderColor = StudentTheme.border(brightness);
+        return Container(
+          height: 100,
+          decoration: BoxDecoration(
+            color: navBgColor,
+            border: Border(top: BorderSide(color: navBorderColor, width: 1)),
+          ),
+          child: Row(
+            children: List.generate(items.length, (index) {
+              final bool isSelected = currentIndex == index;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => onTap(index),
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        width: isSelected ? 54 : 30,
+                        height: isSelected ? 54 : 30,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? StudentTheme.primaryPurple
+                              : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          items[index]['icon'],
+                          size: isSelected ? 30 : 26,
+                          color: isSelected
+                              ? StudentTheme.icon(brightness, selected: true)
+                              : (brightness == Brightness.dark
+                                    ? Colors.white
+                                    : StudentTheme.icon(
+                                        brightness,
+                                        selected: false,
+                                      )),
+                        ),
                       ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        }),
-      ),
+                      if (!isSelected) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          items[index]['label'],
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: brightness == Brightness.dark
+                                ? Colors.white
+                                : StudentTheme.label(brightness),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
+        );
+      },
     );
   }
 }

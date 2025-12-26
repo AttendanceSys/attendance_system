@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../theme/super_admin_theme.dart';
+import '../student_theme_controller.dart';
 
 class AttendanceDuplicatePopup extends StatelessWidget {
   final String subject;
@@ -15,28 +15,13 @@ class AttendanceDuplicatePopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface =
-        palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
-    final border =
-        palette?.border ??
-        (isDark ? const Color(0xFF3A404E) : Colors.blue[100]!);
-    final textPrimary =
-        palette?.textPrimary ?? (isDark ? Colors.white : Colors.black87);
-    final textSecondary =
-        palette?.textSecondary ??
-        (isDark ? const Color(0xFFB5BDCB) : Colors.black54);
-    final accent =
-        palette?.accent ??
-        (isDark ? const Color(0xFF0A1E90) : const Color(0xFF2196F3));
-
+    final theme = StudentThemeController.instance.theme;
     final double screenWidth = MediaQuery.of(context).size.width;
     final double dialogWidth = screenWidth < 400 ? screenWidth * 0.95 : 340;
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
-      backgroundColor: surface,
+      backgroundColor: theme.card,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: dialogWidth),
         child: Padding(
@@ -50,20 +35,20 @@ class AttendanceDuplicatePopup extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: textPrimary,
+                  color: theme.foreground,
                 ),
               ),
               const SizedBox(height: 48),
-              infoRow('Subject:', subject, textPrimary, textSecondary),
-              infoRow('Date:', date, textPrimary, textSecondary),
-              infoRow('Time:', time, textPrimary, textSecondary),
+              infoRow('Subject:', subject, theme.foreground, theme.hint),
+              infoRow('Date:', date, theme.foreground, theme.hint),
+              infoRow('Time:', time, theme.foreground, theme.hint),
               const SizedBox(height: 32),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   style: TextButton.styleFrom(
-                    backgroundColor: accent,
+                    backgroundColor: theme.button,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),

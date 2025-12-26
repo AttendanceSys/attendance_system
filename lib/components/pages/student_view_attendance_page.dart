@@ -8,6 +8,7 @@ import '../../services/session.dart';
 import 'student_profile_page.dart';
 import 'student_scan_attendance_page.dart';
 import '../../components/student_bottom_nav_bar.dart';
+import '../../components/student_theme_controller.dart';
 
 class StudentViewAttendanceMobile extends StatefulWidget {
   const StudentViewAttendanceMobile({super.key});
@@ -306,262 +307,285 @@ class _StudentViewAttendanceMobileState
 
   @override
   Widget build(BuildContext context) {
-    final studentName =
-        _studentData?['fullname']?.toString() ??
-        _studentData?['fullName']?.toString() ??
-        'Student';
-    final avatarLetter = (studentName.isNotEmpty)
-        ? studentName[0].toUpperCase()
-        : 'S';
-    final studentClassDisplay =
-        (_studentData?['className'] ?? _studentData?['class_name'] ?? '')
-            .toString();
-    final semester = _studentData?['semester']?.toString() ?? '';
-    final gender = _studentData?['gender']?.toString() ?? '';
-    final id =
-        _studentData?['id']?.toString() ??
-        _studentData?['student_id']?.toString() ??
-        '';
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 12,
-              ),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Center(
-                      child: Text(
-                        "Attendance Overview",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
+    return AnimatedBuilder(
+      animation: StudentThemeController.instance,
+      builder: (context, _) {
+        final theme = StudentThemeController.instance.theme;
+        final studentName =
+            _studentData?['fullname']?.toString() ??
+            _studentData?['fullName']?.toString() ??
+            'Student';
+        final avatarLetter = (studentName.isNotEmpty)
+            ? studentName[0].toUpperCase()
+            : 'S';
+        final studentClassDisplay =
+            (_studentData?['className'] ?? _studentData?['class_name'] ?? '')
+                .toString();
+        final semester = _studentData?['semester']?.toString() ?? '';
+        final gender = _studentData?['gender']?.toString() ?? '';
+        final id =
+            _studentData?['id']?.toString() ??
+            _studentData?['student_id']?.toString() ??
+            '';
+        return Scaffold(
+          backgroundColor: theme.background,
+          body: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 12,
                   ),
-                  Material(
-                    elevation: 6,
-                    shape: const CircleBorder(),
-                    color: Colors.white,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => StudentProfilePage(
-                              name: studentName,
-                              className: studentClassDisplay,
-                              semester: semester,
-                              gender: gender,
-                              id: id,
-                              avatarLetter: avatarLetter,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            "Attendance Overview",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color:
+                                  StudentThemeController.instance.brightness ==
+                                      Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black,
                             ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        alignment: Alignment.center,
-                        child: Text(
-                          avatarLetter,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 6),
-
-            Expanded(
-              child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : errorMessage != null
-                  ? Center(
-                      child: Text(
-                        errorMessage!,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    )
-                  : attendance.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No attendance sessions found for your class.',
-                        style: TextStyle(color: Colors.black54),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      itemCount: attendance.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final item = attendance[index];
-                        final String course = item['course'];
-                        final int present = item['present'];
-                        final int absent = item['absent'];
-                        final int total = item['total'] ?? (present + absent);
-                        final int presentFlex = (present > 0) ? present : 0;
-                        final int absentFlex = (absent > 0) ? absent : 0;
-
-                        return Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 2,
-                          margin: EdgeInsets.zero,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
+                      Material(
+                        elevation: 6,
+                        shape: const CircleBorder(),
+                        color: theme.card,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => StudentProfilePage(
+                                  name: studentName,
+                                  className: studentClassDisplay,
+                                  semester: semester,
+                                  gender: gender,
+                                  id: id,
+                                  avatarLetter: avatarLetter,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            alignment: Alignment.center,
+                            child: Text(
+                              avatarLetter,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: theme.foreground,
+                              ),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                Expanded(
+                  child: isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : errorMessage != null
+                      ? Center(
+                          child: Text(
+                            errorMessage!,
+                            style: TextStyle(color: theme.error),
+                          ),
+                        )
+                      : attendance.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No attendance sessions found for your class.',
+                            style: TextStyle(color: theme.hint),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          itemCount: attendance.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final item = attendance[index];
+                            final String course = item['course'];
+                            final int present = item['present'];
+                            final int absent = item['absent'];
+                            final int total =
+                                item['total'] ?? (present + absent);
+                            final int presentFlex = (present > 0) ? present : 0;
+                            final int absentFlex = (absent > 0) ? absent : 0;
+
+                            return Card(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 2,
+                              margin: EdgeInsets.zero,
+                              color: theme.card,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Text(
-                                        course,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF222238),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            course,
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              color: theme.foreground,
+                                            ),
+                                          ),
+                                        ),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              "Present: $present",
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: theme.foreground,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              "Absent: $absent",
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: theme.hint,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Container(
+                                        height: 10,
+                                        color: theme.inputBackground,
+                                        child: Row(
+                                          children: [
+                                            if (presentFlex > 0)
+                                              Expanded(
+                                                flex: presentFlex,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        theme.progressPresent,
+                                                    borderRadius:
+                                                        const BorderRadius.only(
+                                                          topLeft:
+                                                              Radius.circular(
+                                                                16,
+                                                              ),
+                                                          bottomLeft:
+                                                              Radius.circular(
+                                                                16,
+                                                              ),
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            if (absentFlex > 0)
+                                              Expanded(
+                                                flex: absentFlex,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: theme.progressAbsent,
+                                                    borderRadius:
+                                                        const BorderRadius.only(
+                                                          topRight:
+                                                              Radius.circular(
+                                                                16,
+                                                              ),
+                                                          bottomRight:
+                                                              Radius.circular(
+                                                                16,
+                                                              ),
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                       ),
                                     ),
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          "Present: $present",
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            color: Color(0xFF222238),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          "Absent: $absent",
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            color: Colors.black45,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      "Total Classes: $total",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: theme.hint,
+                                      ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 10),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Container(
-                                    height: 10,
-                                    color: const Color(0xFFF0F2F5),
-                                    child: Row(
-                                      children: [
-                                        if (presentFlex > 0)
-                                          Expanded(
-                                            flex: presentFlex,
-                                            child: Container(
-                                              decoration: const BoxDecoration(
-                                                color: Color(0xFF6A46FF),
-                                                borderRadius: BorderRadius.only(
-                                                  topLeft: Radius.circular(16),
-                                                  bottomLeft: Radius.circular(
-                                                    16,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        if (absentFlex > 0)
-                                          Expanded(
-                                            flex: absentFlex,
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF05368),
-                                                borderRadius: BorderRadius.only(
-                                                  topRight: Radius.circular(16),
-                                                  bottomRight: Radius.circular(
-                                                    16,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  "Total Classes: $total",
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.black54,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
 
-            StudentBottomNavBar(
-              currentIndex: 0,
-              onTap: (index) {
-                if (index == 1) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => StudentScanAttendancePage(),
-                    ),
-                  );
-                } else if (index == 2) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => StudentProfilePage(
-                        name: studentName,
-                        className: studentClassDisplay,
-                        semester: semester,
-                        gender: gender,
-                        id: id,
-                        avatarLetter: avatarLetter,
-                      ),
-                    ),
-                  );
-                }
-                // index == 0 is current page
-              },
+                StudentBottomNavBar(
+                  currentIndex: 0,
+                  onTap: (index) {
+                    if (index == 1) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => StudentScanAttendancePage(),
+                        ),
+                      );
+                    } else if (index == 2) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StudentProfilePage(
+                            name: studentName,
+                            className: studentClassDisplay,
+                            semester: semester,
+                            gender: gender,
+                            id: id,
+                            avatarLetter: avatarLetter,
+                          ),
+                        ),
+                      );
+                    }
+                    // index == 0 is current page
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

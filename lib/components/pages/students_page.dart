@@ -4,7 +4,7 @@ import '../../models/student.dart';
 import '../popup/add_student_popup.dart';
 import '../cards/searchBar.dart';
 import '../../services/session.dart';
-import '../../theme/super_admin_theme.dart';
+import '../../theme/teacher_theme.dart';
 
 class StudentsPage extends StatefulWidget {
   const StudentsPage({super.key});
@@ -449,7 +449,7 @@ class _StudentsPageState extends State<StudentsPage> {
               fontWeight: FontWeight.bold,
               color: Theme.of(
                 context,
-              ).extension<SuperAdminColors>()?.textPrimary,
+              ).extension<TeacherThemeColors>()?.textPrimary,
             ),
           ),
           const SizedBox(height: 24),
@@ -557,7 +557,7 @@ class _StudentsPageState extends State<StudentsPage> {
 
   Widget _buildDesktopTable() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
     final highlight =
         palette?.highlight ??
         (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
@@ -620,7 +620,7 @@ class _StudentsPageState extends State<StudentsPage> {
 
   Widget _buildMobileTable() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
     final highlight =
         palette?.highlight ??
         (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);

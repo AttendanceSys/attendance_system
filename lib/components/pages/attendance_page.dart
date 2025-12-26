@@ -19,6 +19,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   List<String> departments = [];
   List<String> classesForDept = [];
   List<String> coursesForClass = [];
+  // Lookups to resolve ids from names for queries
+  final Map<String, String> _deptNameToId = {};
+  final Map<String, String> _classNameToId = {};
 
   // Roster grouped by class -> section -> list of student maps
   // Each student map includes 'docId' so we can update the student doc.
@@ -56,6 +59,8 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       departments = [];
       classesForDept = [];
       coursesForClass = [];
+      _deptNameToId.clear();
+      _classNameToId.clear();
       selectedDepartment = null;
       selectedClass = null;
       selectedCourse = null;
@@ -64,45 +69,105 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
 
     try {
       final deptSet = <String>{};
+      // Prefer departments within the current faculty
+      if (Session.facultyRef != null) {
+        final facRef = Session.facultyRef!;
+        final facId = facRef.id;
+        final facPath = facRef.path; // e.g., 'faculties/<id>'
 
-      // Use only Session.username (adjust here if your Session exposes a different id field)
-      final currentUsername = (Session.username ?? '').toString();
-
-      // 1) Try to find departments where head_of_department == currentUsername
-      if (currentUsername.isNotEmpty) {
         try {
-          final q = await _firestore
+          // Common schema: DocumentReference stored as 'faculty_ref'
+          final q1 = await _firestore
               .collection('departments')
-              .where('head_of_department', isEqualTo: currentUsername)
+              .where('faculty_ref', isEqualTo: facRef)
               .where('status', isEqualTo: true)
               .get();
-
-          for (final doc in q.docs) {
+          for (final doc in q1.docs) {
             final d = doc.data();
             final deptValue =
-                (d['department_code'] ??
-                        d['department_name'] ??
+                (d['department_name'] ??
+                        d['name'] ??
+                        d['department_code'] ??
                         d['department'])
                     ?.toString() ??
                 '';
-            if (deptValue.isNotEmpty) deptSet.add(deptValue);
+            if (deptValue.isNotEmpty) {
+              deptSet.add(deptValue);
+              _deptNameToId.putIfAbsent(deptValue, () => doc.id);
+            }
           }
-        } catch (_) {
-          // ignore and fall back
+        } catch (_) {}
+
+        // Alternate schemas where id/path is stored as string
+        for (final field in ['faculty_id', 'faculty']) {
+          for (final value in [facId, facPath]) {
+            try {
+              final qAlt = await _firestore
+                  .collection('departments')
+                  .where(field, isEqualTo: value)
+                  .where('status', isEqualTo: true)
+                  .get();
+              for (final doc in qAlt.docs) {
+                final d = doc.data();
+                final deptValue =
+                    (d['department_name'] ??
+                            d['name'] ??
+                            d['department_code'] ??
+                            d['department'])
+                        ?.toString() ??
+                    '';
+                if (deptValue.isNotEmpty) {
+                  deptSet.add(deptValue);
+                  _deptNameToId.putIfAbsent(deptValue, () => doc.id);
+                }
+              }
+            } catch (_) {}
+          }
         }
       }
 
-      // 2) Legacy fallback: if no departments found for this user, fall back to timetables-based discovery
+      // If facultyRef isn't set or yielded nothing, fall back to previous logic
       if (deptSet.isEmpty) {
-        try {
-          final qs = await _firestore.collection('timetables').get();
-          for (final doc in qs.docs) {
-            final d = doc.data();
-            final dep = (d['department'] ?? '').toString();
-            if (dep.isNotEmpty) deptSet.add(dep);
+        // Use only Session.username (adjust here if your Session exposes a different id field)
+        final currentUsername = (Session.username ?? '').toString();
+
+        // Departments headed by the current user
+        if (currentUsername.isNotEmpty) {
+          try {
+            final q = await _firestore
+                .collection('departments')
+                .where('head_of_department', isEqualTo: currentUsername)
+                .where('status', isEqualTo: true)
+                .get();
+            for (final doc in q.docs) {
+              final d = doc.data();
+              final deptValue =
+                  (d['department_name'] ??
+                          d['name'] ??
+                          d['department_code'] ??
+                          d['department'])
+                      ?.toString() ??
+                  '';
+              if (deptValue.isNotEmpty) {
+                deptSet.add(deptValue);
+                _deptNameToId.putIfAbsent(deptValue, () => doc.id);
+              }
+            }
+          } catch (_) {}
+        }
+
+        // Legacy fallback: derive from timetables
+        if (deptSet.isEmpty) {
+          try {
+            final qs = await _firestore.collection('timetables').get();
+            for (final doc in qs.docs) {
+              final d = doc.data();
+              final dep = (d['department'] ?? '').toString();
+              if (dep.isNotEmpty) deptSet.add(dep);
+            }
+          } catch (e) {
+            debugPrint('Failed fallback timetables fetch: $e');
           }
-        } catch (e) {
-          debugPrint('Failed fallback timetables fetch: $e');
         }
       }
 
@@ -131,16 +196,102 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     });
 
     try {
-      final qs = await _firestore
-          .collection('timetables')
-          .where('department', isEqualTo: dept)
-          .get();
       final clsSet = <String>{};
-      for (final doc in qs.docs) {
-        final d = doc.data();
-        final cls = (d['className'] ?? '').toString();
-        if (cls.isNotEmpty) clsSet.add(cls);
+      final classesSnap = await _firestore.collection('classes').get();
+      String selectedDeptId = _deptNameToId[dept] ?? '';
+
+      // If we don't have the department id (e.g., when departments came from
+      // a timetable fallback), resolve it by name/code now so class matching
+      // can use an id comparison.
+      if (selectedDeptId.isEmpty) {
+        try {
+          final dqs = await _firestore
+              .collection('departments')
+              .where('status', isEqualTo: true)
+              .get();
+          for (final dd in dqs.docs) {
+            final data = dd.data();
+            final nameCandidates = [
+              data['department_name'],
+              data['name'],
+              data['department_code'],
+              data['department'],
+            ].where((v) => v != null).map((v) => v.toString()).toList();
+            if (nameCandidates.any((n) => _looseNameMatch(n, dept))) {
+              selectedDeptId = dd.id;
+              _deptNameToId.putIfAbsent(dept, () => selectedDeptId);
+              break;
+            }
+          }
+        } catch (_) {}
       }
+
+      for (final doc in classesSnap.docs) {
+        final data = doc.data();
+
+        // Optional faculty scoping: skip classes not in session faculty
+        if (Session.facultyRef != null) {
+          final facCandidate =
+              data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'];
+          String facId = '';
+          if (facCandidate != null) {
+            if (facCandidate is DocumentReference) {
+              facId = facCandidate.id;
+            } else if (facCandidate is String) {
+              final s = facCandidate;
+              facId = s.contains('/')
+                  ? s.split('/').where((p) => p.isNotEmpty).toList().last
+                  : s;
+            } else {
+              facId = facCandidate.toString();
+            }
+          }
+          if (facId.isNotEmpty && facId != Session.facultyRef!.id) {
+            continue;
+          }
+        }
+
+        // Resolve the department assigned to this class
+        final deptCandidate =
+            data['department_ref'] ??
+            data['department_id'] ??
+            data['department'];
+        String deptIdOnClass = '';
+        String deptStrOnClass = '';
+        if (deptCandidate != null) {
+          if (deptCandidate is DocumentReference) {
+            deptIdOnClass = deptCandidate.id;
+            deptStrOnClass = deptCandidate.path;
+          } else if (deptCandidate is String) {
+            deptStrOnClass = deptCandidate;
+            deptIdOnClass = deptStrOnClass.contains('/')
+                ? deptStrOnClass
+                      .split('/')
+                      .where((p) => p.isNotEmpty)
+                      .toList()
+                      .last
+                : deptStrOnClass;
+          } else {
+            deptStrOnClass = deptCandidate.toString();
+          }
+        }
+
+        // Check match by id if available, else loose match by name/path
+        final belongsToSelected =
+            (selectedDeptId.isNotEmpty && deptIdOnClass == selectedDeptId) ||
+            _looseNameMatch(deptStrOnClass, dept);
+        if (!belongsToSelected) continue;
+
+        final className =
+            (data['class_name'] ?? data['name'] ?? data['className'] ?? '')
+                .toString()
+                .trim();
+        if (className.isNotEmpty) {
+          clsSet.add(className);
+          _classNameToId[className] = doc.id;
+        }
+      }
+
       setState(() {
         classesForDept = clsSet.toList()..sort();
       });
@@ -164,30 +315,91 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     });
 
     try {
-      final qs = await _firestore
-          .collection('timetables')
-          .where('className', isEqualTo: cls)
-          .get();
       final courseSet = <String>{};
-      for (final doc in qs.docs) {
-        final d = doc.data();
-        final gm = d['grid_meta'];
-        if (gm is List) {
-          for (final gmItem in gm) {
-            if (gmItem is Map && gmItem['cells'] is List) {
-              for (final cell in (gmItem['cells'] as List)) {
-                if (cell is Map && cell['course'] != null) {
-                  final c = cell['course'].toString().trim();
-                  if (c.isNotEmpty) courseSet.add(c);
-                } else if (cell is String) {
-                  final c = cell.toString().trim();
-                  if (c.isNotEmpty) courseSet.add(c);
-                }
-              }
+      final coursesColl = _firestore.collection('courses');
+
+      // Resolve class id from name; if missing, try a quick lookup
+      String? classId = _classNameToId[cls];
+      if (classId == null || classId.isEmpty) {
+        try {
+          final cSnap = await _firestore
+              .collection('classes')
+              .where('class_name', isEqualTo: cls)
+              .get();
+          if (cSnap.docs.isNotEmpty) classId = cSnap.docs.first.id;
+        } catch (_) {}
+      }
+      if (classId == null || classId.isEmpty) {
+        setState(() {
+          coursesForClass = [];
+        });
+        return;
+      }
+
+      final classDocRef = _firestore.collection('classes').doc(classId);
+      final possibleClassKeys = <dynamic>{
+        classDocRef,
+        classId,
+        'classes/$classId',
+        '/classes/$classId',
+      };
+
+      // Fetch all courses and filter client-side to support mixed storage formats
+      final snap = await coursesColl.get();
+      for (final doc in snap.docs) {
+        final data = doc.data();
+
+        // Optional faculty scoping
+        if (Session.facultyRef != null) {
+          final facCandidate =
+              data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'];
+          String facId = '';
+          if (facCandidate != null) {
+            if (facCandidate is DocumentReference) {
+              facId = facCandidate.id;
+            } else if (facCandidate is String) {
+              final s = facCandidate;
+              facId = s.contains('/')
+                  ? s.split('/').where((p) => p.isNotEmpty).toList().last
+                  : s;
+            } else {
+              facId = facCandidate.toString();
+            }
+          }
+          if (facId.isNotEmpty && facId != Session.facultyRef!.id) {
+            continue;
+          }
+        }
+
+        // Match course to the selected class
+        final classField =
+            data['class'] ?? data['classRef'] ?? data['class_ref'];
+        if (classField != null) {
+          if (possibleClassKeys.contains(classField)) {
+            final courseName =
+                (data['course_name'] ??
+                        data['courseName'] ??
+                        data['course_code'] ??
+                        '')
+                    .toString()
+                    .trim();
+            if (courseName.isNotEmpty) courseSet.add(courseName);
+          } else if (classField is String) {
+            final s = classField;
+            if (s.endsWith(classId) || s.contains('/$classId')) {
+              final courseName =
+                  (data['course_name'] ??
+                          data['courseName'] ??
+                          data['course_code'] ??
+                          '')
+                      .toString()
+                      .trim();
+              if (courseName.isNotEmpty) courseSet.add(courseName);
             }
           }
         }
       }
+
       setState(() {
         coursesForClass = courseSet.toList()..sort();
       });
@@ -696,6 +908,7 @@ class _FiltersRow extends StatelessWidget {
           value: selectedDepartment,
           items: departments,
           isLoading: loadingDepartments,
+          isEnabled: true,
           onChanged: (val) => onChanged(department: val),
         ),
         _DropdownFilter(
@@ -703,6 +916,8 @@ class _FiltersRow extends StatelessWidget {
           value: selectedClass,
           items: classes,
           isLoading: loadingClasses,
+          // Enable only after a department is selected
+          isEnabled: selectedDepartment != null,
           onChanged: (val) => onChanged(className: val),
         ),
         _DropdownFilter(
@@ -710,6 +925,8 @@ class _FiltersRow extends StatelessWidget {
           value: selectedCourse,
           items: courses,
           isLoading: loadingCourses,
+          // Enable only after a class is selected
+          isEnabled: selectedClass != null,
           onChanged: (val) => onChanged(course: val),
         ),
       ],
@@ -723,6 +940,7 @@ class _DropdownFilter extends StatelessWidget {
   final List<String> items;
   final ValueChanged<String?> onChanged;
   final bool isLoading;
+  final bool isEnabled;
 
   const _DropdownFilter({
     required this.hint,
@@ -730,6 +948,7 @@ class _DropdownFilter extends StatelessWidget {
     required this.items,
     required this.onChanged,
     this.isLoading = false,
+    this.isEnabled = true,
   });
 
   @override
@@ -780,7 +999,18 @@ class _DropdownFilter extends StatelessWidget {
                 palette?.iconColor ??
                 (isDark ? const Color(0xFFE6EAF1) : const Color(0xFF6D6D6D)),
             value: value,
-            hint: Text(isLoading ? 'Loading...' : hint, style: hintStyle),
+            hint: Text(
+              isLoading
+                  ? 'Loading...'
+                  : (isEnabled
+                        ? hint
+                        : (hint == 'Class'
+                              ? 'Select Department first'
+                              : hint == 'Course'
+                              ? 'Select Class first'
+                              : hint)),
+              style: hintStyle,
+            ),
             items: [
               DropdownMenuItem<String?>(
                 value: null,
@@ -793,7 +1023,7 @@ class _DropdownFilter extends StatelessWidget {
                 ),
               ),
             ],
-            onChanged: isLoading ? null : onChanged,
+            onChanged: (isLoading || !isEnabled) ? null : onChanged,
             dropdownColor:
                 palette?.surface ??
                 (isDark ? const Color(0xFF262C3A) : Colors.white),

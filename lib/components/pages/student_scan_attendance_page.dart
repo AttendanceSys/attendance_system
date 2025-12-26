@@ -7,6 +7,7 @@ import '../../components/popup/attendance_alert.dart';
 import 'student_view_attendance_page.dart';
 import 'student_profile_page.dart';
 import '../../components/student_bottom_nav_bar.dart';
+import '../../components/student_theme_controller.dart';
 
 class StudentScanAttendancePage extends StatefulWidget {
   const StudentScanAttendancePage({super.key});
@@ -563,156 +564,172 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
     final gender = _profileGender ?? "Female";
     final id = _profileId ?? "B3SC760";
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Scan QR Code'),
-        backgroundColor: Colors.blueAccent,
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 320,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 18,
-                            offset: Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.all(16),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.white, width: 6),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            width: 280,
-                            height: 280,
-                            color: Colors.black,
-                            child: MobileScanner(
-                              controller: _controller,
-                              fit: BoxFit.cover,
-                              onDetect: _onDetect,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                      child: Text(
-                        'Position the QR code within the frame to scan.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.black45, fontSize: 13),
-                      ),
-                    ),
-
-                    const SizedBox(height: 18),
-
-                    if (scanResult != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                        child: Container(
-                          width: double.infinity,
+    return AnimatedBuilder(
+      animation: StudentThemeController.instance,
+      builder: (context, _) {
+        final theme = StudentThemeController.instance.theme;
+        return Scaffold(
+          backgroundColor: theme.background,
+          appBar: AppBar(
+            title: const Text('Scan QR Code'),
+            backgroundColor: theme.appBar,
+            elevation: 0,
+            iconTheme: IconThemeData(color: theme.appBarForeground),
+            titleTextStyle: TextStyle(
+              color: theme.appBarForeground,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          body: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 320,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade200),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Scanned:',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.black54,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      scanResult!,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    scanResult = null;
-                                  });
-                                  _controller.start();
-                                },
-                                child: const Text('Scan again'),
+                            color: theme.card,
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.shadow,
+                                blurRadius: 18,
+                                offset: Offset(0, 10),
                               ),
                             ],
                           ),
+                          padding: const EdgeInsets.all(16),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: theme.card,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: theme.card, width: 6),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                width: 280,
+                                height: 280,
+                                color: theme.qrBackground,
+                                child: MobileScanner(
+                                  controller: _controller,
+                                  fit: BoxFit.cover,
+                                  onDetect: _onDetect,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                  ],
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                          child: Text(
+                            'Position the QR code within the frame to scan.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: theme.hint, fontSize: 13),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        if (scanResult != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 28.0,
+                            ),
+                            child: Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: theme.inputBackground,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: theme.inputBorder),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Scanned:',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: theme.hint,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          scanResult!,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: theme.foreground,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        scanResult = null;
+                                      });
+                                      _controller.start();
+                                    },
+                                    child: Text(
+                                      'Scan again',
+                                      style: TextStyle(color: theme.button),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                // Use AnimatedBuilder for StudentBottomNavBar to ensure theme updates
+                StudentBottomNavBar(
+                  currentIndex: 1,
+                  onTap: (index) {
+                    if (index == 0) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const StudentViewAttendanceMobile(),
+                        ),
+                      );
+                    } else if (index == 2) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StudentProfilePage(
+                            name: studentName,
+                            className: className,
+                            semester: semester,
+                            gender: gender,
+                            id: id,
+                            avatarLetter: avatarLetter,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
             ),
-
-            StudentBottomNavBar(
-              currentIndex: 1,
-              onTap: (index) {
-                if (index == 0) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const StudentViewAttendanceMobile(),
-                    ),
-                  );
-                } else if (index == 2) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => StudentProfilePage(
-                        name: studentName,
-                        className: className,
-                        semester: semester,
-                        gender: gender,
-                        id: id,
-                        avatarLetter: avatarLetter,
-                      ),
-                    ),
-                  );
-                }
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

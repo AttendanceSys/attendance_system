@@ -1058,11 +1058,11 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                                 inactiveTrackColor: Colors.red[200],
                                 // Always use a visible thumb color
                                 thumbColor:
-                                    MaterialStateProperty.resolveWith<Color>((
+                                    WidgetStateProperty.resolveWith<Color>((
                                       states,
                                     ) {
                                       if (states.contains(
-                                        MaterialState.selected,
+                                        WidgetState.selected,
                                       )) {
                                         return Colors.white;
                                       }
