@@ -974,6 +974,8 @@ class _TimetablePageState extends State<TimetablePage> {
         spans[depKey]?[clsKey] ?? _tryComputeSpansFromLabels(periods);
 
     final data = {
+      // Ensure `department` holds the human-readable display name
+      // and `department_id` holds the original selected id/value.
       'department': deptDisplay,
       'department_id': depIdOrName,
       'classKey': classIdOrName,
@@ -1181,8 +1183,10 @@ class _TimetablePageState extends State<TimetablePage> {
             : entry.value.first.department;
 
         batch.set(ref, {
-          'department': depPart,
-          'department_id': entry.value.first.department,
+          // Store `department` as the canonical display/name and move the
+          // sanitized doc-id part into `department_id` for compatibility.
+          'department': entry.value.first.department,
+          'department_id': depPart,
           'classKey': entry.value.first.classKey,
           'className': entry.value.first.classKey,
           'periods': periods,

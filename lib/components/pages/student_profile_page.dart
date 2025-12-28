@@ -1,9 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../screens/login_screen.dart';
+import '../../components/popup/logout_confirmation_popup.dart';
 import 'student_view_attendance_page.dart';
 import 'student_scan_attendance_page.dart';
-import '../../components/student_bottom_nav_bar.dart';
+import '../../components/animated_bottom_bar.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 // student_theme_controller.dart
@@ -112,10 +113,15 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   }
 
   void _logout() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (_) => false,
-    );
+    // Show confirmation popup before logging out
+    showLogoutConfirmationPopup(context).then((confirmed) {
+      if (confirmed == true) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (_) => false,
+        );
+      }
+    });
   }
 
   @override
@@ -135,7 +141,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
             : Colors.grey.shade200;
         final Color textColor = darkMode ? Colors.white : Colors.black;
         final Color subTextColor = darkMode ? Colors.white70 : Colors.black54;
-        final Color accentColor = darkMode ? const Color.fromARGB(255, 170, 148, 255) : const Color(0xFF6A46FF);
+        final Color accentColor = darkMode
+            ? const Color.fromARGB(255, 170, 148, 255)
+            : const Color(0xFF6A46FF);
 
         return MaterialApp(
           debugShowCheckedModeBanner: false,
@@ -157,6 +165,15 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
               ),
               actions: [
+                IconButton(
+                  onPressed: () {
+                    StudentThemeController.instance.setDarkMode(!darkMode);
+                  },
+                  icon: Icon(
+                    darkMode ? Icons.dark_mode : Icons.nightlight_round,
+                    color: accentColor,
+                  ),
+                ),
                 IconButton(
                   onPressed: _logout,
                   icon: Icon(Icons.logout_rounded, color: accentColor),
@@ -286,93 +303,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             cardColor: cardColor,
                             borderColor: borderColor,
                           ),
-                          // Settings Card
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: cardColor,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: borderColor),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.settings, color: accentColor),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Setting',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: subTextColor,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      darkMode
-                                          ? Icons.dark_mode
-                                          : Icons.brightness_6,
-                                      color: accentColor,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        'Appearance',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: subTextColor,
-                                        ),
-                                      ),
-                                    ),
-                                    Switch(
-                                      value: darkMode,
-                                      activeColor: accentColor,
-                                      onChanged: (val) {
-                                        StudentThemeController.instance
-                                            .setDarkMode(val);
-                                      },
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: cardColor,
-                                      foregroundColor: accentColor,
-                                      elevation: 0,
-                                      side: BorderSide(color: accentColor),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                        horizontal: 8,
-                                      ),
-                                    ),
-                                    onPressed: _pickAvatarImage,
-                                    icon: Icon(Icons.edit, color: accentColor),
-                                    label: Text(
-                                      'Edit Image',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: accentColor,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          // Appearance moved to AppBar actions
                         ],
                       ),
                     ),
@@ -383,9 +314,10 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
             // ================= NAV BAR =================
             bottomNavigationBar: SafeArea(
-              child: StudentBottomNavBar(
+              child: AnimatedBottomBar(
                 currentIndex: 2,
                 onTap: (index) {
+                  if (index == 2) return;
                   if (index == 0) {
                     Navigator.pushReplacement(
                       context,

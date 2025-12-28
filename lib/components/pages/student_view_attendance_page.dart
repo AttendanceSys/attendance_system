@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import '../../services/session.dart';
 import 'student_profile_page.dart';
 import 'student_scan_attendance_page.dart';
-import '../../components/student_bottom_nav_bar.dart';
+import '../../components/animated_bottom_bar.dart';
 import '../../components/student_theme_controller.dart';
 
 class StudentViewAttendanceMobile extends StatefulWidget {
@@ -312,21 +312,28 @@ class _StudentViewAttendanceMobileState
       builder: (context, _) {
         final theme = StudentThemeController.instance.theme;
         final studentName =
-            _studentData?['fullname']?.toString() ??
-            _studentData?['fullName']?.toString() ??
-            'Student';
-        final avatarLetter = (studentName.isNotEmpty)
-            ? studentName[0].toUpperCase()
-            : 'S';
+            (_studentData?['fullname'] ??
+                    _studentData?['fullName'] ??
+                    _studentData?['name'] ??
+                    _studentData?['studentName'] ??
+                    '')
+                .toString();
+        final avatarLetter = studentName.trim().isNotEmpty
+            ? studentName.trim()[0].toUpperCase()
+            : '';
         final studentClassDisplay =
             (_studentData?['className'] ?? _studentData?['class_name'] ?? '')
                 .toString();
-        final semester = _studentData?['semester']?.toString() ?? '';
-        final gender = _studentData?['gender']?.toString() ?? '';
+        final semester =
+            (_studentData?['semester'] ?? _studentData?['sem'] ?? '')
+                .toString();
+        final gender = (_studentData?['gender'] ?? '')?.toString() ?? '';
         final id =
-            _studentData?['id']?.toString() ??
-            _studentData?['student_id']?.toString() ??
-            '';
+            (_studentData?['id'] ??
+                    _studentData?['student_id'] ??
+                    _studentData?['username'] ??
+                    '')
+                .toString();
         return Scaffold(
           backgroundColor: theme.background,
           body: SafeArea(
@@ -553,9 +560,10 @@ class _StudentViewAttendanceMobileState
                         ),
                 ),
 
-                StudentBottomNavBar(
+                AnimatedBottomBar(
                   currentIndex: 0,
                   onTap: (index) {
+                    if (index == 0) return;
                     if (index == 1) {
                       Navigator.push(
                         context,
@@ -578,7 +586,6 @@ class _StudentViewAttendanceMobileState
                         ),
                       );
                     }
-                    // index == 0 is current page
                   },
                 ),
               ],

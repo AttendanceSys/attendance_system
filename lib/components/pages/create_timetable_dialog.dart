@@ -763,8 +763,75 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
 
       final span = _spans[labelIdx];
 
-      final returnedDeptName = _department!.trim();
+      // Resolve department to canonical display name before saving.
+      String returnedDeptName = _department!.trim();
       final returnedClassName = _classKey!.trim();
+
+      try {
+        // 1) Prefer exact entry from provided `widget.departments` (preserve casing)
+        final match = widget.departments.firstWhere(
+          (d) => d.toLowerCase().trim() == _department!.toLowerCase().trim(),
+          orElse: () => '',
+        );
+        if (match.isNotEmpty) {
+          // Try to find a departments document that matches this display name
+          try {
+            final col = _firestore.collection('departments');
+            QuerySnapshot q = await col
+                .where('department_name', isEqualTo: match)
+                .get();
+            if (q.docs.isEmpty)
+              q = await col.where('name', isEqualTo: match).get();
+            if (q.docs.isEmpty)
+              q = await col.where('displayName', isEqualTo: match).get();
+            if (q.docs.isNotEmpty) {
+              // Use the document id (department_id) as the canonical saved value
+              returnedDeptName = q.docs.first.id;
+            } else {
+              returnedDeptName = match;
+            }
+          } catch (_) {
+            returnedDeptName = match;
+          }
+        } else {
+          // 2) If widget.departmentArg points to a DocumentReference, try to read the doc
+          if (widget.departmentArg is DocumentReference) {
+            try {
+              final doc = await (widget.departmentArg as DocumentReference)
+                  .get();
+              if (doc.exists) {
+                // Prefer the document id as the canonical department value
+                returnedDeptName = doc.id;
+              }
+            } catch (_) {}
+          }
+
+          // 3) Try to lookup in `departments` collection by common fields (case-insensitive)
+          if (returnedDeptName.toLowerCase() ==
+              _department!.toLowerCase().trim()) {
+            try {
+              final col = _firestore.collection('departments');
+              QuerySnapshot q = await col
+                  .where('name', isEqualTo: _department)
+                  .get();
+              if (q.docs.isEmpty)
+                q = await col
+                    .where('department_name', isEqualTo: _department)
+                    .get();
+              if (q.docs.isEmpty)
+                q = await col
+                    .where('displayName', isEqualTo: _department)
+                    .get();
+              if (q.docs.isNotEmpty) {
+                // Use document id (department_id) when available
+                returnedDeptName = q.docs.first.id;
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to resolve department display name/id: $e');
+      }
 
       results.add(
         CreateTimetableTimeResult(

@@ -545,7 +545,6 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         final fullname =
             (data['fullname'] ?? data['fullName'] ?? data['name'] ?? username)
                 .toString();
-        final status = data['status'] == true;
         final courses = (data['courses'] is List)
             ? List<Map<String, dynamic>>.from(data['courses'])
             : <Map<String, dynamic>>[];
@@ -554,7 +553,6 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         final studentMap = <String, dynamic>{
           'username': username,
           'name': fullname,
-          'status': status,
           'courses': courses,
           'docId': d.id,
         };
@@ -581,20 +579,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   // --------------------------
   // Update student status (present/absent) in Firestore
   // --------------------------
-  Future<void> _updateStudentStatusInFirestore(
-    String docId,
-    bool status,
-  ) async {
-    try {
-      await _firestore.collection('students').doc(docId).update({
-        'status': status,
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update student status: $e')),
-      );
-    }
-  }
+  // student status field and toggling removed (view-only for status)
 
   // --------------------------
   // Update student courses array in Firestore
@@ -786,49 +771,6 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                             selectedStudentClass =
                                 '$selectedClass${(foundSection != null && foundSection != "None") ? foundSection : ""}';
                           });
-                        },
-                        onStatusChanged: (studentId, newStatus) async {
-                          setState(() {
-                            final sectionsMap =
-                                classSectionStudents[selectedClass] ?? {};
-                            for (final list in sectionsMap.values) {
-                              final student = list.firstWhere(
-                                (s) => s['username'] == studentId,
-                                orElse: () => <String, dynamic>{},
-                              );
-                              if (student.isNotEmpty) {
-                                student['status'] = newStatus;
-                                break;
-                              }
-                            }
-                          });
-                          String? docId;
-                          final sectionsMap =
-                              classSectionStudents[selectedClass] ?? {};
-                          for (final list in sectionsMap.values) {
-                            final student = list.firstWhere(
-                              (s) => s['username'] == studentId,
-                              orElse: () => <String, dynamic>{},
-                            );
-                            if (student.isNotEmpty) {
-                              docId = student['docId']?.toString();
-                              break;
-                            }
-                          }
-                          if (docId != null) {
-                            await _updateStudentStatusInFirestore(
-                              docId,
-                              newStatus,
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Could not find student document to update.',
-                                ),
-                              ),
-                            );
-                          }
                         },
                       )
                     : showStudentDetails
@@ -1042,7 +984,6 @@ class _AttendanceTable extends StatelessWidget {
   final Map<String, Map<String, List<Map<String, dynamic>>>>
   classSectionStudents;
   final Function(String studentId) onStudentSelected;
-  final void Function(String studentId, bool newStatus)? onStatusChanged;
 
   const _AttendanceTable({
     required this.department,
@@ -1052,7 +993,6 @@ class _AttendanceTable extends StatelessWidget {
     this.date,
     required this.searchText,
     required this.onStudentSelected,
-    this.onStatusChanged,
   });
 
   @override
@@ -1116,12 +1056,6 @@ class _AttendanceTable extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
-                DataColumn(
-                  label: Text(
-                    "Status",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
               ],
               rows: List.generate(filtered.length, (index) {
                 final row = filtered[index];
@@ -1164,18 +1098,7 @@ class _AttendanceTable extends StatelessWidget {
                     DataCell(Text(department)),
                     DataCell(Text(className)),
                     DataCell(Text(course)),
-                    DataCell(
-                      Switch(
-                        value: row['status'] ?? false,
-                        activeColor: Colors.green,
-                        inactiveThumbColor: Colors.red,
-                        onChanged: (val) {
-                          if (onStatusChanged != null) {
-                            onStatusChanged!(row['username'], val);
-                          }
-                        },
-                      ),
-                    ),
+                    // status column removed
                   ],
                 );
               }),

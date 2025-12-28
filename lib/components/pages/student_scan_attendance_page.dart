@@ -6,7 +6,7 @@ import '../../services/session.dart';
 import '../../components/popup/attendance_alert.dart';
 import 'student_view_attendance_page.dart';
 import 'student_profile_page.dart';
-import '../../components/student_bottom_nav_bar.dart';
+import '../../components/animated_bottom_bar.dart';
 import '../../components/student_theme_controller.dart';
 
 class StudentScanAttendancePage extends StatefulWidget {
@@ -49,7 +49,11 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       if (doc == null || !doc.exists) return;
       final data = doc.data() ?? <String, dynamic>{};
       final name =
-          (data['name'] ?? data['fullName'] ?? data['studentName'] ?? username)
+          (data['fullname'] ??
+                  data['fullName'] ??
+                  data['name'] ??
+                  data['studentName'] ??
+                  username)
               .toString();
       final className =
           (data['className'] ?? data['class_name'] ?? data['class'] ?? '')
@@ -557,12 +561,12 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
 
   @override
   Widget build(BuildContext context) {
-    final studentName = _profileName ?? "QaalI Cabdi Cali";
-    final avatarLetter = _profileAvatarLetter ?? "Q";
-    final className = _profileClassName ?? "B3-A Computer Science";
-    final semester = _profileSemester ?? "Semester 7";
-    final gender = _profileGender ?? "Female";
-    final id = _profileId ?? "B3SC760";
+    final studentName = _profileName ?? '';
+    final avatarLetter = _profileAvatarLetter ?? '';
+    final className = _profileClassName ?? '';
+    final semester = _profileSemester ?? '';
+    final gender = _profileGender ?? '';
+    final id = _profileId ?? '';
 
     return AnimatedBuilder(
       animation: StudentThemeController.instance,
@@ -696,10 +700,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                     ),
                   ),
                 ),
-                // Use AnimatedBuilder for StudentBottomNavBar to ensure theme updates
-                StudentBottomNavBar(
+                AnimatedBottomBar(
                   currentIndex: 1,
-                  onTap: (index) {
+                  onTap: (index) async {
                     if (index == 0) {
                       Navigator.pushReplacement(
                         context,
@@ -708,8 +711,10 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                               const StudentViewAttendanceMobile(),
                         ),
                       );
+                    } else if (index == 1) {
+                      // already on scan page
                     } else if (index == 2) {
-                      Navigator.push(
+                      await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => StudentProfilePage(
@@ -722,6 +727,18 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                           ),
                         ),
                       );
+                      if (!mounted) return;
+                      try {
+                        try {
+                          await _controller.stop();
+                        } catch (_) {}
+                        await Future.delayed(const Duration(milliseconds: 300));
+                        await _controller.start();
+                      } catch (e) {
+                        debugPrint(
+                          'Error restarting camera after returning from profile: $e',
+                        );
+                      }
                     }
                   },
                 ),

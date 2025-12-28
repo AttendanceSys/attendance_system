@@ -124,10 +124,76 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
           .where('department', isEqualTo: selectedDepartment)
           .get();
 
-      final filteredDocs = snapshot.docs.where((doc) {
+      // Filter docs more strictly: include a class only if at least one
+      // timetable cell explicitly lists the teacher (or contains the
+      // teacher string). This avoids showing classes where the teacher
+      // is mentioned indirectly elsewhere in the doc.
+      final teacherLower = teacher.toLowerCase().trim();
+      final filteredDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+      for (final doc in snapshot.docs) {
         final data = doc.data();
-        return _docHasTeacher(data, teacher);
-      }).toList();
+        bool hasTeacherInCells = false;
+
+        final gm = data['grid_meta'];
+        if (gm is List) {
+          for (final gridMetaItem in gm) {
+            if (gridMetaItem is Map && gridMetaItem['cells'] is List) {
+              for (final cell in (gridMetaItem['cells'] as List)) {
+                if (cell is Map) {
+                  final lec = (cell['lecturer'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
+                  if (lec.isNotEmpty &&
+                      (lec == teacherLower || lec.contains(teacherLower))) {
+                    hasTeacherInCells = true;
+                    break;
+                  }
+                } else if (cell is String) {
+                  final cellStr = cell.toLowerCase();
+                  if (cellStr.contains(teacherLower)) {
+                    hasTeacherInCells = true;
+                    break;
+                  }
+                }
+              }
+            }
+            if (hasTeacherInCells) break;
+          }
+        }
+
+        if (!hasTeacherInCells) {
+          final grid = data['grid'];
+          if (grid is List) {
+            for (final row in grid) {
+              if (row is Map && row['cells'] is List) {
+                for (final cell in (row['cells'] as List)) {
+                  if (cell is Map) {
+                    final lec = (cell['lecturer'] ?? '')
+                        .toString()
+                        .toLowerCase()
+                        .trim();
+                    if (lec.isNotEmpty &&
+                        (lec == teacherLower || lec.contains(teacherLower))) {
+                      hasTeacherInCells = true;
+                      break;
+                    }
+                  } else if (cell is String) {
+                    final cellStr = cell.toLowerCase();
+                    if (cellStr.contains(teacherLower)) {
+                      hasTeacherInCells = true;
+                      break;
+                    }
+                  }
+                }
+              }
+              if (hasTeacherInCells) break;
+            }
+          }
+        }
+
+        if (hasTeacherInCells) filteredDocs.add(doc);
+      }
 
       final fetchedClasses = filteredDocs
           .map((doc) {
@@ -171,29 +237,33 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         return _docHasTeacher(data, teacher);
       }).toList();
 
-      final fetchedSubjects = filteredDocs
-          .expand((doc) {
-            final data = doc.data();
-            final gm = data['grid_meta'];
-            if (gm is List) {
-              return gm.expand((gridMetaItem) {
-                if (gridMetaItem is Map && gridMetaItem['cells'] is List) {
-                  return (gridMetaItem['cells'] as List);
+      final fetchedSubjectsSet = <String>{};
+      final teacherLower = teacher.toLowerCase().trim();
+      for (final doc in filteredDocs) {
+        final data = doc.data();
+        final gm = data['grid_meta'];
+        if (gm is List) {
+          for (final gridMetaItem in gm) {
+            if (gridMetaItem is Map && gridMetaItem['cells'] is List) {
+              for (final cell in (gridMetaItem['cells'] as List)) {
+                if (cell is Map) {
+                  final course = (cell['course'] ?? '').toString().trim();
+                  final lec = (cell['lecturer'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
+                  if (course.isNotEmpty && lec.isNotEmpty) {
+                    if (lec == teacherLower || lec.contains(teacherLower)) {
+                      fetchedSubjectsSet.add(course);
+                    }
+                  }
                 }
-                return <dynamic>[];
-              });
+              }
             }
-            return <dynamic>[];
-          })
-          .where(
-            (cell) =>
-                cell is Map &&
-                cell['course'] != null &&
-                cell['course'].toString().trim().isNotEmpty,
-          )
-          .map((cell) => cell['course'].toString().trim())
-          .toSet()
-          .toList();
+          }
+        }
+      }
+      final fetchedSubjects = fetchedSubjectsSet.toList();
 
       if (mounted) {
         setState(() {

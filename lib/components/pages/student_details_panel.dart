@@ -32,6 +32,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   late List<Map<String, dynamic>> editRecords;
+  bool _noRecordsSnackShown = false;
 
   // Firestore state
   bool loading = true;
@@ -464,6 +465,20 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         )
         .toList();
 
+    // If there are no filtered records, show a one-time bottom SnackBar
+    if (!loading && filteredRecords.isEmpty && !_noRecordsSnackShown) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No attendance records found'),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          ),
+        );
+      });
+      _noRecordsSnackShown = true;
+    }
+
     return Container(
       width: double.infinity,
       color: palette?.surface,
@@ -610,174 +625,140 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      if (filteredRecords.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 24.0),
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.info_outline,
-                                  size: 56,
-                                  color: Colors.grey[500],
-                                ),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'No attendance records available for this student.',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Color(0xFF6D6D6D),
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 16),
-                                if (widget.onBack != null)
-                                  OutlinedButton.icon(
-                                    onPressed: widget.onBack,
-                                    icon: const Icon(
-                                      Icons.arrow_back_ios_new,
-                                      size: 16,
-                                    ),
-                                    label: const Text('Back'),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFF2563EB),
-                                      side: const BorderSide(
-                                        color: Color(0xFF2563EB),
-                                        width: 1.1,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 10,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(24),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        )
-                      else
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: palette?.border ?? const Color(0xFFE5E7EB),
-                            ),
-                          ),
-                          child: DataTable(
-                            columnSpacing: 48,
-                            headingRowHeight: 46,
-                            dataRowHeight: 44,
-                            headingRowColor: WidgetStateProperty.all(
-                              palette?.surfaceHigh,
-                            ),
-                            dataRowColor: WidgetStateProperty.resolveWith(
-                              (states) => states.contains(WidgetState.hovered)
-                                  ? palette?.overlay
-                                  : palette?.surface,
-                            ),
-                            columns: const [
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 6.0),
-                                  child: Text(
-                                    "Course",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15,
-                                      // color will be set below dynamically
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 6.0),
-                                  child: Text(
-                                    "Total QR",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15,
-                                      // color will be set below dynamically
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 6.0),
-                                  child: Text(
-                                    "Present",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15,
-                                      // color will be set below dynamically
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 6.0),
-                                  child: Text(
-                                    "Percentage",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15,
-                                      // color will be set below dynamically
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                            rows: List.generate(filteredRecords.length, (i) {
-                              final record = filteredRecords[i];
-                              final course = record["course"]?.toString() ?? "";
-                              final total = (record["total"] ?? 0).toString();
-                              final present = (record["present"] ?? 0)
-                                  .toString();
-                              final percent = (record["percentage"] ?? "0%")
-                                  .toString();
-                              final headerTextColor = palette?.textPrimary;
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    Text(
-                                      course,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: headerTextColor,
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(
-                                      total,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: headerTextColor,
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(
-                                      present,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: headerTextColor,
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(_percentBadge(percent)),
-                                ],
-                              );
-                            }),
+                      // Show a DataTable only when there are records. If no
+                      // records are present we show an empty area and trigger
+                      // a bottom SnackBar (handled above) instead of a
+                      // zero-row placeholder.
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: palette?.border ?? const Color(0xFFE5E7EB),
                           ),
                         ),
+                        child: filteredRecords.isEmpty
+                            ? const SizedBox(height: 48)
+                            : DataTable(
+                                columnSpacing: 48,
+                                headingRowHeight: 46,
+                                dataRowHeight: 44,
+                                headingRowColor: WidgetStateProperty.all(
+                                  palette?.surfaceHigh,
+                                ),
+                                dataRowColor: WidgetStateProperty.resolveWith(
+                                  (states) =>
+                                      states.contains(WidgetState.hovered)
+                                      ? palette?.overlay
+                                      : palette?.surface,
+                                ),
+                                columns: const [
+                                  DataColumn(
+                                    label: Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 6.0,
+                                      ),
+                                      child: Text(
+                                        "Course",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 6.0,
+                                      ),
+                                      child: Text(
+                                        "Total QR",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 6.0,
+                                      ),
+                                      child: Text(
+                                        "Present",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 6.0,
+                                      ),
+                                      child: Text(
+                                        "Percentage",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                rows: List.generate(filteredRecords.length, (
+                                  i,
+                                ) {
+                                  final record = filteredRecords[i];
+                                  final course =
+                                      record["course"]?.toString() ?? "";
+                                  final total = (record["total"] ?? 0)
+                                      .toString();
+                                  final present = (record["present"] ?? 0)
+                                      .toString();
+                                  final percent =
+                                      (record["percentage"] ?? "0.0%")
+                                          .toString();
+                                  final headerTextColor = palette?.textPrimary;
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(
+                                          course,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: headerTextColor,
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          total,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: headerTextColor,
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          present,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: headerTextColor,
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(_percentBadge(percent)),
+                                    ],
+                                  );
+                                }),
+                              ),
+                      ),
                     ],
                   ),
                 ),

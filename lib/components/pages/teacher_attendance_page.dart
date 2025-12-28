@@ -230,7 +230,78 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
           .collection('timetables')
           .where('department', isEqualTo: dept)
           .get();
-      final fetched = qs.docs
+
+      // Only include classes where at least one timetable cell explicitly
+      // lists the current teacher (or the cell string contains the teacher).
+      final teacher = await _getCurrentTeacher();
+      final teacherLower = teacher.toLowerCase().trim();
+      final filteredDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+      for (final doc in qs.docs) {
+        final data = doc.data();
+        bool hasTeacherInCells = false;
+
+        final gm = data['grid_meta'];
+        if (gm is List) {
+          for (final gmItem in gm) {
+            if (gmItem is Map && gmItem['cells'] is List) {
+              for (final cell in (gmItem['cells'] as List)) {
+                if (cell is Map) {
+                  final lec = (cell['lecturer'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
+                  if (lec.isNotEmpty &&
+                      (lec == teacherLower || lec.contains(teacherLower))) {
+                    hasTeacherInCells = true;
+                    break;
+                  }
+                } else if (cell is String) {
+                  final cellStr = cell.toLowerCase();
+                  if (cellStr.contains(teacherLower)) {
+                    hasTeacherInCells = true;
+                    break;
+                  }
+                }
+              }
+            }
+            if (hasTeacherInCells) break;
+          }
+        }
+
+        if (!hasTeacherInCells) {
+          final grid = data['grid'];
+          if (grid is List) {
+            for (final row in grid) {
+              if (row is Map && row['cells'] is List) {
+                for (final cell in (row['cells'] as List)) {
+                  if (cell is Map) {
+                    final lec = (cell['lecturer'] ?? '')
+                        .toString()
+                        .toLowerCase()
+                        .trim();
+                    if (lec.isNotEmpty &&
+                        (lec == teacherLower || lec.contains(teacherLower))) {
+                      hasTeacherInCells = true;
+                      break;
+                    }
+                  } else if (cell is String) {
+                    final cellStr = cell.toLowerCase();
+                    if (cellStr.contains(teacherLower)) {
+                      hasTeacherInCells = true;
+                      break;
+                    }
+                  }
+                }
+              }
+              if (hasTeacherInCells) break;
+            }
+          }
+        }
+
+        if (hasTeacherInCells) filteredDocs.add(doc);
+      }
+
+      final fetched = filteredDocs
           .map((d) => _stringFrom(d.data()['className']) ?? '')
           .where((s) => s.isNotEmpty)
           .toSet()
@@ -260,6 +331,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
           .collection('timetables')
           .where('className', isEqualTo: cls)
           .get();
+
+      final teacher = await _getCurrentTeacher();
+      final teacherLower = teacher.toLowerCase().trim();
       final set = <String>{};
       for (final doc in qs.docs) {
         final gm = doc.data()['grid_meta'];
@@ -269,10 +343,22 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
               for (final cell in (gmItem['cells'] as List)) {
                 if (cell is Map && cell['course'] != null) {
                   final c = cell['course'].toString().trim();
-                  if (c.isNotEmpty) set.add(c);
+                  final lec = (cell['lecturer'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
+                  if (c.isNotEmpty && lec.isNotEmpty) {
+                    if (lec == teacherLower || lec.contains(teacherLower)) {
+                      set.add(c);
+                    }
+                  }
                 } else if (cell is String) {
-                  final c = cell.toString().trim();
-                  if (c.isNotEmpty) set.add(c);
+                  final cellStr = cell.toLowerCase();
+                  // include course strings only when the cell string also mentions the teacher
+                  if (cellStr.contains(teacherLower)) {
+                    final c = cell.toString().trim();
+                    if (c.isNotEmpty) set.add(c);
+                  }
                 }
               }
             }
@@ -773,6 +859,33 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       // If we reach here, we have a valid in-window session — ensure currentSessionId/code reflect it
       currentSessionId = sessionDoc.id;
       currentSessionCode = _stringFrom(sessionDoc.data()?['code']);
+
+      // Prevent duplicate manual submissions for the same session by this teacher
+      try {
+        final teacherUsername = await _getCurrentTeacher();
+        if (teacherUsername.isNotEmpty) {
+          final prev = await _firestore
+              .collection('attendance_records')
+              .where('session_id', isEqualTo: currentSessionId)
+              .where('teacher', isEqualTo: teacherUsername)
+              .where('source', isEqualTo: 'manual')
+              .limit(1)
+              .get();
+          if (prev.docs.isNotEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'You have already submitted attendance for this session.',
+                ),
+              ),
+            );
+            return;
+          }
+        }
+      } catch (e) {
+        // If this check fails for any reason, allow submit to continue but log.
+        debugPrint('Duplicate-check failed: $e');
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to validate active session: $e')),

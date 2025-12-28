@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../theme/super_admin_theme.dart';
+import '../student_theme_controller.dart';
 
 Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
-  final palette = Theme.of(context).extension<SuperAdminColors>();
-  final isDark = Theme.of(context).brightness == Brightness.dark;
-  final surface =
-      palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
-  final border =
-      palette?.border ?? (isDark ? const Color(0xFF3A404E) : Colors.blue[100]!);
-  final textPrimary =
-      palette?.textPrimary ?? (isDark ? Colors.white : Colors.black87);
-  final accent = palette?.accent ?? const Color(0xFF1991EB);
+  // Use the app's StudentThemeController so the popup matches dark/light mode
+  final theme = StudentThemeController.instance.theme;
+  final isDark = StudentThemeController.instance.isDarkMode;
+  final surface = theme.card;
+  final border = theme.border;
+  final textPrimary = theme.foreground;
+  final accent = theme.button;
 
   return showDialog<bool>(
     context: context,
