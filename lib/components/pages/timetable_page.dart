@@ -3258,7 +3258,31 @@ class _LecturerListView extends StatelessWidget {
                       flex: 2,
                       child: Text(s.className, style: cellStyle),
                     ),
-                    Expanded(flex: 3, child: Text(s.course, style: cellStyle)),
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(s.course, style: cellStyle),
+                          const SizedBox(height: 2),
+                          Builder(
+                            builder: (context) {
+                              final isDark =
+                                  Theme.of(context).brightness ==
+                                  Brightness.dark;
+                              return Text(
+                                s.lecturer,
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black87,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -3597,14 +3621,23 @@ class _TimetableGrid extends StatelessWidget {
                                       ),
                                       const SizedBox(height: 4),
                                       if (lecturerOnly.isNotEmpty)
-                                        Text(
-                                          lecturerOnly,
-                                          style: const TextStyle(
-                                            color: Colors.black87,
-                                            fontSize: 12,
-                                          ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
+                                        Builder(
+                                          builder: (context) {
+                                            final isDark =
+                                                Theme.of(context).brightness ==
+                                                Brightness.dark;
+                                            return Text(
+                                              lecturerOnly,
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? Colors.white
+                                                    : Colors.black87,
+                                                fontSize: 12,
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            );
+                                          },
                                         ),
                                     ],
                                   );
@@ -3666,4 +3699,3 @@ class _TimetableGrid extends StatelessWidget {
 
 enum _ExportChoice { entireClass }
 
-// _UndoState removed (unused)

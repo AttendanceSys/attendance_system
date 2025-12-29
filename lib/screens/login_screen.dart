@@ -56,144 +56,89 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _handleLogin() async {
     if (_isLoggingIn) return;
+
     setState(() {
       _isLoggingIn = true;
+      _errorMessage = null;
     });
 
     String username = _usernameController.text.trim();
     String password = _passwordController.text;
 
     try {
-      // Query the users collection
-      final snapshot = await FirebaseFirestore.instance
+      // 1️⃣ Check username first
+      final userSnap = await FirebaseFirestore.instance
           .collection('users')
           .where('username', isEqualTo: username)
-          .where('password', isEqualTo: password)
+          .limit(1)
           .get();
 
-      if (snapshot.docs.isEmpty) {
-        // No matching user found
+      if (userSnap.docs.isEmpty) {
         setState(() {
-          _errorMessage = 'Invalid username or password';
+          _errorMessage = 'Username not found';
           _isLoggingIn = false;
         });
         return;
       }
 
-      // Get the user data
-      final userData = snapshot.docs.first.data();
-      final role = userData['role'];
-      final status = userData['status'];
+      final userData = userSnap.docs.first.data();
 
-      // Check if the user is disabled
-      if (status == 'disabled') {
+      // 2️⃣ Check password
+      if (userData['password'] != password) {
+        setState(() {
+          _errorMessage = 'Incorrect password';
+          _isLoggingIn = false;
+        });
+        return;
+      }
+
+      // 3️⃣ Check account status
+      if (userData['status'] == 'disabled') {
         setState(() {
           _errorMessage = 'Your account is disabled';
           _isLoggingIn = false;
         });
         return;
       }
-      // store username in session
+
+      // 4️⃣ Successful login
+      final role = userData['role'];
       Session.username = username;
 
-      // Try to fetch the admin's full name and faculty_ref from the 'admins' collection.
-      String? displayName;
-      try {
-        final adminSnap = await FirebaseFirestore.instance
-            .collection('admins')
-            .where('username', isEqualTo: username)
-            .limit(1)
-            .get();
-        if (adminSnap.docs.isNotEmpty) {
-          final adminData = adminSnap.docs.first.data();
-          displayName =
-              (adminData['full_name'] ??
-                      adminData['name'] ??
-                      adminData['display_name'])
-                  as String?;
-
-          // populate facultyRef in session if available
-          final facCandidate =
-              adminData['faculty_ref'] ??
-              adminData['faculty_id'] ??
-              adminData['faculty'];
-          // Normalize and set Session.facultyRef from whatever shape the admin doc uses
-          Session.setFacultyFromField(facCandidate);
-        }
-      } catch (e) {
-        // ignore and fallback below
-      }
-
-      // fallback to user document fields or username
-      displayName ??=
-          (userData['name'] ??
-                  userData['full_name'] ??
-                  userData['display_name'] ??
-                  username)
-              as String;
-
-      // if faculty not found on admins doc, try users doc
-      if (Session.facultyRef == null) {
-        final userFac =
-            userData['faculty_ref'] ??
-            userData['faculty_id'] ??
-            userData['faculty'];
-        Session.setFacultyFromField(userFac);
-      }
+      final displayName =
+          userData['name'] ??
+          userData['full_name'] ??
+          userData['display_name'] ??
+          username;
 
       Session.name = displayName;
 
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
+
+      await Future.delayed(const Duration(milliseconds: 700));
+
       if (role == 'Super admin') {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const SuperAdminPage()),
+          MaterialPageRoute(builder: (_) => const SuperAdminPage()),
         );
       } else if (role == 'admin') {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const FacultyAdminPage()),
+          MaterialPageRoute(builder: (_) => const FacultyAdminPage()),
         );
       } else if (role == 'teacher') {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const TeacherMainPage()),
+          MaterialPageRoute(builder: (_) => const TeacherMainPage()),
         );
       } else if (role == 'student') {
-        if (!_isMobilePlatform()) {
-          setState(() {
-            _errorMessage =
-                'Student login is allowed only on mobile (Android/iOS).';
-            _isLoggingIn = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Student login is allowed only on mobile (Android/iOS).',
-              ),
-            ),
-          );
-          return;
-        }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => const StudentViewAttendanceMobile(),
+            builder: (_) => const StudentViewAttendanceMobile(),
           ),
         );
       } else {
@@ -204,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'An error occurred during login';
+        _errorMessage = 'Login failed. Try again.';
         _isLoggingIn = false;
       });
     }
