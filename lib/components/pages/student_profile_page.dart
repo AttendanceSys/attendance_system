@@ -10,6 +10,9 @@ import 'dart:io';
 // student_theme_controller.dart
 import '../student_theme_controller.dart';
 
+// Import the ChangePasswordPopup
+import '../../components/popup/change_password_popup.dart';
+
 // For Lucide icons, if needed:
 // import 'package:lucide_icons/lucide_icons.dart';
 
@@ -57,6 +60,123 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
+    }
+  }
+
+  /// Shows the ChangePasswordPopup, verifies the old password against the
+  /// students document (username == widget.id) and updates the password field.
+  Future<void> _showChangePasswordDialog() async {
+    final success = await showDialog<bool?>(
+      context: context,
+      builder: (context) => ChangePasswordPopup(
+        onSubmit: (oldPass, newPass) async {
+          try {
+            if (newPass.length < 6)
+              return 'New password must be at least 6 characters';
+
+            final studentsRef = FirebaseFirestore.instance.collection(
+              'students',
+            );
+
+            // Robust lookup
+            DocumentSnapshot? studentDoc;
+            try {
+              var q = await studentsRef
+                  .where('username', isEqualTo: widget.id)
+                  .limit(1)
+                  .get();
+              if (q.docs.isNotEmpty) studentDoc = q.docs.first;
+              if (studentDoc == null) {
+                q = await studentsRef
+                    .where('student_id', isEqualTo: widget.id)
+                    .limit(1)
+                    .get();
+                if (q.docs.isNotEmpty) studentDoc = q.docs.first;
+              }
+              if (studentDoc == null) {
+                q = await studentsRef
+                    .where('id', isEqualTo: widget.id)
+                    .limit(1)
+                    .get();
+                if (q.docs.isNotEmpty) studentDoc = q.docs.first;
+              }
+              if (studentDoc == null) {
+                final docById = await studentsRef.doc(widget.id).get();
+                if (docById.exists) studentDoc = docById;
+              }
+            } catch (e) {
+              debugPrint('Password change onSubmit lookup error: $e');
+            }
+
+            if (studentDoc == null || !studentDoc.exists)
+              return 'Student record not found';
+
+            final data = (studentDoc.data() ?? {}) as Map<String, dynamic>;
+            final stored = (data['password'] ?? '').toString();
+
+            if (stored.trim() != oldPass)
+              return 'Current password is incorrect';
+
+            try {
+              await studentsRef.doc(studentDoc.id).update({
+                'password': newPass,
+                'passwordChangedAt': FieldValue.serverTimestamp(),
+              });
+              debugPrint(
+                'Password change onSubmit: update succeeded for docId=${studentDoc.id}',
+              );
+              // Also attempt to update the corresponding record in `users` collection
+              try {
+                final usersRef = FirebaseFirestore.instance.collection('users');
+                final uQ = await usersRef
+                    .where('username', isEqualTo: widget.id)
+                    .limit(1)
+                    .get();
+                if (uQ.docs.isNotEmpty) {
+                  final uDoc = uQ.docs.first;
+                  await usersRef.doc(uDoc.id).update({
+                    'password': newPass,
+                    'updated_at': FieldValue.serverTimestamp(),
+                  });
+                  debugPrint(
+                    'Password change onSubmit: updated users/${uDoc.id}',
+                  );
+                } else {
+                  debugPrint(
+                    'Password change onSubmit: no matching user doc in users collection for username=${widget.id}',
+                  );
+                }
+              } catch (e) {
+                debugPrint(
+                  'Password change onSubmit: failed to update users collection: $e',
+                );
+              }
+            } catch (e) {
+              debugPrint('Password change: update failed: $e');
+              return 'Failed to update student record';
+            }
+
+            return null; // success
+          } catch (e) {
+            debugPrint('Password change onSubmit error: $e');
+            return 'An error occurred';
+          }
+        },
+      ),
+    );
+
+    debugPrint('ChangePassword dialog returned: $success');
+    if (success == true) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Password changed successfully',
+              style: TextStyle(color: Colors.black),
+            ),
+            backgroundColor: Colors.greenAccent,
+          ),
+        );
     }
   }
 
@@ -145,10 +265,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
             ? const Color.fromARGB(255, 170, 148, 255)
             : const Color(0xFF6A46FF);
 
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: darkMode ? ThemeData.dark() : ThemeData.light(),
-          home: Scaffold(
+        return Theme(
+          data: darkMode ? ThemeData.dark() : ThemeData.light(),
+          child: Scaffold(
             backgroundColor: bgColor,
 
             // ================= APP BAR =================
@@ -302,6 +421,20 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             accentColor: accentColor,
                             cardColor: cardColor,
                             borderColor: borderColor,
+                          ),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: _showChangePasswordDialog,
+                            icon: const Icon(Icons.lock_outline),
+                            label: const Text('Change Password'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: accentColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
                           ),
                           // Appearance moved to AppBar actions
                         ],

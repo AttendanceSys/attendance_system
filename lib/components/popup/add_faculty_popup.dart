@@ -107,7 +107,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _facultyCode,
-                  decoration: input("Faculty Code"),
+                  decoration: input('').copyWith(labelText: 'Faculty Code'),
                   onChanged: (val) {
                     setState(() => _codeError = null);
                     _facultyCode = val.trim();
@@ -131,7 +131,7 @@ class _AddFacultyPopupState extends State<AddFacultyPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _facultyName,
-                  decoration: input("Faculty Name"),
+                  decoration: input('').copyWith(labelText: 'Faculty Name'),
                   onChanged: (val) {
                     setState(() => _nameError = null);
                     _facultyName = val.trim();

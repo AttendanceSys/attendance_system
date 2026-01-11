@@ -21,7 +21,7 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
   List<Widget> _buildDefaultPages(Color headerColor) {
     return [
       Padding(
-        padding: const EdgeInsets.all(32.0),
+        padding: const EdgeInsets.all(11.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -34,7 +34,7 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                 color: headerColor,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 48),
             Expanded(child: DashboardStatsGrid()),
           ],
         ),
@@ -184,7 +184,17 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                       });
                     }
                   },
-                  child: pages[_selectedIndex],
+                  // Ensure the selected page is aligned to the top-left and
+                  // add a small top inset so content sits below the top-right
+                  // dark-mode / logout buttons.
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      // smaller top inset so header sits below the top icons
+                      padding: const EdgeInsets.only(top: 44.0),
+                      child: pages[_selectedIndex],
+                    ),
+                  ),
                 ),
               ),
             ],

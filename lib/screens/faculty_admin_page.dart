@@ -18,12 +18,12 @@ class FacultyAdminPage extends StatelessWidget {
       customPages: [
         // 0: Dashboard (custom)
         Padding(
-          padding: const EdgeInsets.all(32.0),
+          // remove top padding so content starts near top; keep horizontal + bottom spacing
+          padding: const EdgeInsets.fromLTRB(32.0, 0.0, 32.0, 32.0),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(height: 8),
                 Builder(
                   builder: (context) {
                     final theme = Theme.of(context);
@@ -37,7 +37,6 @@ class FacultyAdminPage extends StatelessWidget {
                     );
                   },
                 ),
-                SizedBox(height: 32),
                 const DashboardStatsGrid(),
               ],
             ),

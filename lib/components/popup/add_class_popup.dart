@@ -18,12 +18,18 @@ class _AddClassPopupState extends State<AddClassPopup> {
   String? _department; // stores department doc id
   String? _section;
   List<Map<String, String>> _departments = []; // {id, name}
-  final List<String> _sections = ['A', 'B', 'C', 'D', 'NONE'];
+  final List<String> _sections = ['A', 'B', 'C', 'D', 'Custom', 'NONE'];
+  String? _customSection;
 
   String get _combinedClassName {
     if ((_baseName ?? '').isEmpty) return '';
     // Do not append the section when the user selected 'NONE'
     if (_section != null && _section!.isNotEmpty && _section != 'NONE') {
+      if (_section == 'Custom' &&
+          _customSection != null &&
+          _customSection!.isNotEmpty) {
+        return "${_baseName!} ${_customSection!}";
+      }
       return "${_baseName!} ${_section!}";
     }
     return _baseName!;
@@ -34,13 +40,40 @@ class _AddClassPopupState extends State<AddClassPopup> {
     super.initState();
     // If editing, split class name into base and section if possible
     if (widget.schoolClass != null) {
-      final parts = widget.schoolClass!.className.split(' ');
-      if (parts.length > 1 && _sections.contains(parts.last)) {
-        _baseName = parts.sublist(0, parts.length - 1).join(' ');
-        _section = parts.last;
+      // Prefer explicit section field if present
+      final existingSection = widget.schoolClass!.section?.trim() ?? '';
+      if (existingSection.isNotEmpty) {
+        if (_sections.contains(existingSection)) {
+          _section = existingSection;
+        } else {
+          _section = 'Custom';
+          _customSection = existingSection;
+        }
+        // derive base name from className by removing last token if it matches section
+        final parts = widget.schoolClass!.className.split(' ');
+        if (parts.length > 1) {
+          final last = parts.last;
+          if (last == existingSection || _sections.contains(last)) {
+            _baseName = parts.sublist(0, parts.length - 1).join(' ');
+          } else {
+            _baseName = widget.schoolClass!.className;
+          }
+        } else {
+          _baseName = widget.schoolClass!.className;
+        }
       } else {
-        _baseName = widget.schoolClass!.className;
-        _section = widget.schoolClass!.section;
+        final parts = widget.schoolClass!.className.split(' ');
+        if (parts.length > 1 && _sections.contains(parts.last)) {
+          _baseName = parts.sublist(0, parts.length - 1).join(' ');
+          _section = parts.last;
+        } else if (parts.length > 1) {
+          // treat trailing token as custom section
+          _baseName = parts.sublist(0, parts.length - 1).join(' ');
+          _section = 'Custom';
+          _customSection = parts.last;
+        } else {
+          _baseName = widget.schoolClass!.className;
+        }
       }
       _department = widget.schoolClass!.departmentRef;
     }
@@ -92,7 +125,9 @@ class _AddClassPopupState extends State<AddClassPopup> {
           id: widget.schoolClass?.id,
           className: _combinedClassName,
           departmentRef: _department!,
-          section: _section ?? 'NONE',
+          section: (_section == 'Custom')
+              ? (_customSection ?? 'NONE')
+              : (_section ?? 'NONE'),
           status: widget.schoolClass?.status ?? true,
           createdAt: widget.schoolClass?.createdAt,
         ),
@@ -175,7 +210,9 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _baseName,
-                  decoration: input("Base Class Name (e.g. B3SC)"),
+                  decoration: input(
+                    '',
+                  ).copyWith(labelText: 'Base Class Name (e.g. B3SC)'),
                   onChanged: (val) {
                     final upper = val.toUpperCase();
                     setState(() => _baseName = upper);
@@ -183,16 +220,28 @@ class _AddClassPopupState extends State<AddClassPopup> {
                   validator: (val) {
                     final value = (val ?? '').trim();
                     if (value.isEmpty) return "Enter base class name";
-                    final sectionSuffix =
-                        (_section != null &&
-                            _section!.isNotEmpty &&
-                            _section != 'NONE')
-                        ? " ${_section!}"
-                        : '';
+                    String sectionSuffix = '';
+                    if (_section != null &&
+                        _section!.isNotEmpty &&
+                        _section != 'NONE') {
+                      if (_section == 'Custom') {
+                        sectionSuffix =
+                            _customSection != null && _customSection!.isNotEmpty
+                            ? ' ${_customSection!}'
+                            : '';
+                      } else {
+                        sectionSuffix = ' ${_section!}';
+                      }
+                    }
                     final combined = value.toUpperCase() + sectionSuffix;
-                    final regex = RegExp(r'^[A-Z0-9]{3,10}( [A-Z])?$');
+                    final regex = RegExp(r'^[A-Z0-9]{3,10}( [A-Z0-9]{1,5})?$');
                     if (!regex.hasMatch(combined)) {
-                      return "Invalid class name. Use uppercase and numbers only.";
+                      return "Invalid class name. Use uppercase letters/numbers and optional section.";
+                    }
+                    // If custom section selected, ensure custom value is provided
+                    if (_section == 'Custom') {
+                      final cs = (_customSection ?? '').trim().toUpperCase();
+                      if (cs.isEmpty) return 'Enter custom section value';
                     }
                     return null;
                   },
@@ -226,6 +275,29 @@ class _AddClassPopupState extends State<AddClassPopup> {
                   onChanged: (val) => setState(() => _section = val),
                   validator: (val) => val == null ? "Select section" : null,
                 ),
+                const SizedBox(height: 8),
+                if (_section == 'Custom')
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextFormField(
+                        initialValue: _customSection,
+                        decoration: input('Custom section (e.g. X)'),
+                        onChanged: (v) =>
+                            setState(() => _customSection = v?.toUpperCase()),
+                        validator: (v) {
+                          if (_section != 'Custom') return null;
+                          final s = (v ?? '').trim();
+                          if (s.isEmpty) return 'Enter custom section';
+                          final creg = RegExp(r'^[A-Z0-9]{1,5}$');
+                          if (!creg.hasMatch(s.toUpperCase()))
+                            return 'Invalid section format';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
                 const SizedBox(height: 12),
                 // Preview field
                 if (_combinedClassName.isNotEmpty)

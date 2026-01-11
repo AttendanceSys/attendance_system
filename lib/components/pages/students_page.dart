@@ -5,6 +5,9 @@ import '../popup/add_student_popup.dart';
 import '../cards/searchBar.dart';
 import '../../services/session.dart';
 import '../../theme/teacher_theme.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
+import 'dart:convert';
 
 class StudentsPage extends StatefulWidget {
   const StudentsPage({super.key});
@@ -460,16 +463,43 @@ class _StudentsPageState extends State<StudentsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SearchAddBar(
-                      hintText: 'Search student...',
-                      buttonText: 'Add Student',
-                      onAddPressed: _showAddStudentPopup,
-                      onChanged: (v) {
-                        setState(() {
-                          _searchText = v;
-                          _selectedIndex = null;
-                        });
-                      },
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SearchAddBar(
+                            hintText: 'Search student...',
+                            buttonText: 'Add Student',
+                            onAddPressed: _showAddStudentPopup,
+                            onChanged: (v) {
+                              setState(() {
+                                _searchText = v;
+                                _selectedIndex = null;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: _handleUploadStudents,
+                            icon: const Icon(Icons.upload_file),
+                            label: const Text('Upload Students'),
+                            style: ElevatedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: const Color.fromARGB(
+                                255,
+                                0,
+                                150,
+                                80,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -678,6 +708,219 @@ class _StudentsPageState extends State<StudentsPage> {
     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
     child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
   );
+
+  String? _findIdByName(Map<String, String> map, String name) {
+    final key = map.entries
+        .firstWhere(
+          (e) => e.value.toLowerCase().trim() == name.toLowerCase().trim(),
+          orElse: () => const MapEntry('', ''),
+        )
+        .key;
+    return key.isEmpty ? null : key;
+  }
+
+  String? _resolveRef(Map<String, String> map, String? val) {
+    if (val == null || val.isEmpty) return null;
+    // if it's already an id present in the lookup map
+    if (map.containsKey(val)) return val;
+    // try to match by name
+    final byName = _findIdByName(map, val);
+    if (byName != null) return byName;
+    // fallback: return the value as-is (may be an id or path)
+    return val;
+  }
+
+  Future<void> _handleUploadStudents() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+      if (result == null) return;
+      final file = result.files.first;
+      if (file.bytes == null) return;
+      final content = utf8.decode(file.bytes!);
+      final rows = const CsvToListConverter(eol: '\n').convert(content);
+      if (rows.isEmpty) return;
+
+      final headers = rows.first
+          .map((h) => h.toString().toLowerCase())
+          .toList();
+      final List<Map<String, dynamic>> parsed = [];
+      for (var i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty))
+          continue;
+        final map = <String, dynamic>{};
+        for (var c = 0; c < headers.length && c < row.length; c++) {
+          map[headers[c]] = row[c]?.toString() ?? '';
+        }
+        parsed.add(map);
+      }
+
+      if (parsed.isEmpty) return;
+
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirm upload'),
+          content: Text('Import ${parsed.length} students?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+
+      final added = <String>[];
+      final skipped = <String>[];
+      for (final row in parsed) {
+        final fullname =
+            (row['fullname'] ?? row['full_name'] ?? row['name'] ?? '')
+                .toString()
+                .trim();
+        final username = (row['username'] ?? '').toString().trim();
+        final password = (row['password'] ?? username).toString();
+        if (fullname.isEmpty || username.isEmpty) {
+          skipped.add(username.isEmpty ? fullname : username);
+          continue;
+        }
+
+        final rawDept =
+            (row['department_ref'] ??
+                    row['department'] ??
+                    row['departmentid'] ??
+                    row['department_name'] ??
+                    '')
+                .toString()
+                .trim();
+        final rawClass =
+            (row['class_ref'] ??
+                    row['class'] ??
+                    row['classid'] ??
+                    row['class_name'] ??
+                    '')
+                .toString()
+                .trim();
+        final rawFaculty =
+            (row['faculty_ref'] ?? row['faculty'] ?? row['facultyid'] ?? '')
+                .toString()
+                .trim();
+
+        final deptId = _resolveRef(_departmentNames, rawDept);
+        final classId = _resolveRef(_classNames, rawClass);
+
+        final stud = Student(
+          fullname: fullname,
+          username: username,
+          password: password,
+          gender: (row['gender'] ?? 'Male').toString(),
+          departmentRef: deptId,
+          classRef: classId,
+          facultyRef: rawFaculty.isEmpty ? null : rawFaculty,
+          createdAt: null,
+        );
+
+        final ok = await _addStudentFromUpload(stud);
+        if (ok)
+          added.add(username);
+        else
+          skipped.add(username);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Imported ${added.length}, skipped ${skipped.length}',
+            ),
+          ),
+        );
+      }
+      await _fetchStudents();
+    } catch (e) {
+      print('Error importing students: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to import students')),
+        );
+      }
+    }
+  }
+
+  Future<bool> _addStudentFromUpload(Student s) async {
+    try {
+      final q = await studentsCollection
+          .where('username', isEqualTo: s.username)
+          .get();
+      if (q.docs.isNotEmpty) return false;
+
+      // infer faculty from department if missing
+      String facultyToWrite = s.facultyRef ?? '';
+      if (facultyToWrite.isEmpty && (s.departmentRef ?? '').isNotEmpty) {
+        try {
+          final dep = await departmentsCollection.doc(s.departmentRef).get();
+          if (dep.exists) {
+            final depData = dep.data() as Map<String, dynamic>?;
+            final cand = depData == null
+                ? null
+                : (depData['faculty_ref'] ??
+                      depData['facultyId'] ??
+                      depData['faculty_id'] ??
+                      depData['faculty']);
+            if (cand != null) facultyToWrite = _extractId(cand);
+          }
+        } catch (_) {}
+      }
+
+      final facultyForStudentField =
+          Session.facultyRef ??
+          (facultyToWrite.isNotEmpty
+              ? facultiesCollection.doc(facultyToWrite)
+              : null);
+
+      final Map<String, dynamic> studentDoc = {
+        'fullname': s.fullname,
+        'username': s.username,
+        'password': s.password,
+        'gender': s.gender,
+        'department_ref': s.departmentRef ?? '',
+        'class_ref': s.classRef ?? '',
+        'className': _classNames[s.classRef ?? ''] ?? '',
+        'faculty_ref': facultyForStudentField ?? '',
+        'created_at': FieldValue.serverTimestamp(),
+      };
+
+      await studentsCollection.add(studentDoc);
+
+      final String? userFacultyValue = Session.facultyRef != null
+          ? '/${Session.facultyRef!.path}'
+          : (facultyToWrite.isNotEmpty ? facultyToWrite : null);
+
+      await usersCollection.add({
+        'username': s.username,
+        'role': 'student',
+        'password': s.password,
+        'faculty_id': userFacultyValue ?? '',
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      return true;
+    } catch (e) {
+      print('Error adding student from upload: $e');
+      return false;
+    }
+  }
+
   Widget _tableBodyCell(String text, {VoidCallback? onTap}) => InkWell(
     onTap: onTap,
     child: Padding(

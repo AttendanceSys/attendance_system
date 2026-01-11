@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:attendance_system/screens/super_admin_page.dart';
 import 'package:attendance_system/screens/faculty_admin_page.dart';
-// <-- Import your teacher page!
 import 'package:attendance_system/screens/teacher_main_page.dart';
 import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -131,6 +130,30 @@ class _LoginScreenState extends State<LoginScreen> {
                   userData['display_name'] ??
                   username)
               as String;
+
+      // For teachers, prefer the teacher record's proper name
+      if (role == 'teacher') {
+        try {
+          final lecSnap = await FirebaseFirestore.instance
+              .collection('teachers')
+              .where('username', isEqualTo: username)
+              .limit(1)
+              .get();
+          if (lecSnap.docs.isNotEmpty) {
+            final lecData = lecSnap.docs.first.data();
+            final teacherName =
+                (lecData['teacher_name'] ??
+                        lecData['name'] ??
+                        lecData['display_name'])
+                    as String?;
+            if (teacherName != null && teacherName.isNotEmpty) {
+              displayName = teacherName;
+            }
+          }
+        } catch (_) {
+          // ignore lookup errors and keep existing displayName
+        }
+      }
 
       // if faculty not found on admins doc, try users doc
       if (Session.facultyRef == null) {

@@ -199,7 +199,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _code,
-                  decoration: input('Department Code'),
+                  decoration: input('').copyWith(labelText: 'Department Code'),
                   onChanged: (val) {
                     setState(() => _codeError = null);
                     _code = val;
@@ -223,7 +223,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _name,
-                  decoration: input('Department Name'),
+                  decoration: input('').copyWith(labelText: 'Department Name'),
                   onChanged: (val) {
                     setState(() => _nameError = null);
                     _name = val;

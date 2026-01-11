@@ -20,6 +20,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
   String? _lecturerId;
   String? _classId;
   String? _semester;
+  String? _customSemester;
   bool _editingClassInactive = false;
 
   List<Map<String, String>> _teachers = [];
@@ -35,7 +36,17 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
       _courseName = widget.course!.courseName;
       _lecturerId = widget.course!.teacherRef;
       _classId = widget.course!.classRef;
-      _semester = widget.course!.semester;
+      // If existing course has a semester beyond 14, treat it as a custom value
+      final sem = widget.course!.semester;
+      if (sem != null && sem.isNotEmpty) {
+        final p = int.tryParse(sem);
+        if (p != null && p > 14) {
+          _customSemester = sem;
+          _semester = 'Custom';
+        } else {
+          _semester = sem;
+        }
+      }
     }
     _fetchLookups();
   }
@@ -252,7 +263,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
       teacherRef: _lecturerId,
       classRef: _classId,
       facultyRef: widget.course?.facultyRef,
-      semester: _semester,
+      semester: (_semester == 'Custom') ? _customSemester : _semester,
       createdAt: widget.course?.createdAt,
     );
     Navigator.of(context).pop(course);
@@ -327,7 +338,9 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   const SizedBox(height: 24),
                   TextFormField(
                     initialValue: _courseCode,
-                    decoration: input('Course code (e.g. MTH101)'),
+                    decoration: input(
+                      '',
+                    ).copyWith(labelText: 'Course code (e.g. MTH101)'),
                     onChanged: (v) =>
                         setState(() => _courseCode = v.toUpperCase()),
                     validator: (v) {
@@ -350,7 +363,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   const SizedBox(height: 16),
                   TextFormField(
                     initialValue: _courseName,
-                    decoration: input('Course name'),
+                    decoration: input('').copyWith(labelText: 'Course name'),
                     onChanged: (v) => setState(() => _courseName = v),
                     validator: (v) {
                       final value = v?.trim() ?? '';
@@ -442,13 +455,37 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   DropdownButtonFormField<String>(
                     value: _semester,
                     decoration: input('Semester'),
-                    items: List.generate(15, (i) => (i + 1).toString())
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                        .toList(),
-                    onChanged: (v) => setState(() => _semester = v),
+                    items: [
+                      ...List.generate(14, (i) => (i + 1).toString())
+                          .map(
+                            (s) => DropdownMenuItem(value: s, child: Text(s)),
+                          )
+                          .toList(),
+                      DropdownMenuItem(value: 'Custom', child: Text('Custom')),
+                    ],
+                    onChanged: (v) => setState(() {
+                      _semester = v;
+                      // when switching away from Custom, we keep custom value but it's unused
+                    }),
                     validator: (v) =>
                         v == null || v.isEmpty ? 'Select semester' : null,
                   ),
+                  const SizedBox(height: 12),
+                  if (_semester == 'Custom')
+                    TextFormField(
+                      initialValue: _customSemester,
+                      decoration: input('Enter semester number (e.g. 15)'),
+                      keyboardType: TextInputType.number,
+                      onChanged: (v) => setState(() => _customSemester = v),
+                      validator: (v) {
+                        if (_semester != 'Custom') return null;
+                        final value = v?.trim() ?? '';
+                        if (value.isEmpty) return 'Enter semester number';
+                        final p = int.tryParse(value);
+                        if (p == null || p <= 0) return 'Enter a valid number';
+                        return null;
+                      },
+                    ),
                   const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,

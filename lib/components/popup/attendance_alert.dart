@@ -68,7 +68,8 @@ class AttendanceAlert {
     String? subject,
     String? date,
     String? time,
-    Duration autoCloseAfter = const Duration(seconds: 2),
+    // By default do not auto-close; caller may pass a Duration to auto-close.
+    Duration? autoCloseAfter,
     VoidCallback? onClose,
   }) => _show(
     context,
@@ -267,99 +268,128 @@ class _AttendanceAlertDialog extends StatelessWidget {
         constraints: BoxConstraints(maxWidth: dialogW, maxHeight: dialogH),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 24, 22, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Title (large)
-              Text(
-                _effectiveTitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.w700,
-                  color: textPrimary,
-                ),
-              ),
-              const SizedBox(height: 18),
+          child: SizedBox(
+            // fixed height equal to the maximum dialog height so inner scrolling works
+            height: dialogH,
+            child: Column(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                // Scrollable content area (title, icon, message, info rows)
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Title (large)
+                        Text(
+                          _effectiveTitle,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
 
-              // Large circular icon (center)
-              Container(
-                width: 160,
-                height: 160,
-                decoration: BoxDecoration(
-                  color: _primaryColor,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Icon(_icon, color: Colors.white, size: 96),
-                ),
-              ),
+                        // Large circular icon (center)
+                        Container(
+                          width: 140,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            color: _primaryColor,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Icon(_icon, color: Colors.white, size: 80),
+                          ),
+                        ),
 
-              const SizedBox(height: 22),
+                        const SizedBox(height: 18),
 
-              // Message (optional short message)
-              if (_effectiveMessage.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                  child: Text(
-                    _effectiveMessage,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: textSecondary),
+                        // Message (optional short message)
+                        if (_effectiveMessage.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6.0,
+                            ),
+                            child: Text(
+                              _effectiveMessage,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: textSecondary,
+                              ),
+                            ),
+                          ),
+
+                        const SizedBox(height: 12),
+
+                        // Info rows (subject / date / time)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                          child: Column(
+                            children: [
+                              _infoRow(
+                                context,
+                                'Subject',
+                                subject,
+                                textSecondary,
+                                textPrimary,
+                              ),
+                              _infoRow(
+                                context,
+                                'Date',
+                                date,
+                                textSecondary,
+                                textPrimary,
+                              ),
+                              _infoRow(
+                                context,
+                                'Time',
+                                time,
+                                textSecondary,
+                                textPrimary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
 
-              const SizedBox(height: 18),
-
-              // Info rows (subject / date / time) — large readable text
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                child: Column(
+                // OK button bottom-right (fixed)
+                Row(
                   children: [
-                    _infoRow(
-                      context,
-                      'Subject',
-                      subject,
-                      textSecondary,
-                      textPrimary,
+                    const Spacer(),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: palette?.accent ?? Colors.blue,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 4,
+                      ),
+                      onPressed: () {
+                        if (Navigator.of(context).canPop()) {
+                          Navigator.of(context).pop();
+                        }
+                        if (onClose != null) onClose!();
+                      },
+                      child: const Text(
+                        'OK',
+                        style: TextStyle(fontSize: 20, color: Colors.white),
+                      ),
                     ),
-                    _infoRow(context, 'Date', date, textSecondary, textPrimary),
-                    _infoRow(context, 'Time', time, textSecondary, textPrimary),
                   ],
                 ),
-              ),
-
-              const Spacer(),
-
-              // OK button bottom-right
-              Row(
-                children: [
-                  const Spacer(),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: palette?.accent ?? Colors.blue,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 28,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 4,
-                    ),
-                    onPressed: () {
-                      if (Navigator.of(context).canPop()) {
-                        Navigator.of(context).pop();
-                      }
-                      if (onClose != null) onClose!();
-                    },
-                    child: const Text(
-                      'OK',
-                      style: TextStyle(fontSize: 20, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

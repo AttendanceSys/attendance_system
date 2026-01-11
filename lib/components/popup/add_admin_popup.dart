@@ -112,7 +112,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _username,
-                  decoration: input("Username"),
+                  decoration: input('').copyWith(labelText: 'Username'),
                   onChanged: (val) {
                     setState(() => _usernameError = null);
                     _username = val.trim();
@@ -137,7 +137,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 24),
                 TextFormField(
                   initialValue: _fullName,
-                  decoration: input("Full Name"),
+                  decoration: input('').copyWith(labelText: 'Full Name'),
                   onChanged: (val) {
                     setState(() => _fullNameError = null);
                     _fullName = val.trim();
@@ -179,19 +179,8 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 16),
                 TextFormField(
                   initialValue: _password,
-                  decoration: InputDecoration(
-                    hintText: "Password",
-                    filled: true,
-                    fillColor: inputFill,
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: saveBg, width: 1.4),
-                    ),
+                  decoration: input('').copyWith(
+                    labelText: 'Password',
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isPasswordHidden

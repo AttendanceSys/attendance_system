@@ -47,7 +47,10 @@ class _TeacherSidebarState extends State<TeacherSidebar> {
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data();
         final name =
-            (data['teacher_name'] ?? data['name'] ?? Session.username)
+            (data['teacher_name'] ??
+                    data['name'] ??
+                    data['display_name'] ??
+                    Session.username)
                 as String;
         if (mounted) setState(() => displayName = name);
         Session.name = name;
@@ -113,11 +116,13 @@ class _TeacherSidebarState extends State<TeacherSidebar> {
                 displayName ?? 'Teacher',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                softWrap: true,
+                overflow: TextOverflow.visible,
               ),
             ),
           const SizedBox(height: 20),

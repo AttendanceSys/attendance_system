@@ -331,7 +331,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: TextFormField(
                           initialValue: _username,
-                          decoration: input('Username'),
+                          decoration: input('').copyWith(labelText: 'Username'),
                           onChanged: (v) => setState(() => _username = v),
                           validator: (v) {
                             final value = v?.trim() ?? '';
@@ -348,7 +348,9 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: TextFormField(
                           initialValue: _fullname,
-                          decoration: input('Full name'),
+                          decoration: input(
+                            '',
+                          ).copyWith(labelText: 'Full name'),
                           onChanged: (v) => setState(() => _fullname = v),
                           validator: (v) {
                             final value = v?.trim() ?? '';
@@ -432,19 +434,8 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                   TextFormField(
                     initialValue: _password,
                     obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderSide: BorderSide(color: border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: accent, width: 1.4),
-                      ),
-                      filled: true,
-                      fillColor: inputFill,
-                      hintText: 'Password',
+                    decoration: input('').copyWith(
+                      labelText: 'Password',
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword

@@ -5,6 +5,9 @@ import '../popup/add_course_popup.dart';
 import '../cards/searchBar.dart';
 import '../../services/session.dart';
 import '../../theme/super_admin_theme.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
+import 'dart:convert';
 
 class CoursesPage extends StatefulWidget {
   const CoursesPage({super.key});
@@ -52,15 +55,18 @@ class _CoursesPageState extends State<CoursesPage> {
   @override
   void initState() {
     super.initState();
-    // Ensure lookups load before courses so names are available when
-    // we map course teacher ids to display names.
+    // Fetch lookups first so teacher lookup map is available when rendering courses.
     _init();
   }
 
   Future<void> _init() async {
-    await Future.wait([_fetchLookups(), _fetchCourses()]);
-    await _prefetchMissingTeachersFromCourses();
-    if (mounted) setState(() => _loading = false);
+    try {
+      await _fetchLookups();
+      await _fetchCourses();
+      await _prefetchMissingTeachersFromCourses();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _fetchLookups() async {
@@ -68,10 +74,6 @@ class _CoursesPageState extends State<CoursesPage> {
       Query cq = classesCollection;
       Query fq = facultiesCollection;
 
-      // Fetch teacher documents in a way that tolerates mixed storage formats
-      // for faculty on teacher docs. We may have either:
-      // - a DocumentReference stored in 'faculty_ref'
-      // - a string stored in 'faculty_id' that may be the id or the '/path'
       List<QueryDocumentSnapshot> tDocs = [];
       if (Session.facultyRef == null) {
         final tSnap = await teachersCollection.get();
@@ -117,26 +119,28 @@ class _CoursesPageState extends State<CoursesPage> {
       }
 
       final cSnap = await cq.get();
-      // fetch departments (filtered by faculty when session scoped)
       Query dq = departmentsCollection;
       if (Session.facultyRef != null) {
         dq = dq.where('faculty_ref', isEqualTo: Session.facultyRef);
       }
       final dSnap = await dq.get();
       final fSnap = await fq.get();
+
+      // Build teacher map with multiple key forms for robust lookup
+      final Map<String, String> teacherMap = {};
+      for (final d in tDocs) {
+        final data = d.data() as Map<String, dynamic>? ?? {};
+        final name = (data['teacher_name'] ?? data['name'] ?? '') as String;
+        final id = d.id;
+        teacherMap[id] = name;
+        teacherMap[d.reference.path] = name; // 'teachers/abc'
+        teacherMap['/${d.reference.path}'] = name; // '/teachers/abc'
+        // and also try common prefix forms if your DB used them
+        teacherMap['teachers/$id'] = name;
+        teacherMap['/teachers/$id'] = name;
+      }
+
       setState(() {
-        // Build a teacher lookup that maps several possible key forms
-        // (id, path, '/path') to the teacher's display name so courses
-        // that store either an id or a path will resolve to the name.
-        final Map<String, String> teacherMap = {};
-        for (final d in tDocs) {
-          final data = d.data() as Map<String, dynamic>? ?? {};
-          final name = (data['teacher_name'] ?? data['name'] ?? '') as String;
-          final id = d.id;
-          teacherMap[id] = name;
-          teacherMap[d.reference.path] = name; // e.g. 'teachers/abc'
-          teacherMap['/${d.reference.path}'] = name; // e.g. '/teachers/abc'
-        }
         _teacherNames = teacherMap;
         _classNames = Map.fromEntries(
           cSnap.docs.map((d) {
@@ -187,8 +191,6 @@ class _CoursesPageState extends State<CoursesPage> {
 
   Future<void> _fetchCourses() async {
     try {
-      // NOTE: courses may store faculty as 'faculty_id' (string) in some DBs.
-      // The requirement is to treat courses/admins as reading from faculty_id.
       final snap = await coursesCollection.get();
       setState(() {
         _courses = snap.docs
@@ -216,6 +218,7 @@ class _CoursesPageState extends State<CoursesPage> {
                     teacherRef = cand.id;
                   } else if (cand is String) {
                     final s = cand;
+                    // if it's a path like 'teachers/abc' or '/teachers/abc' extract last
                     teacherRef = s.contains('/')
                         ? s.split('/').where((p) => p.isNotEmpty).toList().last
                         : s;
@@ -231,9 +234,6 @@ class _CoursesPageState extends State<CoursesPage> {
                         data['classRef']?.toString() ??
                         '');
 
-              // Normalize faculty stored in course doc. Support
-              // - DocumentReference in faculty_ref
-              // - String in faculty_id (e.g. '/faculties/Engineering' or 'Engineering')
               String courseFacultyId = '';
               final facCandidate =
                   data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'];
@@ -258,6 +258,7 @@ class _CoursesPageState extends State<CoursesPage> {
 
               final semester = (data['semester'] ?? '') as String?;
               final createdAt = (data['created_at'] as Timestamp?)?.toDate();
+
               return Course(
                 id: d.id,
                 courseCode: courseCode,
@@ -270,7 +271,6 @@ class _CoursesPageState extends State<CoursesPage> {
               );
             })
             .where((c) {
-              // If session has a faculty, filter client-side by normalized faculty id
               if (Session.facultyRef == null) return true;
               final sessId = Session.facultyRef!.id;
               return (c.facultyRef ?? '') == sessId;
@@ -334,10 +334,9 @@ class _CoursesPageState extends State<CoursesPage> {
 
   Future<void> _addCourse(Course course) async {
     try {
-      await coursesCollection.add({
+      final Map<String, dynamic> payload = {
         'course_code': course.courseCode,
         'course_name': course.courseName,
-        'teacher_assigned': course.teacherRef ?? '',
         'class': course.classRef ?? '',
         'faculty_ref': Session.facultyRef ?? course.facultyRef ?? '',
         'faculty_id': Session.facultyRef != null
@@ -345,7 +344,17 @@ class _CoursesPageState extends State<CoursesPage> {
             : (course.facultyRef ?? ''),
         'semester': course.semester ?? '',
         'created_at': FieldValue.serverTimestamp(),
-      });
+      };
+      // If teacherRef is provided, save as a DocumentReference to keep type consistent
+      if (course.teacherRef != null && course.teacherRef!.isNotEmpty) {
+        payload['teacher_assigned'] = teachersCollection.doc(
+          course.teacherRef!,
+        );
+      } else {
+        payload['teacher_assigned'] = '';
+      }
+
+      await coursesCollection.add(payload);
       await _fetchCourses();
       setState(() => _selectedIndex = null);
       if (mounted) {
@@ -364,18 +373,24 @@ class _CoursesPageState extends State<CoursesPage> {
   Future<void> _updateCourse(Course oldC, Course newC) async {
     if (oldC.id == null) return;
     try {
-      await coursesCollection.doc(oldC.id).update({
+      final Map<String, dynamic> payload = {
         'course_code': newC.courseCode,
         'course_name': newC.courseName,
-        'teacher_assigned': newC.teacherRef ?? '',
         'class': newC.classRef ?? '',
         'faculty_ref': Session.facultyRef ?? newC.facultyRef ?? '',
         'faculty_id': Session.facultyRef != null
             ? Session.facultyRef!.id
             : (newC.facultyRef ?? ''),
         'semester': newC.semester ?? '',
-        'created_at': FieldValue.serverTimestamp(),
-      });
+        'updated_at': FieldValue.serverTimestamp(),
+      };
+      if (newC.teacherRef != null && newC.teacherRef!.isNotEmpty) {
+        payload['teacher_assigned'] = teachersCollection.doc(newC.teacherRef!);
+      } else {
+        payload['teacher_assigned'] = '';
+      }
+
+      await coursesCollection.doc(oldC.id).update(payload);
       await _fetchCourses();
       setState(() => _selectedIndex = null);
       if (mounted) {
@@ -443,16 +458,43 @@ class _CoursesPageState extends State<CoursesPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SearchAddBar(
-                      hintText: 'Search Course...',
-                      buttonText: 'Add Course',
-                      onAddPressed: _showAddCoursePopup,
-                      onChanged: (val) {
-                        setState(() {
-                          _searchText = val;
-                          _selectedIndex = null;
-                        });
-                      },
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SearchAddBar(
+                            hintText: 'Search Course...',
+                            buttonText: 'Add Course',
+                            onAddPressed: _showAddCoursePopup,
+                            onChanged: (val) {
+                              setState(() {
+                                _searchText = val;
+                                _selectedIndex = null;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: _handleUploadCourses,
+                            icon: const Icon(Icons.upload_file),
+                            label: const Text('Upload Courses'),
+                            style: ElevatedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              backgroundColor: const Color.fromARGB(
+                                255,
+                                0,
+                                150,
+                                80,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -537,22 +579,35 @@ class _CoursesPageState extends State<CoursesPage> {
     );
   }
 
+  // Try multiple candidate forms for teacherRef and fallback to the raw ref so you can
+  // see what was stored (useful when CSV/input used unexpected formats).
   String _teacherDisplay(String? teacherRef) {
     if (teacherRef == null || teacherRef.isEmpty) return '';
     // direct id lookup
     if (_teacherNames.containsKey(teacherRef)) {
       return _teacherNames[teacherRef]!;
     }
-    // maybe teacherRef contains a path; try extracting last segment
+    // full path forms
+    final path = 'teachers/$teacherRef';
+    final pathWithSlash = '/$path';
+    if (_teacherNames.containsKey(path)) return _teacherNames[path]!;
+    if (_teacherNames.containsKey(pathWithSlash))
+      return _teacherNames[pathWithSlash]!;
+    // maybe teacherRef already contains a path; try last segment
     if (teacherRef.contains('/')) {
       final parts = teacherRef.split('/').where((p) => p.isNotEmpty).toList();
       if (parts.isNotEmpty) {
         final last = parts.last;
         if (_teacherNames.containsKey(last)) return _teacherNames[last]!;
+        final p2 = 'teachers/$last';
+        if (_teacherNames.containsKey(p2)) return _teacherNames[p2]!;
+        final p3 = '/$p2';
+        if (_teacherNames.containsKey(p3)) return _teacherNames[p3]!;
       }
     }
-    // fallback: keep empty (names are prefetched before render)
-    return '';
+    // fallback: return the raw ref so the UI shows something (helps debug)
+    // If you prefer an empty string, change this to return ''.
+    return teacherRef;
   }
 
   Future<void> _prefetchMissingTeachersFromCourses() async {
@@ -561,22 +616,42 @@ class _CoursesPageState extends State<CoursesPage> {
       for (final c in _courses) {
         final t = c.teacherRef ?? '';
         if (t.isEmpty) continue;
+        // add multiple candidate forms so we attempt to fetch by doc id
         ids.add(t);
         if (t.contains('/')) {
           final parts = t.split('/').where((p) => p.isNotEmpty).toList();
           if (parts.isNotEmpty) ids.add(parts.last);
+        } else {
+          // also consider full path forms
+          ids.add('teachers/$t');
+          ids.add('/teachers/$t');
         }
       }
 
-      final missing = ids
-          .where((id) => !_teacherNames.containsKey(id))
-          .toList();
+      // Only keep those that actually don't have a name yet
+      final missing = ids.where((id) {
+        return !_teacherNames.containsKey(id);
+      }).toList();
+
       if (missing.isEmpty) return;
 
-      // batch fetch by document id (chunks of 10)
+      // For server query we need actual document ids (not paths like 'teachers/abc').
+      // Extract last segments and deduplicate.
+      final docIds = missing
+          .map((m) {
+            if (m.contains('/')) {
+              final parts = m.split('/').where((p) => p.isNotEmpty).toList();
+              return parts.isNotEmpty ? parts.last : m;
+            }
+            return m;
+          })
+          .toSet()
+          .toList();
+
+      // fetch in chunks (whereIn has size limits)
       const chunkSize = 10;
-      for (var i = 0; i < missing.length; i += chunkSize) {
-        final chunk = missing.skip(i).take(chunkSize).toList();
+      for (var i = 0; i < docIds.length; i += chunkSize) {
+        final chunk = docIds.skip(i).take(chunkSize).toList();
         final snap = await teachersCollection
             .where(FieldPath.documentId, whereIn: chunk)
             .get();
@@ -584,15 +659,19 @@ class _CoursesPageState extends State<CoursesPage> {
           final data = d.data() as Map<String, dynamic>? ?? {};
           final name = (data['teacher_name'] ?? data['name'] ?? '').toString();
           if (name.isNotEmpty) {
+            // add multiple key forms so lookups succeed later
             _teacherNames[d.id] = name;
             _teacherNames[d.reference.path] = name;
             _teacherNames['/${d.reference.path}'] = name;
+            _teacherNames['teachers/${d.id}'] = name;
+            _teacherNames['/teachers/${d.id}'] = name;
           }
         }
       }
+
       if (mounted) setState(() {});
-    } catch (_) {
-      // ignore
+    } catch (e) {
+      print('Error prefetching teachers: $e');
     }
   }
 
@@ -746,5 +825,219 @@ class _CoursesPageState extends State<CoursesPage> {
         child: Text(text, overflow: TextOverflow.ellipsis),
       ),
     );
+  }
+
+  // CSV import helpers unchanged from previous version (omitted here for brevity)
+  // ... (keep _handleUploadCourses and _addCourseFromUpload as in earlier version)
+  // For brevity in this snippet, the CSV functions aren't repeated. Keep them as you have.
+  // Helpers copied/adapted from StudentsPage for CSV import + lookup resolution
+
+  String? _findIdByName(Map<String, String> map, String name) {
+    final entry = map.entries.firstWhere(
+      (e) => e.value.toLowerCase().trim() == name.toLowerCase().trim(),
+      orElse: () => const MapEntry('', ''),
+    );
+    final key = entry.key;
+    if (key.isEmpty) return null;
+    // Normalize to a document id: prefer the last segment if a path was stored.
+    if (key.contains('/')) {
+      final parts = key.split('/').where((p) => p.isNotEmpty).toList();
+      return parts.isNotEmpty ? parts.last : key;
+    }
+    return key;
+  }
+
+  String? _resolveRef(Map<String, String> map, String? val) {
+    if (val == null || val.isEmpty) return null;
+    // if it's already an id present in the lookup map
+    if (map.containsKey(val)) {
+      // normalize to simple id if caller passed a path-like key
+      if (val.contains('/')) {
+        final parts = val.split('/').where((p) => p.isNotEmpty).toList();
+        return parts.isNotEmpty ? parts.last : val;
+      }
+      return val;
+    }
+    // try to match by name
+    final byName = _findIdByName(map, val);
+    if (byName != null) return byName;
+    // fallback: return the value as-is (may be an id or path)
+    return val;
+  }
+
+  Future<void> _handleUploadCourses() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+      if (result == null) return;
+      final file = result.files.first;
+      if (file.bytes == null) return;
+      final content = utf8.decode(file.bytes!);
+      final rows = const CsvToListConverter(eol: '\n').convert(content);
+      if (rows.isEmpty) return;
+
+      final headers = rows.first
+          .map((h) => h.toString().toLowerCase().trim())
+          .toList();
+      final List<Map<String, dynamic>> parsed = [];
+      for (var i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty))
+          continue;
+        final map = <String, dynamic>{};
+        for (var c = 0; c < headers.length && c < row.length; c++) {
+          map[headers[c]] = row[c]?.toString() ?? '';
+        }
+        parsed.add(map);
+      }
+
+      if (parsed.isEmpty) return;
+
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirm upload'),
+          content: Text('Import ${parsed.length} courses?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+
+      final added = <String>[];
+      final skipped = <String>[];
+      for (final row in parsed) {
+        final courseCode =
+            (row['course_code'] ?? row['coursecode'] ?? row['code'] ?? '')
+                .toString()
+                .trim();
+        final courseName =
+            (row['course_name'] ?? row['coursename'] ?? row['name'] ?? '')
+                .toString()
+                .trim();
+        final semester = (row['semester'] ?? '').toString().trim();
+        final rawTeacher =
+            (row['teacher'] ??
+                    row['teacher_assigned'] ??
+                    row['teacher_id'] ??
+                    row['lecturer'] ??
+                    '')
+                .toString()
+                .trim();
+        final rawClass =
+            (row['class'] ??
+                    row['class_ref'] ??
+                    row['classid'] ??
+                    row['class_name'] ??
+                    '')
+                .toString()
+                .trim();
+        final rawFaculty =
+            (row['faculty'] ??
+                    row['faculty_ref'] ??
+                    row['facultyid'] ??
+                    row['faculty_id'] ??
+                    '')
+                .toString()
+                .trim();
+
+        if (courseCode.isEmpty || courseName.isEmpty) {
+          skipped.add(courseCode.isEmpty ? courseName : courseCode);
+          continue;
+        }
+
+        // avoid duplicates by course_code (basic)
+        final exists = await coursesCollection
+            .where('course_code', isEqualTo: courseCode)
+            .get();
+        if (exists.docs.isNotEmpty) {
+          skipped.add(courseCode);
+          continue;
+        }
+
+        final teacherId = _resolveRef(_teacherNames, rawTeacher);
+        final classId = _resolveRef(_classNames, rawClass);
+        final facultyId = rawFaculty.isEmpty ? null : rawFaculty;
+
+        final course = Course(
+          courseCode: courseCode,
+          courseName: courseName,
+          teacherRef: teacherId,
+          classRef: classId,
+          facultyRef: facultyId,
+          semester: semester.isEmpty ? null : semester,
+        );
+
+        final ok = await _addCourseFromUpload(course);
+        if (ok)
+          added.add(courseCode);
+        else
+          skipped.add(courseCode);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Imported ${added.length}, skipped ${skipped.length}',
+            ),
+          ),
+        );
+      }
+      await _fetchCourses();
+    } catch (e) {
+      print('Error importing courses: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to import courses')),
+        );
+      }
+    }
+  }
+
+  Future<bool> _addCourseFromUpload(Course c) async {
+    try {
+      // basic duplicate check
+      final q = await coursesCollection
+          .where('course_code', isEqualTo: c.courseCode)
+          .get();
+      if (q.docs.isNotEmpty) return false;
+
+      final Map<String, dynamic> payload = {
+        'course_code': c.courseCode,
+        'course_name': c.courseName,
+        'class': c.classRef ?? '',
+        'faculty_ref': Session.facultyRef ?? c.facultyRef ?? '',
+        'faculty_id': Session.facultyRef != null
+            ? Session.facultyRef!.id
+            : (c.facultyRef ?? ''),
+        'semester': c.semester ?? '',
+        'created_at': FieldValue.serverTimestamp(),
+      };
+      if (c.teacherRef != null && c.teacherRef!.isNotEmpty) {
+        // ensure we store a DocumentReference for the teacher
+        payload['teacher_assigned'] = teachersCollection.doc(c.teacherRef!);
+      } else {
+        payload['teacher_assigned'] = '';
+      }
+
+      await coursesCollection.add(payload);
+
+      return true;
+    } catch (e) {
+      print('Error adding course from upload: $e');
+      return false;
+    }
   }
 }
