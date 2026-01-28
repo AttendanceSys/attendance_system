@@ -1,4 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Location permissions required for GPS-based attendance verification -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- If you need background location (not required for simple foreground scans),
+         uncomment the following line and ensure you handle background permission flow.
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    -->
     <application
         android:label="attendance_system"
         android:name="${applicationName}"

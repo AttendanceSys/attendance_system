@@ -1,6 +1,7 @@
 import 'package:attendance_system/components/pages/classes_page.dart';
 import 'package:attendance_system/components/pages/courses_page.dart';
 import 'package:attendance_system/components/pages/departments_page.dart';
+import 'package:attendance_system/components/pages/admin_anomalies_page.dart';
 import 'package:attendance_system/components/pages/students_page.dart';
 import 'package:flutter/material.dart';
 import '../layouts/faculty_admin_layout.dart';
@@ -56,6 +57,8 @@ class FacultyAdminPage extends StatelessWidget {
         TimetablePage(),
         // 7: User Handling
         FacultyUserHandlingPage(),
+        // 8: Anomalies
+        const AdminAnomaliesPage(),
       ],
     );
   }

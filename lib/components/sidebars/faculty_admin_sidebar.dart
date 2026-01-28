@@ -43,10 +43,7 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data();
         final name =
-            (data['name'] ??
-                    data['full_name'] ??
-                    data['display_name'] ??
-                    Session.username)
+            (data['name'] ?? data['full_name'] ?? data['display_name'] ?? Session.username)
                 as String;
         if (mounted) {
           setState(() {
@@ -60,17 +57,19 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
     }
   }
 
+  void _emit(int idx) {
+    debugPrint('FacultyAdminSidebar: item tapped -> $idx');
+    widget.onItemSelected(idx);
+  }
+
   @override
   Widget build(BuildContext context) {
     final collapsed = widget.collapsed;
     final selectedIndex = widget.selectedIndex;
-    final onItemSelected = widget.onItemSelected;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final palette = Theme.of(context).extension<SuperAdminColors>();
     final sidebarColor =
-        palette?.sidebarColor ??
-        (isDark ? const Color(0xFF0E1A60) : const Color(0xFF3B4B9B));
-        
+        palette?.sidebarColor ?? (isDark ? const Color(0xFF0E1A60) : const Color(0xFF3B4B9B));
 
     return Container(
       width: collapsed ? 60 : 220,
@@ -83,9 +82,7 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
             radius: collapsed ? 22 : 42,
             backgroundColor: const Color(0xFF70C2FF),
             child: Text(
-              (displayName != null && displayName!.isNotEmpty)
-                  ? displayName![0].toUpperCase()
-                  : 'U',
+              (displayName != null && displayName!.isNotEmpty) ? displayName![0].toUpperCase() : 'U',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: collapsed ? 18 : 28,
@@ -117,56 +114,65 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
                   icon: Icons.home_outlined,
                   title: "Dashboard",
                   isSelected: selectedIndex == 0,
-                  onTap: () => onItemSelected(0),
+                  onTap: () => _emit(0),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
                   icon: Icons.settings,
                   title: "Departments",
                   isSelected: selectedIndex == 1,
-                  onTap: () => onItemSelected(1),
+                  onTap: () => _emit(1),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
                   icon: Icons.class_outlined,
                   title: "Classes",
                   isSelected: selectedIndex == 2,
-                  onTap: () => onItemSelected(2),
+                  onTap: () => _emit(2),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
                   icon: Icons.people_outline,
                   title: "Students",
                   isSelected: selectedIndex == 3,
-                  onTap: () => onItemSelected(3),
+                  onTap: () => _emit(3),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
                   icon: Icons.menu_book_outlined,
                   title: "Courses",
                   isSelected: selectedIndex == 4,
-                  onTap: () => onItemSelected(4),
+                  onTap: () => _emit(4),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
                   icon: Icons.assignment_outlined,
                   title: "Attendance",
                   isSelected: selectedIndex == 5,
-                  onTap: () => onItemSelected(5),
+                  onTap: () => _emit(5),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
                   icon: Icons.calendar_today_outlined,
                   title: "TimeTable",
                   isSelected: selectedIndex == 6,
-                  onTap: () => onItemSelected(6),
+                  onTap: () => _emit(6),
                   collapsed: collapsed,
                 ),
                 _SidebarItem(
                   icon: Icons.person,
                   title: "User Handling",
                   isSelected: selectedIndex == 7,
-                  onTap: () => onItemSelected(7),
+                  onTap: () => _emit(7),
+                  collapsed: collapsed,
+                ),
+
+                // "Anomalies" item at index 8 (Faculty)
+                _SidebarItem(
+                  icon: Icons.report_gmailerrorred_outlined,
+                  title: "Anomalies",
+                  isSelected: selectedIndex == 8,
+                  onTap: () => _emit(8),
                   collapsed: collapsed,
                 ),
               ],
@@ -197,30 +203,23 @@ class _SidebarItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final palette = Theme.of(context).extension<SuperAdminColors>();
-    final Color selectedBg =
-        palette?.selectedBg ??
-        (isDark
-            ? Colors.white.withOpacity(0.13)
-            : Colors.white.withOpacity(0.25));
+    final Color selectedBg = palette?.selectedBg ??
+        (isDark ? Colors.white.withOpacity(0.13) : Colors.white.withOpacity(0.25));
     final Color iconColor = palette?.iconColor ?? Colors.white;
     final Color textColor = palette?.textPrimary ?? Colors.white;
     final overlay = WidgetStateProperty.resolveWith<Color?>((states) {
       if (states.contains(WidgetState.hovered)) {
         return palette?.hoverOverlay ??
-            (isDark
-                ? Colors.white.withOpacity(0.10)
-                : Colors.white.withOpacity(0.20));
+            (isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.20));
       }
       if (states.contains(WidgetState.pressed)) {
         return palette?.pressedOverlay ??
-            (isDark
-                ? Colors.white.withOpacity(0.16)
-                : Colors.white.withOpacity(0.28));
+            (isDark ? Colors.white.withOpacity(0.16) : Colors.white.withOpacity(0.28));
       }
       return null;
     });
     return Tooltip(
-      message: collapsed ? title : "", // Only show tooltip when collapsed
+      message: collapsed ? title : "",
       verticalOffset: 0,
       preferBelow: false,
       waitDuration: const Duration(milliseconds: 300),
@@ -241,9 +240,7 @@ class _SidebarItem extends StatelessWidget {
               color: isSelected ? selectedBg : Colors.transparent,
             ),
             child: Row(
-              mainAxisAlignment: collapsed
-                  ? MainAxisAlignment.center
-                  : MainAxisAlignment.start,
+              mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
               children: [
                 Icon(icon, color: iconColor, size: 22),
                 if (!collapsed) ...[

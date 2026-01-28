@@ -8,6 +8,7 @@ import 'login_screen.dart';
 import 'package:attendance_system/components/pages/faculties_page.dart';
 import 'package:attendance_system/components/pages/lecturer_page.dart';
 import 'package:attendance_system/components/pages/Admin_user_handling_page.dart';
+import 'package:attendance_system/components/pages/admin_anomalies_page.dart';
 import 'package:attendance_system/components/popup/logout_confirmation_popup.dart';
 import '../services/theme_controller.dart';
 import '../theme/super_admin_theme.dart';
@@ -152,6 +153,7 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
     TeachersPage(),
     AdminsPage(),
     UserHandlingPage(),
+    const AdminAnomaliesPage(),
   ];
 
   // --- This method now shows the confirmation popup before logging out ---

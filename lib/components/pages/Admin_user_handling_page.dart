@@ -1,5 +1,3 @@
-//admin user handling
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user.dart';
@@ -15,16 +13,11 @@ class UserHandlingPage extends StatefulWidget {
 }
 
 class _UserHandlingPageState extends State<UserHandlingPage> {
-  final CollectionReference usersCollection = FirebaseFirestore.instance
-      .collection('users');
-  final CollectionReference adminsCollection = FirebaseFirestore.instance
-      .collection('admins');
-  final CollectionReference facultiesCollection = FirebaseFirestore.instance
-      .collection('faculties');
-  final CollectionReference teachersCollection = FirebaseFirestore.instance
-      .collection('teachers');
-  final CollectionReference studentsCollection = FirebaseFirestore.instance
-      .collection('students');
+  final CollectionReference usersCollection = FirebaseFirestore.instance.collection('users');
+  final CollectionReference adminsCollection = FirebaseFirestore.instance.collection('admins');
+  final CollectionReference facultiesCollection = FirebaseFirestore.instance.collection('faculties');
+  final CollectionReference teachersCollection = FirebaseFirestore.instance.collection('teachers');
+  final CollectionReference studentsCollection = FirebaseFirestore.instance.collection('students');
 
   List<AppUser> _users = [];
   String _searchText = '';
@@ -32,7 +25,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
 
   // Track password visibility by user id
   final Map<String, bool> _showPasswordById = {};
-  // Scroll controller used for the list and scrollbar
+  // Scroll controller for the main scroll view
   final ScrollController _scrollController = ScrollController();
 
   List<AppUser> get _filteredUsers => _users
@@ -237,23 +230,16 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
     });
   }
 
-  // New: a vertically scrollable list with a header row and selectable rows.
-  // This replaces the fixed Table so the user can easily reach the last user even with many rows.
   Widget _buildScrollableTable({required bool isDesktop}) {
     final rows = _filteredUsers;
     return Column(
       children: [
-        // Header (sticky look)
+        // Header
         Builder(
           builder: (context) {
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final headerBg = isDark
-                ? const Color(0xFF323746)
-                : Colors.grey[100];
-            final headerTextColor = isDark
-                ? const Color(0xFFE6EAF1)
-                : Colors.black87;
-
+            final headerBg = isDark ? const Color(0xFF323746) : Colors.grey[100];
+            final headerTextColor = isDark ? const Color(0xFFE6EAF1) : Colors.black87;
             return Container(
               color: headerBg,
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
@@ -315,17 +301,17 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
           },
         ),
 
-        // Flexible area with scrollbar + ListView
-        Expanded(
-          child: Scrollbar(
-            controller: _scrollController,
-            thumbVisibility: isDesktop ? true : false,
+        // Vertical list with scrollbar. No Expanded!
+        Scrollbar(
+          controller: _scrollController,
+          thumbVisibility: isDesktop, // Show thumb on desktop
+          child: SizedBox(
+            height: 420, // fits many rows, scroll if more
             child: ListView.separated(
               controller: _scrollController,
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               itemCount: rows.length,
-              separatorBuilder: (_, __) =>
-                  Divider(height: 1, color: Colors.grey.shade300),
+              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade300),
               itemBuilder: (context, index) {
                 final user = rows[index];
                 final selected = _selectedIndex == index;
@@ -334,8 +320,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                 final isDark = Theme.of(context).brightness == Brightness.dark;
                 final palette = Theme.of(context).extension<SuperAdminColors>();
                 final highlight =
-                    palette?.highlight ??
-                    (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
+                    palette?.highlight ?? (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
 
                 return InkWell(
                   onTap: () => _handleRowTap(index),
@@ -363,15 +348,12 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
                               ),
                               IconButton(
                                 icon: Icon(
-                                  visible
-                                      ? Icons.visibility
-                                      : Icons.visibility_off,
+                                  visible ? Icons.visibility : Icons.visibility_off,
                                   size: 20,
                                 ),
                                 onPressed: () {
                                   setState(() {
-                                    _showPasswordById[user.id] =
-                                        !(_showPasswordById[user.id] ?? false);
+                                    _showPasswordById[user.id] = !(_showPasswordById[user.id] ?? false);
                                   });
                                 },
                               ),
@@ -395,122 +377,120 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isDesktop = screenWidth > 800;
 
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 8),
-          Text(
-            "User Handling",
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(
-                context,
-              ).extension<SuperAdminColors>()?.textPrimary,
-            ),
+    return Scrollbar(
+      controller: _scrollController,
+      thumbVisibility: isDesktop,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(32.0),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height - kToolbarHeight,
           ),
-          const SizedBox(height: 24),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                Text(
+                  "User Handling",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).extension<SuperAdminColors>()?.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SearchAddBar(
-                      hintText: "Search users...",
-                      buttonText: "",
-                      onAddPressed: () {},
-                      onChanged: (value) {
-                        setState(() {
-                          _searchText = value;
-                          _selectedIndex = null;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _showEditUserPopup,
-                            child: const Text(
-                              "Edit",
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SearchAddBar(
+                            hintText: "Search users...",
+                            buttonText: "",
+                            onAddPressed: () {},
+                            onChanged: (value) {
+                              setState(() {
+                                _searchText = value;
+                                _selectedIndex = null;
+                              });
+                            },
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 100,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : () => _confirmToggleStatus(
-                                    _filteredUsers[_selectedIndex!],
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              SizedBox(
+                                width: 80,
+                                height: 36,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 0,
+                                      horizontal: 0,
+                                    ),
                                   ),
-                            child: Text(
-                              _selectedIndex == null
-                                  ? 'Disable'
-                                  : (_filteredUsers[_selectedIndex!].status
-                                                .toLowerCase() ==
-                                            'disabled'
-                                        ? 'Enable'
-                                        : 'Disable'),
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
+                                  onPressed: _selectedIndex == null ? null : _showEditUserPopup,
+                                  child: const Text(
+                                    "Edit",
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 100,
+                                height: 36,
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 0,
+                                      horizontal: 0,
+                                    ),
+                                  ),
+                                  onPressed: _selectedIndex == null
+                                      ? null
+                                      : () => _confirmToggleStatus(_filteredUsers[_selectedIndex!]),
+                                  child: Text(
+                                    _selectedIndex == null
+                                        ? 'Disable'
+                                        : (_filteredUsers[_selectedIndex!].status.toLowerCase() == 'disabled'
+                                            ? 'Enable'
+                                            : 'Disable'),
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: _buildScrollableTable(isDesktop: isDesktop),
+                const SizedBox(height: 8),
+                _buildScrollableTable(isDesktop: isDesktop),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

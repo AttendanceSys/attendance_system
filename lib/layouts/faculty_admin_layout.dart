@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../components/sidebars/faculty_admin_sidebar.dart';
 import '../components/popup/logout_confirmation_popup.dart';
+import '../components/pages/admin_anomalies_page.dart';
 import '../screens/login_screen.dart';
 import '../components/faculty_dashboard_stats_grid.dart';
 import '../theme/super_admin_theme.dart';
@@ -46,6 +47,8 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
       const Center(child: Text('Attendance')),
       const Center(child: Text('TimeTable')),
       const Center(child: Text('User Handling')),
+      // Faculty "Anomalies" page at index 8
+      const AdminAnomaliesPage(),
     ];
   }
 
@@ -60,6 +63,10 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
     final headerColor = palette?.textPrimary ?? Colors.black87;
     final scaffoldBg = palette?.scaffold;
     final pages = widget.customPages ?? _buildDefaultPages(headerColor);
+
+    final safeIndex = (_selectedIndex >= 0 && _selectedIndex < pages.length)
+        ? _selectedIndex
+        : 0;
 
     return Scaffold(
       backgroundColor: scaffoldBg,
@@ -93,7 +100,6 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                         context,
                       );
                       if (shouldLogout == true) {
-                        // Reset theme to light mode on logout
                         ThemeController.setThemeMode(ThemeMode.light);
                         Navigator.pushReplacement(
                           context,
@@ -157,19 +163,18 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                             ),
                           ),
                         ),
-                      if (!_collapsed || _collapsed)
-                        Expanded(
-                          child: FacultyAdminSidebar(
-                            selectedIndex: _selectedIndex,
-                            onItemSelected: (index) {
-                              setState(() {
-                                _selectedIndex = index;
-                                _collapsed = true;
-                              });
-                            },
-                            collapsed: _collapsed,
-                          ),
+                      Expanded(
+                        child: FacultyAdminSidebar(
+                          selectedIndex: _selectedIndex,
+                          onItemSelected: (index) {
+                            setState(() {
+                              _selectedIndex = index;
+                              _collapsed = true;
+                            });
+                          },
+                          collapsed: _collapsed,
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -184,22 +189,17 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                       });
                     }
                   },
-                  // Ensure the selected page is aligned to the top-left and
-                  // add a small top inset so content sits below the top-right
-                  // dark-mode / logout buttons.
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: Padding(
-                      // smaller top inset so header sits below the top icons
                       padding: const EdgeInsets.only(top: 44.0),
-                      child: pages[_selectedIndex],
+                      child: pages[safeIndex],
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          // --- Logout Button in Top Right for desktop/tablet ---
           if (!isMobile)
             Positioned(
               top: 16,
@@ -226,7 +226,6 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
                           context,
                         );
                         if (shouldLogout == true) {
-                          // Reset theme to light mode on logout
                           ThemeController.setThemeMode(ThemeMode.light);
                           Navigator.pushReplacement(
                             context,
@@ -248,5 +247,3 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
     );
   }
 }
-
-// Use reusable popup from components/popup/logout_confirmation_popup.dart

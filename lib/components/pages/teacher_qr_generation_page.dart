@@ -22,6 +22,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/session.dart';
 import '../../theme/teacher_theme.dart';
+import '../../services/location_service.dart';
+import '../../config.dart';
 
 class TeacherQRGenerationPage extends StatefulWidget {
   const TeacherQRGenerationPage({super.key});
@@ -66,11 +68,26 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
   String? qrCodeData;
   String? _lastSavedSessionId;
+  // Location capture for allowed session area
+  bool requireLocationVerification = false;
+  double? _allowedLat;
+  double? _allowedLng;
+  double _allowedRadiusMeters = kDefaultCampusRadiusMeters;
+  late TextEditingController _radiusController;
 
   @override
   void initState() {
     super.initState();
+    _radiusController = TextEditingController(
+      text: _allowedRadiusMeters.toStringAsFixed(0),
+    );
     _fetchDepartments();
+  }
+
+  @override
+  void dispose() {
+    _radiusController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchDepartments() async {
@@ -824,6 +841,17 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         'active': true,
       };
 
+      // Attach allowed_location if teacher captured one via the UI
+      if (requireLocationVerification &&
+          _allowedLat != null &&
+          _allowedLng != null) {
+        docData['allowed_location'] = {
+          'lat': _allowedLat,
+          'lng': _allowedLng,
+          'radius': _allowedRadiusMeters,
+        };
+      }
+
       final ref = await FirebaseFirestore.instance
           .collection('qr_generation')
           .add(docData);
@@ -855,9 +883,12 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     final palette = Theme.of(context).extension<TeacherThemeColors>();
     return Padding(
       padding: const EdgeInsets.all(32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
@@ -905,6 +936,93 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                 // call this color please color: isDarkMode ? Colors.white : Colors.grey[100],
                 hint: "Select Subject",
                 onChanged: (value) => setState(() => subject = value),
+              ),
+              // Location verification toggle + capture
+              Container(
+                constraints: const BoxConstraints(minWidth: 220, maxWidth: 420),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Switch(
+                      value: requireLocationVerification,
+                      onChanged: (v) {
+                        setState(() {
+                          requireLocationVerification = v;
+                          if (!v) {
+                            _allowedLat = null;
+                            _allowedLng = null;
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 6),
+                    const Flexible(
+                      child: Text(
+                        'Require location verification',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (requireLocationVerification) ...[
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (!requireLocationVerification) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Capturing location...'),
+                            ),
+                          );
+                          final pos =
+                              await LocationService.getCurrentPosition();
+                          if (pos == null) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Failed to get GPS position'),
+                                ),
+                              );
+                            }
+                            return;
+                          }
+                          setState(() {
+                            _allowedLat = pos.latitude;
+                            _allowedLng = pos.longitude;
+                          });
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Captured location: ${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)}',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: Text(
+                          _allowedLat == null ? 'Capture' : 'Captured',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 110,
+                        child: TextFormField(
+                          controller: _radiusController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Radius (m)',
+                            isDense: true,
+                          ),
+                          onChanged: (v) {
+                            final parsed = double.tryParse(v);
+                            if (parsed != null) {
+                              setState(() => _allowedRadiusMeters = parsed);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
               const SizedBox(width: 18),
               ElevatedButton(
@@ -1108,7 +1226,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _dropdown({

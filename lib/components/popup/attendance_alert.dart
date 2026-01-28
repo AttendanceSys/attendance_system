@@ -82,6 +82,32 @@ class AttendanceAlert {
     onClose: onClose,
   );
 
+  static Future<void> showLocationBlocked(
+    BuildContext context, {
+    String? details,
+    VoidCallback? onClose,
+  }) => _show(
+    context,
+    type: AttendanceAlertType.info,
+    title: 'Location Verification Failed',
+    message:
+        details ??
+        'You appear to be outside the allowed location for this session.',
+    onClose: onClose,
+  );
+
+  static Future<void> showAnomalyFlagged(
+    BuildContext context, {
+    String? details,
+    VoidCallback? onClose,
+  }) => _show(
+    context,
+    type: AttendanceAlertType.info,
+    title: 'Suspicious Activity Detected',
+    message:
+        details ?? 'Your scan was flagged as suspicious and will be reviewed.',
+    onClose: onClose,
+  );
   // Generic show function
   static Future<void> _show(
     BuildContext context, {
@@ -104,20 +130,14 @@ class AttendanceAlert {
       onClose: onClose,
     );
 
-    // Show dialog. Keep qrExpired non-dismissible if you prefer (so user must acknowledge).
+    // Show dialog. Make alerts non-dismissible: require the user to press OK.
     showDialog(
       context: context,
-      barrierDismissible: type != AttendanceAlertType.qrExpired,
-      builder: (_) => dialog,
+      barrierDismissible: false,
+      builder: (_) => WillPopScope(onWillPop: () async => false, child: dialog),
     );
 
-    if (autoCloseAfter != null) {
-      await Future.delayed(autoCloseAfter);
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-        if (onClose != null) onClose();
-      }
-    }
+    // autoCloseAfter intentionally ignored to ensure dialog requires explicit OK
   }
 }
 

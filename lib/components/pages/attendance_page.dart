@@ -15,13 +15,19 @@ class AttendanceUnifiedPage extends StatefulWidget {
 class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Scroll controller for the page scrollbar
+  final ScrollController _pageScrollController = ScrollController();
+
   // Data sources populated from Firestore
   List<String> departments = [];
   List<String> classesForDept = [];
   List<String> coursesForClass = [];
+  List<String> teachersForDept = [];
+
   // Lookups to resolve ids from names for queries
   final Map<String, String> _deptNameToId = {};
   final Map<String, String> _classNameToId = {};
+  final Map<String, String> _teacherNameToId = {};
 
   // Roster grouped by class -> section -> list of student maps
   // Each student map includes 'docId' so we can update the student doc.
@@ -32,6 +38,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   String? selectedDepartment;
   String? selectedClass;
   String? selectedCourse;
+  String? selectedTeacher;
   DateTime? selectedDate;
   String? selectedUsername;
   String? selectedStudentName;
@@ -43,11 +50,549 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   bool loadingClasses = false;
   bool loadingSubjects = false;
   bool loadingStudents = false;
+  bool loadingTeachers = false;
+
+  // Percentage results state
+  bool loadingPercentage = false;
+  List<Map<String, dynamic>> percentageRows = [];
 
   @override
   void initState() {
     super.initState();
     _loadDepartments();
+  }
+
+  @override
+  void dispose() {
+    _pageScrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchPercentageForDepartment() async {
+    if (selectedDepartment == null) return;
+    setState(() {
+      loadingPercentage = true;
+      percentageRows = [];
+    });
+
+    final dept = selectedDepartment!;
+    final firestore = FirebaseFirestore.instance;
+    // If a teacher is selected, derive the classes from qr_generation docs
+    // authored/owned by that teacher; otherwise use the loaded classes list.
+    final Map<String, List<String>> classCodes = {};
+    List<String> classList = [];
+    String? selTeacher = selectedTeacher;
+    String teacherDocId = '';
+    String teacherUsername = '';
+    String? teacherName = selTeacher;
+    // map className -> list of 7 ints representing Mon..Sun session counts
+    Map<String, List<int>> classSessionDayCounts = {};
+    if (selTeacher != null) {
+      teacherDocId = _teacherNameToId[selTeacher] ?? '';
+      // try to fetch teacher doc to get username if we have an id
+      if (teacherDocId.isNotEmpty) {
+        try {
+          final tdoc = await firestore
+              .collection('teachers')
+              .doc(teacherDocId)
+              .get();
+          if (tdoc.exists) {
+            final td = tdoc.data();
+            teacherUsername = (td?['username'] ?? td?['user'] ?? '').toString();
+            teacherName =
+                (td?['teacher_name'] ?? td?['teacherName'] ?? teacherName)
+                    .toString();
+          }
+        } catch (_) {}
+      }
+
+      try {
+        // Build classes taught by this teacher from the timetables collection.
+        final timetableSnap = await firestore
+            .collection('timetables')
+            .where('department', isEqualTo: dept)
+            .get();
+        classSessionDayCounts.clear();
+        for (final t in timetableSnap.docs) {
+          final td = t.data();
+          // match timetable doc to the teacher
+          if (!_qrDocMatchesTeacher(
+            td,
+            teacherDocId,
+            teacherUsername,
+            teacherName,
+          ))
+            continue;
+          final cls =
+              (td['class'] ??
+                      td['className'] ??
+                      td['class_name'] ??
+                      td['class_id'] ??
+                      td['classRef'] ??
+                      '')
+                  .toString();
+          if (cls.isEmpty) continue;
+
+          // count matching cells in grid and grid_meta (weekly sessions)
+          // we'll attribute cells to weekday indices (0..6)
+          final dayCounts = List<int>.filled(7, 0);
+          try {
+            final grid = td['grid'];
+            if (grid is Iterable) {
+              var rIndex = 0;
+              for (final row in grid) {
+                if (row is Map && row.containsKey('cells')) {
+                  final cells = row['cells'];
+                  if (cells is Iterable) {
+                    for (final cell in cells) {
+                      if (_qrDocMatchesTeacher(
+                        {'v': cell},
+                        teacherDocId,
+                        teacherUsername,
+                        teacherName,
+                      )) {
+                        final idx = (rIndex >= 0 && rIndex < 7)
+                            ? rIndex
+                            : (rIndex % 7);
+                        dayCounts[idx] = dayCounts[idx] + 1;
+                      }
+                    }
+                  }
+                }
+                rIndex++;
+              }
+            }
+            final gridMeta = td['grid_meta'];
+            if (gridMeta is Iterable) {
+              var gmRowIndex = 0;
+              for (final gm in gridMeta) {
+                if (gm is Map && gm.containsKey('cells')) {
+                  final rows = gm['cells'];
+                  if (rows is Iterable) {
+                    for (final r in rows) {
+                      if (r is Map && r.containsKey('cells')) {
+                        final cells = r['cells'];
+                        if (cells is Iterable) {
+                          for (final cell in cells) {
+                            if (_qrDocMatchesTeacher(
+                              {'v': cell},
+                              teacherDocId,
+                              teacherUsername,
+                              teacherName,
+                            )) {
+                              final idx = (gmRowIndex >= 0 && gmRowIndex < 7)
+                                  ? gmRowIndex
+                                  : (gmRowIndex % 7);
+                              dayCounts[idx] = dayCounts[idx] + 1;
+                            }
+                          }
+                        }
+                      }
+                      gmRowIndex++;
+                    }
+                  }
+                }
+              }
+            }
+          } catch (_) {}
+
+          final totalFromDays = dayCounts.fold<int>(0, (p, n) => p + n);
+          if (totalFromDays > 0) {
+            classSessionDayCounts[cls] =
+                (classSessionDayCounts[cls] ?? List<int>.filled(7, 0))
+                    .asMap()
+                    .map((i, v) => MapEntry(i, v + dayCounts[i]))
+                    .values
+                    .toList();
+          }
+        }
+
+        // If nothing found by dept-name filter, try fetching all timetables and match loose
+        if (classSessionDayCounts.isEmpty) {
+          try {
+            final allTimetables = await firestore
+                .collection('timetables')
+                .get();
+            for (final t in allTimetables.docs) {
+              final td = t.data();
+              if (!_qrDocMatchesTeacher(
+                td,
+                teacherDocId,
+                teacherUsername,
+                teacherName,
+              ))
+                continue;
+              final dep =
+                  (td['department'] ??
+                          td['department_name'] ??
+                          td['dept'] ??
+                          '')
+                      .toString();
+              if (!_looseNameMatch(dep, dept)) continue;
+              final cls =
+                  (td['class'] ??
+                          td['className'] ??
+                          td['class_name'] ??
+                          td['class_id'] ??
+                          td['classRef'] ??
+                          '')
+                      .toString();
+              if (cls.isEmpty) continue;
+
+              // count matching cells in grid and grid_meta (weekly sessions)
+              final dayCounts = List<int>.filled(7, 0);
+              try {
+                final grid = td['grid'];
+                if (grid is Iterable) {
+                  var rIndex = 0;
+                  for (final row in grid) {
+                    if (row is Map && row.containsKey('cells')) {
+                      final cells = row['cells'];
+                      if (cells is Iterable) {
+                        for (final cell in cells) {
+                          if (_qrDocMatchesTeacher(
+                            {'v': cell},
+                            teacherDocId,
+                            teacherUsername,
+                            teacherName,
+                          )) {
+                            final idx = (rIndex >= 0 && rIndex < 7)
+                                ? rIndex
+                                : (rIndex % 7);
+                            dayCounts[idx] = dayCounts[idx] + 1;
+                          }
+                        }
+                      }
+                    }
+                    rIndex++;
+                  }
+                }
+                final gridMeta = td['grid_meta'];
+                if (gridMeta is Iterable) {
+                  var gmRowIndex = 0;
+                  for (final gm in gridMeta) {
+                    if (gm is Map && gm.containsKey('cells')) {
+                      final rows = gm['cells'];
+                      if (rows is Iterable) {
+                        for (final r in rows) {
+                          if (r is Map && r.containsKey('cells')) {
+                            final cells = r['cells'];
+                            if (cells is Iterable) {
+                              for (final cell in cells) {
+                                if (_qrDocMatchesTeacher(
+                                  {'v': cell},
+                                  teacherDocId,
+                                  teacherUsername,
+                                  teacherName,
+                                )) {
+                                  final idx =
+                                      (gmRowIndex >= 0 && gmRowIndex < 7)
+                                      ? gmRowIndex
+                                      : (gmRowIndex % 7);
+                                  dayCounts[idx] = dayCounts[idx] + 1;
+                                }
+                              }
+                            }
+                          }
+                          gmRowIndex++;
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch (_) {}
+
+              final totalFromDays = dayCounts.fold<int>(0, (p, n) => p + n);
+              if (totalFromDays > 0) {
+                classSessionDayCounts[cls] =
+                    (classSessionDayCounts[cls] ?? List<int>.filled(7, 0))
+                        .asMap()
+                        .map((i, v) => MapEntry(i, v + dayCounts[i]))
+                        .values
+                        .toList();
+              }
+            }
+          } catch (_) {}
+        }
+
+        // For each class, collect QR codes generated that match the teacher
+        for (final cls in classSessionDayCounts.keys) {
+          try {
+            final qrSnap = await firestore
+                .collection('qr_generation')
+                .where('department', isEqualTo: dept)
+                .where('className', isEqualTo: cls)
+                .where('active', isEqualTo: true)
+                .get();
+            for (final d in qrSnap.docs) {
+              final qd = d.data();
+              if (!_qrDocMatchesTeacher(
+                qd,
+                teacherDocId,
+                teacherUsername,
+                teacherName,
+              ))
+                continue;
+              // Only include QR codes for the current week (teacher report)
+              DateTime? psDt;
+              try {
+                final ps =
+                    qd['period_starts_at'] ??
+                    qd['period_starts_at_iso'] ??
+                    qd['created_at'] ??
+                    qd['created_at_iso'];
+                if (ps != null) {
+                  if (ps is Timestamp) {
+                    psDt = ps.toDate();
+                  } else if (ps is String) {
+                    psDt = DateTime.tryParse(ps);
+                  } else if (ps is int) {
+                    psDt = DateTime.fromMillisecondsSinceEpoch(ps);
+                  }
+                }
+              } catch (_) {}
+              if (psDt == null) continue;
+              final now = DateTime.now();
+              final startOfWeek = DateTime(
+                now.year,
+                now.month,
+                now.day,
+              ).subtract(Duration(days: now.weekday - 1));
+              final endOfWeek = startOfWeek.add(const Duration(days: 7));
+              if (!(psDt.isAtSameMomentAs(startOfWeek) ||
+                  (psDt.isAfter(startOfWeek) && psDt.isBefore(endOfWeek)) ||
+                  psDt.isAtSameMomentAs(endOfWeek)))
+                continue;
+              final code = (qd['code'] ?? '').toString();
+              if (code.isEmpty) continue;
+              classCodes.putIfAbsent(cls, () => []).add(code);
+            }
+          } catch (e) {
+            debugPrint('qr fetch error for class $cls: $e');
+          }
+        }
+
+        classList = classSessionDayCounts.keys.toList()..sort();
+        // store session counts in a map accessible in loop below via local variable
+        // we'll keep classSessionCount in lexical scope by assigning to an outer var
+        // (we'll reuse it below)
+        // assign to a local final via closure
+        // (we'll reference classSessionCount directly below)
+      } catch (e) {
+        debugPrint('timetable fetch error for teacher filter: $e');
+      }
+    }
+    if (selTeacher == null) {
+      classList = classesForDept;
+    }
+
+    final rows = <Map<String, dynamic>>[];
+
+    for (var i = 0; i < classList.length; i++) {
+      final cls = classList[i];
+
+      int totalQr = 0;
+      List<String> codes = [];
+      try {
+        if (selTeacher != null) {
+          // use pre-collected codes for teacher
+          codes = classCodes[cls] ?? [];
+          totalQr = codes.length;
+        } else {
+          final qrSnap = await firestore
+              .collection('qr_generation')
+              .where('department', isEqualTo: dept)
+              .where('className', isEqualTo: cls)
+              .where('active', isEqualTo: true)
+              .get();
+          totalQr = qrSnap.docs.length;
+          codes = qrSnap.docs
+              .map((d) => (d.data()['code'] ?? '').toString())
+              .where((c) => c.isNotEmpty)
+              .toList();
+        }
+      } catch (e) {
+        debugPrint('qr fetch error for $cls: $e');
+      }
+
+      int totalAttendances = 0;
+      try {
+        const batchSize = 10;
+        for (var start = 0; start < codes.length; start += batchSize) {
+          final end = (start + batchSize) > codes.length
+              ? codes.length
+              : (start + batchSize);
+          final chunk = codes.sublist(start, end);
+          if (chunk.isEmpty) continue;
+          final attSnap = await firestore
+              .collection('attendance_records')
+              .where('code', whereIn: chunk)
+              .get();
+          totalAttendances += attSnap.docs.length;
+        }
+      } catch (e) {
+        debugPrint('attendance fetch error for $cls: $e');
+      }
+
+      int totalStudents = 0;
+      try {
+        final s1 = await firestore
+            .collection('students')
+            .where('className', isEqualTo: cls)
+            .get();
+        totalStudents = s1.docs.length;
+        if (totalStudents == 0) {
+          final s2 = await firestore
+              .collection('students')
+              .where('class_name', isEqualTo: cls)
+              .get();
+          totalStudents = s2.docs.length;
+        }
+      } catch (e) {
+        debugPrint('students fetch error for $cls: $e');
+      }
+
+      // If teacher selected, expected should be based on scheduled sessions from timetables
+      final expectedSessions = selTeacher != null
+          ? (classSessionDayCounts[cls]?.fold<int>(0, (p, n) => p + n) ?? 0)
+          : totalQr;
+      final expected = totalStudents * expectedSessions;
+      int absence = 0;
+      int attendancePercent = 0;
+      int absencePercent = 0;
+      if (expected > 0) {
+        absence = expected - totalAttendances;
+        if (absence < 0) absence = 0;
+        attendancePercent = ((totalAttendances / expected) * 100).round();
+        absencePercent = ((absence / expected) * 100).round();
+      }
+
+      final totalNeeded =
+          expectedSessions; // count of scheduled sessions (week total)
+      final totalNotGenerated = (totalNeeded - totalQr) < 0
+          ? 0
+          : (totalNeeded - totalQr);
+
+      // Display 'pct' as the percentage of ABSENCE per your request.
+      // include per-day breakdown for teacher view if available
+      final dayList = selTeacher != null
+          ? (classSessionDayCounts[cls] ?? List<int>.filled(7, 0))
+          : List<int>.filled(7, 0);
+
+      // Calculate teacher absence percentage as (notGenerated / needed) * 100
+      int absencePct = 0;
+      if (totalNeeded > 0) {
+        absencePct = ((totalNotGenerated / totalNeeded) * 100).round();
+      }
+
+      if (selTeacher == null) {
+        // Department-wide row: include attended/absence and show attendance pct as `pct`
+        rows.add({
+          'no': i + 1,
+          'class': cls,
+          'totalGenerated': totalQr,
+          'attended': totalAttendances,
+          'absence': absence,
+          'totalNeeded': totalNeeded,
+          'totalNotGenerated': totalNotGenerated,
+          'pct': absencePercent, // show ABSENCE % in the Percentage column
+          'absencePct': absencePercent, // used to colour the row
+        });
+      } else {
+        // Teacher-scoped row: include per-day counts and teacher absence %
+        rows.add({
+          'no': i + 1,
+          'class': cls,
+          'd0': dayList.length > 0 ? dayList[0] : 0,
+          'd1': dayList.length > 1 ? dayList[1] : 0,
+          'd2': dayList.length > 2 ? dayList[2] : 0,
+          'd3': dayList.length > 3 ? dayList[3] : 0,
+          'd4': dayList.length > 4 ? dayList[4] : 0,
+          'd5': dayList.length > 5 ? dayList[5] : 0,
+          'd6': dayList.length > 6 ? dayList[6] : 0,
+          'totalNeeded': totalNeeded,
+          'totalGenerated': totalQr,
+          'totalNotGenerated': totalNotGenerated,
+          'pct': absencePct,
+          'absencePct': absencePct,
+        });
+      }
+    }
+
+    setState(() {
+      percentageRows = rows;
+      loadingPercentage = false;
+    });
+  }
+
+  bool _qrDocMatchesTeacher(
+    Map<String, dynamic> qd,
+    String teacherDocId,
+    String teacherUsername,
+    String? teacherName,
+  ) {
+    if (teacherDocId.isEmpty &&
+        (teacherUsername.isEmpty &&
+            (teacherName == null || teacherName.isEmpty)))
+      return false;
+
+    bool checkString(String s) {
+      if (s.isEmpty) return false;
+      if (teacherDocId.isNotEmpty && s.contains(teacherDocId)) return true;
+      if (teacherUsername.isNotEmpty) {
+        final low = s.toLowerCase();
+        if (low == teacherUsername.toLowerCase() ||
+            low.contains(teacherUsername.toLowerCase()))
+          return true;
+      }
+      if (teacherName != null &&
+          teacherName.isNotEmpty &&
+          _looseNameMatch(s, teacherName))
+        return true;
+      return false;
+    }
+
+    bool searchValue(dynamic v) {
+      if (v == null) return false;
+      if (v is DocumentReference) {
+        if (teacherDocId.isNotEmpty && v.id == teacherDocId) return true;
+        if (teacherDocId.isNotEmpty && v.path.contains(teacherDocId))
+          return true;
+        return false;
+      }
+      if (v is String) return checkString(v);
+      if (v is Map) {
+        for (final e in v.values) {
+          if (searchValue(e)) return true;
+        }
+        return false;
+      }
+      if (v is Iterable) {
+        for (final e in v) {
+          if (searchValue(e)) return true;
+        }
+        return false;
+      }
+      // Fallback to string compare
+      return checkString(v.toString());
+    }
+
+    // common candidate keys at top-level
+    final candidates = <dynamic>[
+      qd['created_by'],
+      qd['creator'],
+      qd['created_by_username'],
+      qd['teacher'],
+      qd['lecturer'],
+      qd['owner'],
+      qd['username'],
+    ];
+    for (final cand in candidates) {
+      if (searchValue(cand)) return true;
+    }
+
+    // lastly, recursively search the whole document for any matching string
+    return searchValue(qd);
   }
 
   // --------------------------
@@ -59,11 +604,14 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       departments = [];
       classesForDept = [];
       coursesForClass = [];
+      teachersForDept = [];
       _deptNameToId.clear();
       _classNameToId.clear();
+      _teacherNameToId.clear();
       selectedDepartment = null;
       selectedClass = null;
       selectedCourse = null;
+      selectedTeacher = null;
       classSectionStudents = {};
     });
 
@@ -302,6 +850,145 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     } finally {
       setState(() {
         loadingClasses = false;
+      });
+    }
+  }
+
+  // --------------------------
+  // NEW: load teachers for the selected department
+  // --------------------------
+  Future<void> _loadTeachersForDepartment(String dept) async {
+    setState(() {
+      loadingTeachers = true;
+      teachersForDept = [];
+      selectedTeacher = null;
+      _teacherNameToId.clear();
+    });
+
+    try {
+      final teacherSet = <String>{};
+      // fetch all teachers and filter client-side similar to classes loader
+      final snap = await _firestore.collection('teachers').get();
+
+      // Try to resolve department id if we have mapping
+      String selectedDeptId = _deptNameToId[dept] ?? '';
+
+      if (selectedDeptId.isEmpty) {
+        try {
+          final dqs = await _firestore
+              .collection('departments')
+              .where('status', isEqualTo: true)
+              .get();
+          for (final dd in dqs.docs) {
+            final data = dd.data();
+            final nameCandidates = [
+              data['department_name'],
+              data['name'],
+              data['department_code'],
+              data['department'],
+            ].where((v) => v != null).map((v) => v.toString()).toList();
+            if (nameCandidates.any((n) => _looseNameMatch(n, dept))) {
+              selectedDeptId = dd.id;
+              _deptNameToId.putIfAbsent(dept, () => selectedDeptId);
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+
+        // teachers may include a department reference/field; support multiple possibilities
+        final deptCandidate =
+            data['department_ref'] ??
+            data['department_id'] ??
+            data['department'] ??
+            data['dept'];
+        String deptIdOnTeacher = '';
+        String deptStrOnTeacher = '';
+        if (deptCandidate != null) {
+          if (deptCandidate is DocumentReference) {
+            deptIdOnTeacher = deptCandidate.id;
+            deptStrOnTeacher = deptCandidate.path;
+          } else if (deptCandidate is String) {
+            deptStrOnTeacher = deptCandidate;
+            deptIdOnTeacher = deptStrOnTeacher.contains('/')
+                ? deptStrOnTeacher
+                      .split('/')
+                      .where((p) => p.isNotEmpty)
+                      .toList()
+                      .last
+                : deptStrOnTeacher;
+          } else {
+            deptStrOnTeacher = deptCandidate.toString();
+          }
+        }
+
+        // Teachers might not have department but have faculty_id as in your sample.
+        // We'll consider a teacher belonging to the department if:
+        //  - dept id matches, OR
+        //  - loose name match with department field string, OR
+        //  - teacher has no department but the selected department's faculty matches teacher.faculty_id (best-effort)
+        bool belongsToSelected = false;
+        if (selectedDeptId.isNotEmpty && deptIdOnTeacher == selectedDeptId) {
+          belongsToSelected = true;
+        } else if (_looseNameMatch(deptStrOnTeacher, dept)) {
+          belongsToSelected = true;
+        } else {
+          // try matching by faculty if available on teacher
+          final facCandidate =
+              data['faculty_id'] ?? data['faculty'] ?? data['faculty_ref'];
+          String facIdOnTeacher = '';
+          if (facCandidate != null) {
+            if (facCandidate is DocumentReference) {
+              facIdOnTeacher = facCandidate.id;
+            } else if (facCandidate is String) {
+              final s = facCandidate;
+              facIdOnTeacher = s.contains('/')
+                  ? s.split('/').where((p) => p.isNotEmpty).toList().last
+                  : s;
+            } else {
+              facIdOnTeacher = facCandidate.toString();
+            }
+          }
+          if (!belongsToSelected &&
+              facIdOnTeacher.isNotEmpty &&
+              Session.facultyRef != null) {
+            if (facIdOnTeacher == Session.facultyRef!.id) {
+              // if dept is in the same faculty, include teacher as possible match (best-effort)
+              belongsToSelected = true;
+            }
+          }
+        }
+
+        if (!belongsToSelected) continue;
+
+        final teacherName =
+            (data['teacher_name'] ??
+                    data['name'] ??
+                    data['fullname'] ??
+                    data['fullName'] ??
+                    data['username'])
+                .toString()
+                .trim();
+        if (teacherName.isNotEmpty) {
+          teacherSet.add(teacherName);
+          _teacherNameToId.putIfAbsent(teacherName, () => doc.id);
+        }
+      }
+
+      setState(() {
+        teachersForDept = teacherSet.toList()..sort();
+      });
+    } catch (e) {
+      debugPrint('Failed to load teachers: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load teachers: $e')));
+    } finally {
+      setState(() {
+        loadingTeachers = false;
       });
     }
   }
@@ -665,136 +1352,351 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-              Text(
-                'Attendance',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(
-                    context,
-                  ).extension<SuperAdminColors>()?.textPrimary,
+        // Wrap the whole page in a Scrollbar + SingleChildScrollView so the user can scroll the entire page
+        child: Scrollbar(
+          controller: _pageScrollController,
+          thumbVisibility: true,
+          child: SingleChildScrollView(
+            controller: _pageScrollController,
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                Text(
+                  'Attendance',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(
+                      context,
+                    ).extension<SuperAdminColors>()?.textPrimary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              SearchAddBar(
-                hintText: 'Search Attendance...',
-                buttonText: '',
-                onAddPressed: () {},
-                onChanged: (value) => setState(() => searchText = value),
-              ),
-              const SizedBox(height: 10),
-              _FiltersRow(
-                departments: departments,
-                classes: classes,
-                courses: courses,
-                selectedDepartment: selectedDepartment,
-                selectedClass: selectedClass,
-                selectedCourse: selectedCourse,
-                loadingDepartments: loadingDepartments,
-                loadingClasses: loadingClasses,
-                loadingCourses: loadingSubjects,
-                onChanged:
-                    ({String? department, String? className, String? course}) {
-                      setState(() {
-                        if (department != null &&
-                            department != selectedDepartment) {
-                          selectedDepartment = department;
-                          selectedClass = null;
-                          selectedCourse = null;
-                          classesForDept = [];
-                          coursesForClass = [];
-                          classSectionStudents = {};
-                          _loadClassesForDepartment(department);
-                        }
-                        if (className != null && className != selectedClass) {
-                          selectedClass = className;
-                          selectedCourse = null;
-                          coursesForClass = [];
-                          classSectionStudents = {};
-                          _loadSubjectsForClass(className);
-                        }
-                        if (course != null && course != selectedCourse) {
-                          selectedCourse = course;
-                          classSectionStudents = {};
-                          if (selectedDepartment != null &&
-                              selectedClass != null &&
-                              selectedCourse != null) {
-                            _fetchStudentsForSelection();
+                const SizedBox(height: 16),
+                SearchAddBar(
+                  hintText: 'Search Attendance...',
+                  buttonText: '',
+                  onAddPressed: () {},
+                  onChanged: (value) => setState(() => searchText = value),
+                ),
+                const SizedBox(height: 10),
+                _FiltersRow(
+                  departments: departments,
+                  classes: classes,
+                  courses: courses,
+                  teachers: teachersForDept,
+                  selectedDepartment: selectedDepartment,
+                  selectedClass: selectedClass,
+                  selectedCourse: selectedCourse,
+                  selectedTeacher: selectedTeacher,
+                  loadingDepartments: loadingDepartments,
+                  loadingClasses: loadingClasses,
+                  loadingCourses: loadingSubjects,
+                  loadingTeachers: loadingTeachers,
+                  onChanged:
+                      ({
+                        String? department,
+                        String? className,
+                        String? course,
+                        String? lecturer,
+                      }) {
+                        setState(() {
+                          if (department != null &&
+                              department != selectedDepartment) {
+                            selectedDepartment = department;
+                            selectedClass = null;
+                            selectedCourse = null;
+                            selectedTeacher = null;
+                            classesForDept = [];
+                            coursesForClass = [];
+                            teachersForDept = [];
+                            classSectionStudents = {};
+                            percentageRows = [];
+                            _loadClassesForDepartment(department);
+                            _loadTeachersForDepartment(department);
                           }
-                        }
-                      });
-                    },
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: showTable
-                    ? _AttendanceTable(
-                        department: selectedDepartment ?? '',
-                        className: selectedClass ?? '',
-                        course: selectedCourse ?? '',
-                        date: selectedDate,
-                        searchText: searchText,
-                        classSectionStudents: classSectionStudents,
-                        onStudentSelected: (studentId) {
-                          final sectionsMap =
-                              classSectionStudents[selectedClass] ?? {};
-                          String? foundSection;
-                          Map<String, dynamic>? student;
-                          for (final entry in sectionsMap.entries) {
-                            final s = entry.value.firstWhere(
-                              (it) => it['username'] == studentId,
-                              orElse: () => <String, dynamic>{},
-                            );
-                            if (s.isNotEmpty) {
-                              foundSection = entry.key;
-                              student = s;
-                              break;
+                          if (className != null && className != selectedClass) {
+                            selectedClass = className;
+                            selectedCourse = null;
+                            coursesForClass = [];
+                            classSectionStudents = {};
+                            percentageRows = [];
+                            _loadSubjectsForClass(className);
+                          }
+                          if (course != null && course != selectedCourse) {
+                            selectedCourse = course;
+                            classSectionStudents = {};
+                            if (selectedDepartment != null &&
+                                selectedClass != null &&
+                                selectedCourse != null) {
+                              _fetchStudentsForSelection();
                             }
                           }
-                          if (student == null || student.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Student data not available.'),
-                              ),
-                            );
-                            return;
+                          if (lecturer != null && lecturer != selectedTeacher) {
+                            selectedTeacher = lecturer;
+                            // Clear class/course selections when a teacher is chosen
+                            selectedClass = null;
+                            selectedCourse = null;
+                            classesForDept = [];
+                            coursesForClass = [];
+                            classSectionStudents = {};
+                            percentageRows = [];
                           }
+                        });
+                      },
+                  onPercentagePressed: selectedDepartment == null
+                      ? null
+                      : () {
                           setState(() {
-                            selectedUsername = studentId;
-                            selectedStudentName = student!['name']?.toString();
-                            selectedStudentClass =
-                                '$selectedClass${(foundSection != null && foundSection != "None") ? foundSection : ""}';
+                            // Clear selected class and course boxes when Percentage is requested
+                            // but preserve selectedTeacher so department+teacher percentages work.
+                            selectedClass = null;
+                            selectedCourse = null;
+                            // Clear dependent UI lists/state to reflect cleared selections
+                            coursesForClass = [];
+                            classSectionStudents = {};
+                            percentageRows = [];
                           });
+                          _fetchPercentageForDepartment();
                         },
-                      )
-                    : showStudentDetails
-                    ? StudentDetailsPanel(
-                        studentId: selectedUsername!,
-                        studentName: selectedStudentName,
-                        studentClass: selectedStudentClass,
-                        selectedDate: selectedDate,
-                        attendanceRecords: _getRecordsForSelectedStudent(),
-                        searchText: searchText,
-                        onBack: () {
-                          setState(() {
-                            selectedUsername = null;
-                            selectedStudentName = null;
-                            selectedStudentClass = null;
-                          });
+                  onRefreshPressed: () {
+                    setState(() {
+                      selectedDepartment = null;
+                      selectedClass = null;
+                      selectedCourse = null;
+                      selectedTeacher = null;
+                      classesForDept = [];
+                      coursesForClass = [];
+                      teachersForDept = [];
+                      classSectionStudents = {};
+                      percentageRows = [];
+                    });
+                    _loadDepartments();
+                  },
+                ),
+                const SizedBox(height: 12),
+                // Inline percentage results
+                if (loadingPercentage)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8.0),
+                    child: LinearProgressIndicator(),
+                  ),
+
+                // ===== UPDATED: make percentage table span the available page width =====
+                if (!loadingPercentage && percentageRows.isNotEmpty)
+                  Card(
+                    elevation: 1,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Choose column spacing responsively for narrow screens
+                          final tableWidth = constraints.maxWidth;
+                          final int colSpacingNarrow = tableWidth < 480
+                              ? 10
+                              : 16;
+                          final int colSpacingWide = tableWidth < 480 ? 10 : 24;
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: selectedTeacher == null
+                                ? DataTable(
+                                    columnSpacing: colSpacingNarrow.toDouble(),
+                                    columns: const [
+                                      DataColumn(label: Text('No')),
+                                      DataColumn(label: Text('Class name')),
+                                      DataColumn(label: Text('Total QR Gen')),
+                                      DataColumn(label: Text('Total Attended')),
+                                      DataColumn(label: Text('Total Absence')),
+                                      DataColumn(label: Text('Percentage')),
+                                    ],
+                                    rows: percentageRows.map((r) {
+                                      final absencePct =
+                                          r['absencePct'] as int? ?? 0;
+                                      final pctText = '${r['pct'] ?? 0}%';
+                                      final pctColor = absencePct < 25
+                                          ? Colors.green
+                                          : Colors.red;
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(Text(r['no'].toString())),
+                                          DataCell(Text(r['class'].toString())),
+                                          DataCell(
+                                            Text(
+                                              r['totalGenerated']?.toString() ??
+                                                  '0',
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              r['attended']?.toString() ?? '0',
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              r['absence']?.toString() ?? '0',
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              pctText,
+                                              style: TextStyle(color: pctColor),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                                  )
+                                : DataTable(
+                                    columnSpacing: colSpacingWide.toDouble(),
+                                    columns: const [
+                                      DataColumn(label: Text('No')),
+                                      DataColumn(label: Text('Class name')),
+                                      DataColumn(label: Text('Total Needed')),
+                                      DataColumn(
+                                        label: Text('Total Generated'),
+                                      ),
+                                      DataColumn(
+                                        label: Text('Total Not Generated'),
+                                      ),
+                                      DataColumn(label: Text('Percentage')),
+                                    ],
+                                    rows: percentageRows.map((r) {
+                                      final absencePct =
+                                          r['absencePct'] as int? ?? 0;
+                                      final pctText = '${r['pct'] ?? 0}%';
+                                      final pctColor = absencePct < 25
+                                          ? Colors.green
+                                          : Colors.red;
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(Text(r['no'].toString())),
+                                          DataCell(Text(r['class'].toString())),
+                                          DataCell(
+                                            Text(
+                                              r['totalNeeded']?.toString() ??
+                                                  '0',
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              r['totalGenerated']?.toString() ??
+                                                  '0',
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              r['totalNotGenerated']
+                                                      ?.toString() ??
+                                                  '0',
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              pctText,
+                                              style: TextStyle(color: pctColor),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
+                                  ),
+                          );
                         },
-                        onEdit: _updateAttendanceForStudent,
-                      )
-                    : Center(
-                        child: Text("Select all filters to view attendance"),
                       ),
-              ),
-            ],
+                    ),
+                  ),
+
+                const SizedBox(height: 16),
+
+                // Table / details area: make this a fixed-height box so it renders nicely inside the SingleChildScrollView.
+                // We pick a reasonable height based on viewport; this keeps the page scrollable while the table itself can still
+                // scroll horizontally if needed.
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Calculate a height for the content area roughly equal to 55% of the remaining viewport height.
+                    final viewportHeight = MediaQuery.of(context).size.height;
+                    final contentHeight = (viewportHeight * 0.55).clamp(
+                      300.0,
+                      900.0,
+                    );
+
+                    return SizedBox(
+                      height: contentHeight,
+                      child: showTable
+                          ? _AttendanceTable(
+                              department: selectedDepartment ?? '',
+                              className: selectedClass ?? '',
+                              course: selectedCourse ?? '',
+                              date: selectedDate,
+                              searchText: searchText,
+                              classSectionStudents: classSectionStudents,
+                              onStudentSelected: (studentId) {
+                                final sectionsMap =
+                                    classSectionStudents[selectedClass] ?? {};
+                                String? foundSection;
+                                Map<String, dynamic>? student;
+                                for (final entry in sectionsMap.entries) {
+                                  final s = entry.value.firstWhere(
+                                    (it) => it['username'] == studentId,
+                                    orElse: () => <String, dynamic>{},
+                                  );
+                                  if (s.isNotEmpty) {
+                                    foundSection = entry.key;
+                                    student = s;
+                                    break;
+                                  }
+                                }
+                                if (student == null || student.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Student data not available.',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                setState(() {
+                                  selectedUsername = studentId;
+                                  selectedStudentName = student!['name']
+                                      ?.toString();
+                                  selectedStudentClass =
+                                      '$selectedClass${(foundSection != null && foundSection != "None") ? foundSection : ""}';
+                                });
+                              },
+                            )
+                          : showStudentDetails
+                          ? StudentDetailsPanel(
+                              studentId: selectedUsername!,
+                              studentName: selectedStudentName,
+                              studentClass: selectedStudentClass,
+                              selectedDate: selectedDate,
+                              attendanceRecords:
+                                  _getRecordsForSelectedStudent(),
+                              searchText: searchText,
+                              onBack: () {
+                                setState(() {
+                                  selectedUsername = null;
+                                  selectedStudentName = null;
+                                  selectedStudentClass = null;
+                                });
+                              },
+                              onEdit: _updateAttendanceForStudent,
+                            )
+                          : Center(
+                              child: percentageRows.isNotEmpty
+                                  ? const SizedBox.shrink()
+                                  : const Text(
+                                      "Select all filters to view attendance",
+                                    ),
+                            ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -819,24 +1721,41 @@ class _FiltersRow extends StatelessWidget {
   final List<String> departments;
   final List<String> classes;
   final List<String> courses;
-  final String? selectedDepartment, selectedClass, selectedCourse;
+  final List<String> teachers;
+  final String? selectedDepartment,
+      selectedClass,
+      selectedCourse,
+      selectedTeacher;
   final bool loadingDepartments;
   final bool loadingClasses;
   final bool loadingCourses;
-  final Function({String? department, String? className, String? course})
+  final bool loadingTeachers;
+  final Function({
+    String? department,
+    String? className,
+    String? course,
+    String? lecturer,
+  })
   onChanged;
+  final VoidCallback? onRefreshPressed;
+  final VoidCallback? onPercentagePressed;
 
   const _FiltersRow({
     required this.departments,
     required this.classes,
     required this.courses,
+    required this.teachers,
     this.selectedDepartment,
     this.selectedClass,
     this.selectedCourse,
+    this.selectedTeacher,
     required this.loadingDepartments,
     required this.loadingClasses,
     required this.loadingCourses,
+    required this.loadingTeachers,
     required this.onChanged,
+    this.onPercentagePressed,
+    this.onRefreshPressed,
   });
 
   @override
@@ -870,6 +1789,48 @@ class _FiltersRow extends StatelessWidget {
           // Enable only after a class is selected
           isEnabled: selectedClass != null,
           onChanged: (val) => onChanged(course: val),
+        ),
+        // NEW: Lecturer dropdown
+        _DropdownFilter(
+          hint: "Lecturer",
+          value: selectedTeacher,
+          items: teachers,
+          isLoading: loadingTeachers,
+          isEnabled: selectedDepartment != null,
+          onChanged: (val) => onChanged(lecturer: val),
+        ),
+        // Percentage button + Refresh
+        Padding(
+          padding: const EdgeInsets.only(left: 4.0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton(
+                onPressed:
+                    (selectedDepartment == null || onPercentagePressed == null)
+                    ? null
+                    : onPercentagePressed,
+                child: const Text('Percentage'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: onRefreshPressed,
+                child: const Text('Refresh'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -1011,12 +1972,13 @@ class _AttendanceTable extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final int tableColSpacing = constraints.maxWidth < 480 ? 8 : 24;
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: ConstrainedBox(
             constraints: BoxConstraints(minWidth: constraints.maxWidth),
             child: DataTable(
-              columnSpacing: 24,
+              columnSpacing: tableColSpacing.toDouble(),
               headingRowHeight: 44,
               dataRowHeight: 40,
               columns: const [

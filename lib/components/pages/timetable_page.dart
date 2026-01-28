@@ -26,8 +26,6 @@ import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
-import 'dart:typed_data';
-import 'package:flutter/services.dart';
 
 import 'create_timetable_dialog.dart';
 import 'create_timetable_cell_edit_dialog.dart';
@@ -98,7 +96,7 @@ class _TimetablePageState extends State<TimetablePage> {
   final CollectionReference timetablesCollection = FirebaseFirestore.instance
       .collection('timetables');
 
-  List<String> get days => ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu","Friday"];
+  List<String> get days => ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"];
 
   @override
   void initState() {
@@ -1142,6 +1140,70 @@ class _TimetablePageState extends State<TimetablePage> {
           periods = newPeriods;
           docSpans = newSpans;
           grid = newGrid;
+        }
+
+        // Before applying new entries, clear any existing cells for the
+        // same course/lecturer that are NOT present in the payload.
+        // This makes deletions (removing a day in the dialog) persist.
+        if (entry.value.isNotEmpty) {
+          // Derive target course and lecturer from the first payload entry.
+          final firstCell = entry.value.first.cellText;
+          final parts = firstCell.split('\n');
+          final targetCourse = parts.isNotEmpty
+              ? parts.first.trim().toLowerCase()
+              : '';
+          final targetLecturer = parts.length > 1
+              ? parts.sublist(1).join(' ').trim().toLowerCase()
+              : '';
+
+          // Build a set of (day,col) positions to KEEP for this course/lecturer.
+          final keepPositions = <String>{};
+          for (final r in entry.value) {
+            int colIndex = -1;
+            if (docSpans.isNotEmpty) {
+              colIndex = docSpans.indexWhere(
+                (s) => s['start'] == r.startMinutes,
+              );
+            }
+            if (colIndex < 0) {
+              final startStr =
+                  '${r.startMinutes ~/ 60}:${(r.startMinutes % 60).toString().padLeft(2, '0')}';
+              colIndex = periods.indexWhere((p) => p.contains(startStr));
+            }
+            if (colIndex >= 0 &&
+                r.dayIndex >= 0 &&
+                r.dayIndex < grid.length &&
+                colIndex < grid[r.dayIndex].length) {
+              keepPositions.add('${r.dayIndex}#$colIndex');
+            }
+          }
+
+          // Clear cells that match the same course (and lecturer, if provided)
+          // but are not in the keep set.
+          for (int r = 0; r < grid.length; r++) {
+            final row = grid[r];
+            for (int c = 0; c < row.length; c++) {
+              final key = '$r#$c';
+              if (keepPositions.contains(key)) continue; // will be set below
+              final cell = row[c].trim();
+              if (cell.isEmpty) continue;
+              if (cell.toLowerCase().contains('break')) continue;
+              final cellParts = cell.split('\n');
+              final course = cellParts.isNotEmpty
+                  ? cellParts.first.trim().toLowerCase()
+                  : '';
+              final lecturer = cellParts.length > 1
+                  ? cellParts.sublist(1).join(' ').trim().toLowerCase()
+                  : '';
+              final courseMatches =
+                  course == targetCourse && targetCourse.isNotEmpty;
+              final lecturerMatches =
+                  targetLecturer.isEmpty || lecturer == targetLecturer;
+              if (courseMatches && lecturerMatches) {
+                row[c] = '';
+              }
+            }
+          }
         }
 
         for (final r in entry.value) {
@@ -2761,25 +2823,6 @@ class _TimetablePageState extends State<TimetablePage> {
       return;
     }
 
-    // Try to load a logo from assets (try common filenames), fall back to null.
-    Uint8List? logoBytes;
-    final List<String> _logoPaths = [
-      'assets/ummadda.jpeg',
-      'assets/ummadda.jpg',
-      'assets/logo.png',
-    ];
-    for (final p in _logoPaths) {
-      try {
-        final bd = await rootBundle.load(p);
-        logoBytes = bd.buffer.asUint8List();
-        break;
-      } catch (_) {
-        logoBytes = null;
-      }
-    }
-
-    final uniName = 'Jamacadda Umadda Soomaliyeed';
-
     final pdf = pw.Document();
     final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
@@ -2826,13 +2869,7 @@ class _TimetablePageState extends State<TimetablePage> {
           ),
         ),
         build: (ctx) => [
-          _pdfHeader(
-            depKey,
-            classKey,
-            dateStr,
-            logoBytes: logoBytes,
-            uniName: uniName,
-          ),
+          _pdfHeader(depKey, classKey, dateStr),
           pw.SizedBox(height: 8),
           if (periods.isEmpty)
             pw.Text(
@@ -2871,58 +2908,18 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  pw.Widget _pdfHeader(
-    String dep,
-    String cls,
-    String dateStr, {
-    Uint8List? logoBytes,
-    String uniName = '',
-  }) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.only(bottom: 8),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: pw.CrossAxisAlignment.center,
-        children: [
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
-              if (logoBytes != null)
-                pw.Container(
-                  width: 48,
-                  height: 48,
-                  child: pw.Image(pw.MemoryImage(logoBytes)),
-                ),
-              if (logoBytes != null) pw.SizedBox(width: 8),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    uniName,
-                    style: pw.TextStyle(
-                      fontSize: 14,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 2),
-                  pw.Text('Class Timetable', style: pw.TextStyle(fontSize: 16)),
-                ],
-              ),
-            ],
-          ),
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
-            children: [
-              pw.Text('Department: $dep   Class: $cls'),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                'Exported: $dateStr',
-                style: pw.TextStyle(color: PdfColors.grey600),
-              ),
-            ],
-          ),
-        ],
-      ),
+  pw.Widget _pdfHeader(String dep, String cls, String dateStr) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'Class Timetable',
+          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Text('Department: $dep   Class: $cls'),
+        pw.Text('Exported: $dateStr'),
+      ],
     );
   }
 

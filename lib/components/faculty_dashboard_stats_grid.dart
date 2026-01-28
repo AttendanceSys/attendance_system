@@ -687,7 +687,8 @@ class _DepartmentsByStudentsChartState
       }
       final snap = await q.get();
 
-      final Map<String, int> deptCounts = {};
+      // Build raw counts from students
+      final Map<String, int> rawCounts = {};
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
@@ -695,57 +696,90 @@ class _DepartmentsByStudentsChartState
             data['department_ref'] ??
             data['departmentRef'] ??
             data['department'];
-        String? deptId;
+        String? key;
         if (raw is DocumentReference) {
-          deptId = raw.id;
+          key = raw.id;
         } else if (raw is String) {
-          deptId = raw;
+          final s = raw;
+          if (s.contains('/')) {
+            final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+            key = parts.isNotEmpty ? parts.last : s;
+          } else {
+            key = s;
+          }
         }
-        if (deptId == null || deptId.trim().isEmpty) continue;
-        deptCounts[deptId] = (deptCounts[deptId] ?? 0) + 1;
+        if (key == null || key.trim().isEmpty) continue;
+        rawCounts[key] = (rawCounts[key] ?? 0) + 1;
       }
 
-      if (deptCounts.isEmpty) return {};
-
+      // Fetch all departments so we can include zero-count ones
       final deptRef = FirebaseFirestore.instance.collection('departments');
+      final deptSnap = await deptRef.get();
       final Map<String, String> names = {};
-      final List<Future<void>> fetches = [];
-      for (final id in deptCounts.keys) {
-        fetches.add(
-          Future<void>(() async {
-            try {
-              final d = await deptRef.doc(id).get();
-              if (d.exists) {
-                final m = d.data() as Map<String, dynamic>?;
-                if (m != null) {
-                  final name =
-                      (m['department_name'] ??
-                              m['departmentName'] ??
-                              m['name'] ??
-                              m['department_code'] ??
-                              m['departmentCode'] ??
-                              m['title'])
-                          ?.toString() ??
-                      id;
-                  names[id] = name;
-                  return;
-                }
-              }
-              names[id] = id;
-            } catch (_) {
-              names[id] = id;
-            }
-          }),
-        );
+      final List<Map<String, dynamic>> deptDocs = [];
+      for (final d in deptSnap.docs) {
+        final m = d.data() as Map<String, dynamic>?;
+        deptDocs.add({'id': d.id, 'data': m ?? {}});
+        final disp =
+            (m?['department_name'] ??
+                    m?['departmentName'] ??
+                    m?['name'] ??
+                    m?['department_code'] ??
+                    m?['departmentCode'] ??
+                    m?['title'])
+                ?.toString() ??
+            d.id;
+        names[d.id] = disp;
       }
-      await Future.wait(fetches);
 
-      final Map<String, int> result = {};
-      final entries = deptCounts.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-      for (final e in entries) {
-        result[names[e.key] ?? e.key] = e.value;
+      // Resolve rawCounts keys to department ids where possible
+      final Map<String, int> countsById = {for (final id in names.keys) id: 0};
+      final Map<String, int> unknowns = {};
+
+      for (final entry in rawCounts.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        String? resolvedId;
+        if (names.containsKey(key)) {
+          resolvedId = key; // key is department id
+        } else {
+          // try match by name (case-insensitive)
+          for (final dd in deptSnap.docs) {
+            final m = dd.data() as Map<String, dynamic>?;
+            final candidate =
+                (m?['department_name'] ??
+                        m?['departmentName'] ??
+                        m?['name'] ??
+                        '')
+                    .toString();
+            if (candidate.isNotEmpty &&
+                candidate.toLowerCase() == key.toLowerCase()) {
+              resolvedId = dd.id;
+              break;
+            }
+          }
+        }
+
+        if (resolvedId != null) {
+          countsById[resolvedId] = (countsById[resolvedId] ?? 0) + value;
+        } else {
+          unknowns[key] = (unknowns[key] ?? 0) + value;
+        }
       }
+
+      // Convert to name -> count and include zeroes
+      final Map<String, int> resultUnsorted = {};
+      for (final id in countsById.keys) {
+        final label = names[id] ?? id;
+        resultUnsorted[label] = countsById[id] ?? 0;
+      }
+      for (final u in unknowns.entries) {
+        resultUnsorted[u.key] = u.value;
+      }
+
+      final entries = resultUnsorted.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      final Map<String, int> result = {for (final e in entries) e.key: e.value};
       return result;
     } catch (e) {
       debugPrint('Failed to fetch department student counts: $e');

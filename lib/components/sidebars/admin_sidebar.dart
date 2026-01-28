@@ -1,5 +1,3 @@
-//admin side bar
-
 import 'package:flutter/material.dart';
 import '../../theme/super_admin_theme.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -83,19 +81,14 @@ class _AdminSidebarState extends State<AdminSidebar> {
           // Profile Section
           CircleAvatar(
             radius: collapsed ? 22 : 42,
-
             backgroundColor: const Color(0xFF70C2FF),
-
             child: Text(
               (displayName != null && displayName!.isNotEmpty)
                   ? displayName![0].toUpperCase()
                   : 'U',
-
               style: TextStyle(
                 color: Colors.white,
-
                 fontSize: collapsed ? 18 : 28,
-
                 fontWeight: FontWeight.bold,
               ),
             ),

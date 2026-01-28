@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../services/location_service.dart';
+import '../../services/anomaly_service.dart';
+import '../../config.dart';
 import '../../services/session.dart';
 // replaced old success popup with reusable attendance alert widget
 import '../../components/popup/attendance_alert.dart';
@@ -353,6 +356,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
     String code,
     QueryDocumentSnapshot sessionDoc,
     Map<String, dynamic> sessionData,
+    dynamic position,
   ) async {
     final firestore = FirebaseFirestore.instance;
     final username = Session.username;
@@ -408,6 +412,13 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       'scannedAt': FieldValue.serverTimestamp(),
       'code': code,
       'session_id': sessionDoc.id,
+      'location': position == null
+          ? null
+          : {
+              'lat': position.latitude,
+              'lng': position.longitude,
+              'accuracy': position.accuracy,
+            },
     };
 
     await firestore.collection('attendance_records').add(attendanceData);
@@ -535,7 +546,36 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
         return;
       }
 
-      await _writeAttendanceForSession(code, sessionDoc, sessionData);
+      // Obtain current GPS position and evaluate anomalies
+      final pos = await LocationService.getCurrentPosition();
+      final anomaly = await AnomalyService.evaluate(
+        {...sessionData, 'id': sessionDoc.id},
+        username,
+        pos,
+      );
+
+      if (anomaly.block) {
+        debugPrint('Blocking attendance due to anomaly: ${anomaly.reason}');
+        if (mounted) {
+          await AttendanceAlert.showLocationBlocked(
+            context,
+            details: 'Attendance blocked: ${anomaly.reason}',
+          );
+        }
+        return;
+      }
+
+      if (anomaly.flag) {
+        // Allow but show flagged notice
+        if (mounted) {
+          await AttendanceAlert.showAnomalyFlagged(
+            context,
+            details: 'Suspicious scan: ${anomaly.reason}',
+          );
+        }
+      }
+
+      await _writeAttendanceForSession(code, sessionDoc, sessionData, pos);
     } catch (e, st) {
       debugPrint('Error handling attendance: $e\n$st');
       if (mounted) {

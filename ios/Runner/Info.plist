@@ -26,6 +26,12 @@
 	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
+
+	<!-- Location usage descriptions required for geolocation -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Allow access to your location to verify attendance within the classroom area.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Location access is used to verify attendance and detect suspicious scans.</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UISupportedInterfaceOrientations</key>
