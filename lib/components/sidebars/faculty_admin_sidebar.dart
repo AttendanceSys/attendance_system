@@ -168,13 +168,7 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
                 ),
 
                 // "Anomalies" item at index 8 (Faculty)
-                _SidebarItem(
-                  icon: Icons.report_gmailerrorred_outlined,
-                  title: "Anomalies",
-                  isSelected: selectedIndex == 8,
-                  onTap: () => _emit(8),
-                  collapsed: collapsed,
-                ),
+                
               ],
             ),
           ),

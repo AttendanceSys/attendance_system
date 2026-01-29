@@ -153,7 +153,7 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
     TeachersPage(),
     AdminsPage(),
     UserHandlingPage(),
-    const AdminAnomaliesPage(),
+   
   ];
 
   // --- This method now shows the confirmation popup before logging out ---

@@ -49,7 +49,7 @@ class AnomalyService {
         return AnomalyResult(block: true, flag: false, reason: 'no_gps');
       }
 
-      final accuracy = (position.accuracy ?? 1000.0) as double;
+      final accuracy = _readAccuracy(position, fallback: 1000.0);
       if (accuracy > kGpsAccuracyThresholdMeters) {
         // Suspicious but allow if within campus bounds? flag it
         // We'll continue to check off-campus, but set flag
@@ -95,6 +95,7 @@ class AnomalyService {
       double centerLat = kDefaultCampusLatitude;
       double centerLng = kDefaultCampusLongitude;
       double radius = kDefaultCampusRadiusMeters;
+      double captureAccuracyPadding = 0.0;
 
       // If sessionData contains an explicit allowed_location, prefer it
       if (sessionData.containsKey('allowed_location')) {
@@ -103,27 +104,46 @@ class AnomalyService {
           final aLat = double.tryParse(al['lat']?.toString() ?? '');
           final aLng = double.tryParse(al['lng']?.toString() ?? '');
           final aRad = double.tryParse(al['radius']?.toString() ?? '');
+          final aAcc = double.tryParse(al['accuracy']?.toString() ?? '');
           if (aLat != null && aLng != null) {
             centerLat = aLat;
             centerLng = aLng;
             if (aRad != null) radius = aRad;
+            if (aAcc != null && aAcc > 0) {
+              captureAccuracyPadding = aAcc;
+            }
           }
         }
       }
 
+      if (radius < 0) radius = 0;
+
       final lat = (position.latitude ?? 0.0) as double;
       final lng = (position.longitude ?? 0.0) as double;
+      final scanAccuracy = _readAccuracy(position);
+
+      final effectiveRadius = radius + captureAccuracyPadding + scanAccuracy;
 
       final within = LocationService.isWithinRadius(
         lat,
         lng,
         centerLat,
         centerLng,
-        radius,
+        effectiveRadius,
       );
       return !within;
     } catch (e) {
       return false;
     }
+  }
+
+  static double _readAccuracy(dynamic source, {double fallback = 0.0}) {
+    try {
+      final val = source.accuracy;
+      if (val is num && val.isFinite) {
+        return val.toDouble();
+      }
+    } catch (_) {}
+    return fallback;
   }
 }
