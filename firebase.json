@@ -1,0 +1,22 @@
+{
+  "functions": {
+    "source": "lib/cloud_functions",
+    "runtime": "nodejs16",
+    "predeploy": [
+      "npm --prefix \"$RESOURCE_DIR\" install"
+    ]
+  },
+  "firestore": {
+    "indexes": [
+      {
+        "collectionGroup": "attendance_records",
+        "queryScope": "COLLECTION",
+        "fields": [
+          { "fieldPath": "subject", "order": "ASCENDING" },
+          { "fieldPath": "className", "order": "ASCENDING" },
+          { "fieldPath": "scannedAt", "order": "ASCENDING" }
+        ]
+      }
+    ]
+  }
+}
