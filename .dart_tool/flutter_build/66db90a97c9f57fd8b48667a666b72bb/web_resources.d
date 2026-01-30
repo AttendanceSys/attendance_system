@@ -1,0 +1,1 @@
+:  /home/qaali/attendance_system/web/index.html

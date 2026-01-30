@@ -12,10 +12,33 @@
         "collectionGroup": "attendance_records",
         "queryScope": "COLLECTION",
         "fields": [
-          { "fieldPath": "subject", "order": "ASCENDING" },
-          { "fieldPath": "className", "order": "ASCENDING" },
-          { "fieldPath": "scannedAt", "order": "ASCENDING" }
+          {
+            "fieldPath": "subject",
+            "order": "ASCENDING"
+          },
+          {
+            "fieldPath": "className",
+            "order": "ASCENDING"
+          },
+          {
+            "fieldPath": "scannedAt",
+            "order": "ASCENDING"
+          }
         ]
+      }
+    ]
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
       }
     ]
   }
