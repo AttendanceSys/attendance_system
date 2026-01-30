@@ -249,7 +249,11 @@ class _LoginScreenState extends State<LoginScreen> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeController.themeMode,
       builder: (context, themeMode, _) {
-        final isDark = themeMode == ThemeMode.dark;
+        final systemDark =
+            MediaQuery.of(context).platformBrightness == Brightness.dark;
+        final isDark =
+            themeMode == ThemeMode.dark ||
+            (themeMode == ThemeMode.system && systemDark);
         return Scaffold(
           body: Stack(
             children: [
@@ -279,42 +283,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       : _buildWebForm(context),
                 ),
               ),
-              Positioned(
-                top: isMobile ? 32 : 48,
-                right: isMobile ? 32 : 48,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(24),
-                    onTap: () {
-                      ThemeController.themeMode.value = isDark
-                          ? ThemeMode.light
-                          : ThemeMode.dark;
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.black26 : Colors.white70,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        isDark
-                            ? Icons.wb_sunny_outlined
-                            : Icons.nightlight_round,
-                        color: isDark ? Colors.yellow[700] : Colors.indigo,
-                        size: 28,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         );
@@ -324,7 +292,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildMobileForm(BuildContext context) {
     final themeMode = ThemeController.themeMode.value;
-    final isDark = themeMode == ThemeMode.dark;
+    final systemDark =
+        MediaQuery.of(context).platformBrightness == Brightness.dark;
+    final isDark =
+        themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system && systemDark);
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
       child: Center(
@@ -431,7 +403,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildWebForm(BuildContext context) {
     final themeMode = ThemeController.themeMode.value;
-    final isDark = themeMode == ThemeMode.dark;
+    final systemDark =
+        MediaQuery.of(context).platformBrightness == Brightness.dark;
+    final isDark =
+        themeMode == ThemeMode.dark ||
+        (themeMode == ThemeMode.system && systemDark);
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),

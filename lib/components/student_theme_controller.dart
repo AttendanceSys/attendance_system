@@ -6,36 +6,81 @@ class StudentThemeController extends ChangeNotifier {
   static final StudentThemeController instance =
       StudentThemeController._internal();
 
-  bool _isDarkMode = false;
+  ThemeMode _mode = ThemeMode.system;
   bool _themeLoaded = false;
 
   StudentThemeController._internal() {
     _loadTheme();
+    final dispatcher = WidgetsBinding.instance.platformDispatcher;
+    final previous = dispatcher.onPlatformBrightnessChanged;
+    dispatcher.onPlatformBrightnessChanged = () {
+      if (previous != null) previous();
+      if (_mode == ThemeMode.system) notifyListeners();
+    };
   }
 
   static const String _themeKey = 'student_theme_dark';
+  static const String _themeModeKey = 'student_theme_mode';
 
-  bool get isDarkMode => _isDarkMode;
+  ThemeMode get mode => _mode;
   bool get isLoaded => _themeLoaded;
 
   /// Returns the current theme brightness (Brightness.dark or Brightness.light)
-  Brightness get brightness => _isDarkMode ? Brightness.dark : Brightness.light;
+  Brightness get brightness {
+    if (_mode == ThemeMode.system) {
+      return WidgetsBinding
+          .instance.platformDispatcher.platformBrightness;
+    }
+    return _mode == ThemeMode.dark ? Brightness.dark : Brightness.light;
+  }
+
+  bool get isDarkMode => brightness == Brightness.dark;
 
   /// Returns a helper object to access theme colors by brightness
   StudentThemeProxy get theme => StudentThemeProxy(brightness);
 
   Future<void> _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
-    _isDarkMode = prefs.getBool(_themeKey) ?? false;
+    if (prefs.containsKey(_themeModeKey)) {
+      final value = prefs.getString(_themeModeKey);
+      _mode = _parseMode(value) ?? ThemeMode.system;
+    } else if (prefs.containsKey(_themeKey)) {
+      final legacyDark = prefs.getBool(_themeKey) ?? false;
+      _mode = legacyDark ? ThemeMode.dark : ThemeMode.light;
+    } else {
+      _mode = ThemeMode.system;
+    }
     _themeLoaded = true;
     notifyListeners();
   }
 
   Future<void> setDarkMode(bool value) async {
-    _isDarkMode = value;
+    _mode = value ? ThemeMode.dark : ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_themeKey, value);
+    await prefs.setString(
+      _themeModeKey,
+      _mode == ThemeMode.dark ? 'dark' : 'light',
+    );
     notifyListeners();
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _mode = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_themeModeKey, _mode.name);
+    notifyListeners();
+  }
+
+  ThemeMode? _parseMode(String? value) {
+    switch (value) {
+      case 'system':
+        return ThemeMode.system;
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+    }
+    return null;
   }
 }
 

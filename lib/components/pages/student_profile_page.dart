@@ -250,6 +250,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
       animation: StudentThemeController.instance,
       builder: (context, _) {
         final darkMode = StudentThemeController.instance.isDarkMode;
+        final themeMode = StudentThemeController.instance.mode;
         final Color bgColor = darkMode
             ? const Color(0xFF1F2937)
             : const Color(0xFFF7F8FA);
@@ -284,15 +285,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                 style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
               ),
               actions: [
-                IconButton(
-                  onPressed: () {
-                    StudentThemeController.instance.setDarkMode(!darkMode);
-                  },
-                  icon: Icon(
-                    darkMode ? Icons.dark_mode : Icons.nightlight_round,
-                    color: accentColor,
-                  ),
-                ),
                 IconButton(
                   onPressed: _logout,
                   icon: Icon(Icons.logout_rounded, color: accentColor),
@@ -422,6 +414,20 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             cardColor: cardColor,
                             borderColor: borderColor,
                           ),
+                          _appearanceCard(
+                            darkMode: darkMode,
+                            textColor: textColor,
+                            subTextColor: subTextColor,
+                            accentColor: accentColor,
+                            cardColor: cardColor,
+                            borderColor: borderColor,
+                            themeMode: themeMode,
+                            onChanged: (mode) {
+                              StudentThemeController.instance.setThemeMode(
+                                mode,
+                              );
+                            },
+                          ),
                           const SizedBox(height: 8),
                           ElevatedButton.icon(
                             onPressed: _showChangePasswordDialog,
@@ -517,6 +523,97 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _appearanceCard({
+    required bool darkMode,
+    required Color textColor,
+    required Color subTextColor,
+    required Color accentColor,
+    required Color cardColor,
+    required Color borderColor,
+    required ThemeMode themeMode,
+    required ValueChanged<ThemeMode> onChanged,
+  }) {
+    final options = const [
+      {'label': 'Device', 'mode': ThemeMode.system},
+      {'label': 'Light', 'mode': ThemeMode.light},
+      {'label': 'Dark', 'mode': ThemeMode.dark},
+    ];
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.palette_outlined, color: accentColor, size: 20),
+              const SizedBox(width: 12),
+              Text(
+                'Appearance',
+                style: TextStyle(fontSize: 13, color: subTextColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: darkMode ? const Color(0xFF1F2335) : const Color(0xFFF1F3F7),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            child: Row(
+              children: options.map((o) {
+                final mode = o['mode'] as ThemeMode;
+                final selected = mode == themeMode;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => onChanged(mode),
+                    behavior: HitTestBehavior.opaque,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOut,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: selected ? accentColor : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: selected
+                            ? [
+                                BoxShadow(
+                                  color: accentColor.withOpacity(0.28),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ]
+                            : const [],
+                      ),
+                      child: Text(
+                        o['label'] as String,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? Colors.white
+                              : (darkMode ? Colors.white70 : Colors.black87),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(growable: false),
             ),
           ),
         ],
