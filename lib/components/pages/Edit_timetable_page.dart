@@ -22,7 +22,8 @@ class TimetableCellEditDialog extends StatefulWidget {
   });
 
   @override
-  State<TimetableCellEditDialog> createState() => _TimetableCellEditDialogState();
+  State<TimetableCellEditDialog> createState() =>
+      _TimetableCellEditDialogState();
 }
 
 class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
@@ -41,12 +42,15 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
     super.initState();
 
     // Course initial
-    _course = (widget.initialCourse != null && widget.initialCourse!.trim().isNotEmpty)
+    _course =
+        (widget.initialCourse != null &&
+            widget.initialCourse!.trim().isNotEmpty)
         ? widget.initialCourse!.trim()
         : null;
 
     // Lecturer initial: try to match existing lecturer values case-insensitively.
-    if (widget.initialLecturer != null && widget.initialLecturer!.trim().isNotEmpty) {
+    if (widget.initialLecturer != null &&
+        widget.initialLecturer!.trim().isNotEmpty) {
       final initLect = widget.initialLecturer!.trim();
       final matched = widget.lecturers.firstWhere(
         (e) => e.toLowerCase() == initLect.toLowerCase(),
@@ -77,8 +81,9 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   }
 
   String get _currentCourse => (_course ?? '').trim();
-  String get _currentLecturer =>
-      _useCustomLecturer ? _customLecturerCtrl.text.trim() : (_lecturer ?? '').trim();
+  String get _currentLecturer => _useCustomLecturer
+      ? _customLecturerCtrl.text.trim()
+      : (_lecturer ?? '').trim();
 
   bool get _hasChanges =>
       _currentCourse != _initialCourse ||
@@ -98,11 +103,16 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
         title: Text(title),
         content: Text(content),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(cancelText)),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(cancelText),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: destructive ? Colors.red : Theme.of(context).colorScheme.primary,
+              backgroundColor: destructive
+                  ? Colors.red
+                  : Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
             ),
             child: Text(confirmText),
@@ -155,7 +165,8 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       // Treat as clear, but confirm first
       final ok = await _confirm(
         title: 'Save as empty?',
-        content: 'Both Course and Lecturer are empty. This will clear the cell.',
+        content:
+            'Both Course and Lecturer are empty. This will clear the cell.',
         confirmText: 'Clear cell',
         destructive: true,
       );
@@ -169,7 +180,6 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
 
     // Confirm applying non-empty edits (show before -> after summary) only if changed
     if (_hasChanges) {
-      display(String s) => s.isEmpty ? '(empty)' : s;
       final beforeParts = <String>[];
       if (_initialCourse.isNotEmpty) beforeParts.add(_initialCourse);
       if (_initialLecturer.isNotEmpty) beforeParts.add(_initialLecturer);
@@ -182,7 +192,8 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
 
       final ok = await _confirm(
         title: 'Apply changes?',
-        content: 'You are about to update this cell.\n\nBefore:\n$before\n\nAfter:\n$after',
+        content:
+            'You are about to update this cell.\n\nBefore:\n$before\n\nAfter:\n$after',
         confirmText: 'Save',
         destructive: false,
       );
@@ -197,7 +208,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 480),
         child: Padding(
@@ -212,10 +223,17 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                     const Expanded(
                       child: Text(
                         'Edit Cell',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    IconButton(icon: const Icon(Icons.close), tooltip: 'Close', onPressed: _onCloseOrCancel),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Close',
+                      onPressed: _onCloseOrCancel,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -254,7 +272,10 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                           hintText: 'Lecturer name',
                           border: OutlineInputBorder(),
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                         ),
                       )
                     : _dropdownBox<String>(
@@ -283,10 +304,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                       child: const Text('Cancel'),
                     ),
                     const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: _save,
-                      child: const Text('Save'),
-                    ),
+                    ElevatedButton(onPressed: _save, child: const Text('Save')),
                   ],
                 ),
               ],
@@ -308,14 +326,21 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
         hintText: hint,
         border: const OutlineInputBorder(),
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
           isExpanded: true,
           value: value,
           hint: Text(hint),
-          items: items.map((e) => DropdownMenuItem<T>(value: e, child: Text(e.toString()))).toList(),
+          items: items
+              .map(
+                (e) => DropdownMenuItem<T>(value: e, child: Text(e.toString())),
+              )
+              .toList(),
           onChanged: onChanged,
         ),
       ),

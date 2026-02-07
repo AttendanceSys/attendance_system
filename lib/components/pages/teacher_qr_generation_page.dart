@@ -1,4 +1,3 @@
-import '../../services/theme_controller.dart';
 // TeacherQRGenerationPage — save generated QR session to Firestore (qr_generation collection)
 //
 // Updates in this version:
@@ -17,7 +16,6 @@ import '../../services/theme_controller.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../theme/super_admin_theme.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/session.dart';
@@ -35,28 +33,6 @@ class TeacherQRGenerationPage extends StatefulWidget {
 
 class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   bool get isDarkMode => Theme.of(context).brightness == Brightness.dark;
-  Widget _themeToggleButton() {
-    final palette = Theme.of(context).extension<TeacherThemeColors>();
-    final iconColor = palette?.iconColor ?? Colors.black87;
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeController.themeMode,
-      builder: (context, mode, _) {
-        final isDark = mode == ThemeMode.dark;
-        return IconButton(
-          icon: Icon(
-            isDark ? Icons.light_mode : Icons.dark_mode,
-            color: iconColor,
-          ),
-          tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
-          onPressed: () {
-            ThemeController.setThemeMode(
-              isDark ? ThemeMode.light : ThemeMode.dark,
-            );
-          },
-        );
-      },
-    );
-  }
 
   String? department;
   String? className;
@@ -621,44 +597,6 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     return null;
   }
 
-  bool _isNowWithinPeriodForMatch(Map<String, dynamic> match) {
-    final spanStart = match['spanStart'] as int?;
-    final spanEnd = match['spanEnd'] as int?;
-    if (spanStart != null && spanEnd != null) {
-      final now = DateTime.now();
-      final minutesNow = now.hour * 60 + now.minute;
-      return minutesNow >= spanStart && minutesNow < spanEnd;
-    }
-    // fallback to previous logic (less strict)
-    final spans = match['spans'];
-    final periods = match['periods'];
-    final periodIndex = match['periodIndex'] as int;
-    final now = DateTime.now();
-    final minutesSinceMidnight = now.hour * 60 + now.minute;
-
-    if (spans is List && periodIndex >= 0 && periodIndex < spans.length) {
-      final span = spans[periodIndex];
-      if (span is Map && span['start'] is num && span['end'] is num) {
-        final start = (span['start'] as num).toInt();
-        final end = (span['end'] as num).toInt();
-        return minutesSinceMidnight >= start && minutesSinceMidnight < end;
-      }
-    }
-
-    if (periods is List && periodIndex >= 0 && periodIndex < periods.length) {
-      final periodStr = periods[periodIndex];
-      if (periodStr is String) {
-        final parsed = _parsePeriodString(periodStr);
-        if (parsed != null) {
-          return minutesSinceMidnight >= parsed[0] &&
-              minutesSinceMidnight < parsed[1];
-        }
-      }
-    }
-
-    return false;
-  }
-
   DateTime? _getPeriodStartDateTime(Map<String, dynamic> match) {
     try {
       final spanStart = match['spanStart'] as int?;
@@ -761,7 +699,6 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   ) async {
     try {
       final now = DateTime.now().toUtc();
-      final nowTs = Timestamp.fromDate(now);
       final collection = FirebaseFirestore.instance.collection('qr_generation');
 
       // Query active sessions for same teacher/subject/class
@@ -915,9 +852,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(
-                      context,
-                    ).extension<SuperAdminColors>()?.textPrimary,
+                    color:
+                        palette?.textPrimary ??
+                        Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ],
@@ -1058,7 +995,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                       vertical: 16,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                   onPressed: () async {
@@ -1260,7 +1197,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     required String hint,
     bool isLoading = false,
   }) {
-    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
     final hintStyle = TextStyle(color: palette?.textSecondary);
     final itemStyle = TextStyle(color: palette?.textPrimary);
     final borderColor = palette?.border ?? const Color(0xFFC7BECF);

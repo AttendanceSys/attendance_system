@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../services/location_service.dart';
 import '../../services/anomaly_service.dart';
-import '../../config.dart';
 import '../../services/session.dart';
 // replaced old success popup with reusable attendance alert widget
 import '../../components/popup/attendance_alert.dart';

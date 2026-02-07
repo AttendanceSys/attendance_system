@@ -137,7 +137,14 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
         // try matching by DocumentReference if courses use refs
         try {
           final classRef = _firestore.collection('classes').doc(classId);
-          snap = await col.where('class_ref', isEqualTo: classRef).get();
+          // Common schemas: class is the DocumentReference itself
+          snap = await col.where('class', isEqualTo: classRef).get();
+          if (snap.docs.isEmpty) {
+            snap = await col.where('class_ref', isEqualTo: classRef).get();
+          }
+          if (snap.docs.isEmpty) {
+            snap = await col.where('classRef', isEqualTo: classRef).get();
+          }
         } catch (_) {}
       }
 
@@ -168,31 +175,81 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       if (!doc.exists || doc.data() == null) return [];
 
       final data = doc.data() as Map<String, dynamic>;
-      // Try 'teacher_assigned' field (string id)
-      if (data.containsKey('teacher_assigned') &&
-          (data['teacher_assigned'] is String)) {
-        final teacherId = data['teacher_assigned'] as String;
-        if (teacherId.trim().isNotEmpty) {
-          final tdoc = await _firestore
-              .collection('teachers')
-              .doc(teacherId)
-              .get();
-          if (tdoc.exists && tdoc.data() != null) {
-            final tdata = tdoc.data() as Map<String, dynamic>;
-            final tname =
-                (tdata['full_name'] ??
-                        tdata['fullName'] ??
-                        tdata['fullname'] ??
-                        tdata['teacher_name'] ??
-                        tdata['name'] ??
-                        tdata['username'] ??
-                        teacherId)
-                    .toString();
+      String extractId(dynamic value) {
+        if (value == null) return '';
+        if (value is DocumentReference) return value.id;
+        if (value is String) {
+          final s = value.trim();
+          if (s.isEmpty) return '';
+          if (s.contains('/')) {
+            final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+            return parts.isNotEmpty ? parts.last : s;
+          }
+          return s;
+        }
+        return value.toString();
+      }
+
+      Future<List<Map<String, String>>> loadTeacherById(
+        String teacherId,
+      ) async {
+        final tid = teacherId.trim();
+        if (tid.isEmpty) return [];
+        final tdoc = await _firestore.collection('teachers').doc(tid).get();
+        if (!tdoc.exists || tdoc.data() == null) return [];
+        final tdata = tdoc.data() as Map<String, dynamic>;
+        final tname =
+            (tdata['full_name'] ??
+                    tdata['fullName'] ??
+                    tdata['fullname'] ??
+                    tdata['teacher_name'] ??
+                    tdata['name'] ??
+                    tdata['username'] ??
+                    tid)
+                .toString();
+        return [
+          {'id': tid, 'name': tname},
+        ];
+      }
+
+      // Try common teacher keys (id string, path string, or DocumentReference)
+      const teacherKeys = [
+        'teacher_assigned',
+        'teacher_ref',
+        'teacher',
+        'teacherRef',
+        'teacher_id',
+        'lecturer',
+        'lecturer_id',
+      ];
+      for (final key in teacherKeys) {
+        if (!data.containsKey(key) || data[key] == null) continue;
+        // Some schemas use a map for teacher
+        if (data[key] is Map) {
+          final t = data[key] as Map;
+          final tid = extractId(t['id'] ?? t['teacher_id'] ?? t['ref']);
+          final tname =
+              (t['full_name'] ??
+                      t['fullName'] ??
+                      t['fullname'] ??
+                      t['teacher_name'] ??
+                      t['name'] ??
+                      t['username'] ??
+                      '')
+                  .toString();
+          if (tname.trim().isNotEmpty) {
             return [
-              {'id': teacherId, 'name': tname},
+              {'id': tid, 'name': tname.trim()},
             ];
           }
+          final byId = await loadTeacherById(tid);
+          if (byId.isNotEmpty) return byId;
+          continue;
         }
+
+        final tid = extractId(data[key]);
+        final byId = await loadTeacherById(tid);
+        if (byId.isNotEmpty) return byId;
       }
 
       // Some schemas embed teacher info in the course doc
@@ -277,7 +334,6 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   Future<void> _loadCoursesAndClearSelection(String? classId) async {
     setState(() {
       _loadingCourses = true;
-      _courses = [];
       _selectedCourseId = null;
       _selectedCourseName = null;
       _useCustomCourse = false;
@@ -289,7 +345,10 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
     }
     final courses = await _fetchCoursesForClass(classId);
     setState(() {
-      _courses = courses;
+      // Keep widget-provided fallback if Firestore returns nothing
+      if (courses.isNotEmpty) {
+        _courses = courses;
+      }
       // If widget.initialCourse matches one of these, pick it
       if (widget.initialCourse != null) {
         final match = _courses.indexWhere(
@@ -305,12 +364,15 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
       if (_courses.isEmpty && (widget.courses.isEmpty)) _useCustomCourse = true;
       _loadingCourses = false;
     });
+
+    if (_selectedCourseId != null && _selectedCourseId!.trim().isNotEmpty) {
+      _loadLecturersForCourse(_selectedCourseId);
+    }
   }
 
   Future<void> _loadLecturersForCourse(String? courseId) async {
     setState(() {
       _loadingLecturers = true;
-      _lecturers = [];
       _selectedLecturerId = null;
       _selectedLecturerName = null;
       _useCustomLecturer = false;
@@ -322,7 +384,10 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
     }
     final lecturers = await _fetchLecturersForCourseDoc(courseId);
     setState(() {
-      _lecturers = lecturers;
+      // Keep widget-provided fallback if Firestore returns nothing
+      if (lecturers.isNotEmpty) {
+        _lecturers = lecturers;
+      }
       if (widget.initialLecturer != null) {
         final match = _lecturers.indexWhere(
           (t) =>
@@ -397,10 +462,20 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
   Widget build(BuildContext context) {
     // prepare dropdown items: show name but use id as value when available
     final courseEntries = _courses
-        .map((c) => MapEntry(c['id'] ?? '', c['name'] ?? ''))
+        .map((c) {
+          final id = (c['id'] ?? '').trim();
+          final name = (c['name'] ?? '').trim();
+          return MapEntry(id.isNotEmpty ? id : name, name);
+        })
+        .where((e) => e.value.trim().isNotEmpty)
         .toList();
     final lecturerEntries = _lecturers
-        .map((t) => MapEntry(t['id'] ?? '', t['name'] ?? ''))
+        .map((t) {
+          final id = (t['id'] ?? '').trim();
+          final name = (t['name'] ?? '').trim();
+          return MapEntry(id.isNotEmpty ? id : name, name);
+        })
+        .where((e) => e.value.trim().isNotEmpty)
         .toList();
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -462,9 +537,14 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                                   : null,
                               value:
                                   (_selectedCourseId != null &&
-                                      _selectedCourseId!.isNotEmpty)
+                                      _selectedCourseId!.trim().isNotEmpty)
                                   ? _selectedCourseId
-                                  : null,
+                                  : ((_selectedCourseName != null &&
+                                            _selectedCourseName!
+                                                .trim()
+                                                .isNotEmpty)
+                                        ? _selectedCourseName
+                                        : null),
                               hint: Text(
                                 _selectedCourseName ?? 'Select course',
                                 style: isDark
@@ -487,14 +567,20 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                                   )
                                   .toList(),
                               onChanged: (id) {
-                                final picked = _courses.firstWhere(
-                                  (c) => c['id'] == id,
-                                  orElse: () => {
-                                    'id': id ?? '',
-                                    'name': id ?? '',
-                                  },
+                                if (id == null) {
+                                  _onCoursePickedByUser(null);
+                                  return;
+                                }
+                                final picked = _courses.firstWhere((c) {
+                                  final cid = (c['id'] ?? '').trim();
+                                  final cname = (c['name'] ?? '').trim();
+                                  return cid == id || cname == id;
+                                }, orElse: () => {'id': '', 'name': id});
+                                _onCoursePickedByUser(
+                                  picked.map(
+                                    (k, v) => MapEntry(k, v.toString()),
+                                  ),
                                 );
-                                _onCoursePickedByUser(picked);
                               },
                             ),
                           ),
@@ -560,9 +646,14 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                                   : null,
                               value:
                                   (_selectedLecturerId != null &&
-                                      _selectedLecturerId!.isNotEmpty)
+                                      _selectedLecturerId!.trim().isNotEmpty)
                                   ? _selectedLecturerId
-                                  : null,
+                                  : ((_selectedLecturerName != null &&
+                                            _selectedLecturerName!
+                                                .trim()
+                                                .isNotEmpty)
+                                        ? _selectedLecturerName
+                                        : null),
                               hint: Text(
                                 _selectedLecturerName ?? 'Select lecturer',
                                 style: isDark
@@ -584,25 +675,22 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                                     ),
                                   )
                                   .toList(),
-                              onChanged:
-                                  (_selectedCourseId != null &&
-                                      _selectedCourseId!.isNotEmpty)
-                                  ? (id) {
-                                      final picked = _lecturers.firstWhere(
-                                        (t) => t['id'] == id,
-                                        orElse: () => {
-                                          'id': id ?? '',
-                                          'name': id ?? '',
-                                        },
-                                      );
-                                      setState(() {
-                                        _selectedLecturerId = picked['id'];
-                                        _selectedLecturerName = picked['name'];
-                                        _useCustomLecturer = false;
-                                        _customLecturerCtrl.clear();
-                                      });
-                                    }
-                                  : null,
+                              onChanged: (id) {
+                                if (id == null) return;
+                                final picked = _lecturers.firstWhere((t) {
+                                  final tid = (t['id'] ?? '').trim();
+                                  final tname = (t['name'] ?? '').trim();
+                                  return tid == id || tname == id;
+                                }, orElse: () => {'id': '', 'name': id});
+                                setState(() {
+                                  _selectedLecturerId = (picked['id'] ?? '')
+                                      .toString();
+                                  _selectedLecturerName = (picked['name'] ?? '')
+                                      .toString();
+                                  _useCustomLecturer = false;
+                                  _customLecturerCtrl.clear();
+                                });
+                              },
                             ),
                           ),
                   ),

@@ -5,6 +5,7 @@ import 'package:attendance_system/screens/faculty_admin_page.dart';
 import 'package:attendance_system/screens/teacher_main_page.dart';
 import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/session.dart';
 import '../services/theme_controller.dart';
 
@@ -19,7 +20,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  // UI-only additions
   final FocusNode _usernameFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
 
@@ -33,58 +33,41 @@ class _LoginScreenState extends State<LoginScreen> {
     return p == TargetPlatform.android || p == TargetPlatform.iOS;
   }
 
-  // Shared text styles
-  static const TextStyle _headerStyleLight = TextStyle(
-    color: Colors.black87,
-    fontSize: 28,
-    fontWeight: FontWeight.bold,
-  );
-  static const TextStyle _headerStyleDark = TextStyle(
-    color: Color(0xFFE6EAF1),
-    fontSize: 28,
-    fontWeight: FontWeight.bold,
-  );
-  static const TextStyle _subtitleStyleLight = TextStyle(
-    color: Colors.black54,
-    fontSize: 14,
-  );
-  static const TextStyle _subtitleStyleDark = TextStyle(
-    color: Color(0xFF9EA5B5),
-    fontSize: 14,
-  );
-
   void _handleLogin() async {
     if (_isLoggingIn) return;
-    setState(() {
-      _isLoggingIn = true;
-    });
+    setState(() => _isLoggingIn = true);
 
     String username = _usernameController.text.trim();
     String password = _passwordController.text;
 
     try {
-      // Query the users collection
-      final snapshot = await FirebaseFirestore.instance
+      final userSnap = await FirebaseFirestore.instance
           .collection('users')
           .where('username', isEqualTo: username)
-          .where('password', isEqualTo: password)
+          .limit(1)
           .get();
 
-      if (snapshot.docs.isEmpty) {
-        // No matching user found
+      if (userSnap.docs.isEmpty) {
         setState(() {
-          _errorMessage = 'Invalid username or password';
+          _errorMessage = 'Invalid username';
           _isLoggingIn = false;
         });
         return;
       }
 
-      // Get the user data
-      final userData = snapshot.docs.first.data();
+      final userData = userSnap.docs.first.data();
+
+      if ((userData['password'] as String?) != password) {
+        setState(() {
+          _errorMessage = 'Invalid password';
+          _isLoggingIn = false;
+        });
+        return;
+      }
+
       final role = userData['role'];
       final status = userData['status'];
 
-      // Check if the user is disabled
       if (status == 'disabled') {
         setState(() {
           _errorMessage = 'Your account is disabled';
@@ -92,10 +75,9 @@ class _LoginScreenState extends State<LoginScreen> {
         });
         return;
       }
-      // store username in session
+
       Session.username = username;
 
-      // Try to fetch the admin's full name and faculty_ref from the 'admins' collection.
       String? displayName;
       try {
         final adminSnap = await FirebaseFirestore.instance
@@ -111,19 +93,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       adminData['display_name'])
                   as String?;
 
-          // populate facultyRef in session if available
           final facCandidate =
               adminData['faculty_ref'] ??
               adminData['faculty_id'] ??
               adminData['faculty'];
-          // Normalize and set Session.facultyRef from whatever shape the admin doc uses
           Session.setFacultyFromField(facCandidate);
         }
-      } catch (e) {
-        // ignore and fallback below
-      }
+      } catch (_) {}
 
-      // fallback to user document fields or username
       displayName ??=
           (userData['name'] ??
                   userData['full_name'] ??
@@ -131,7 +108,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   username)
               as String;
 
-      // For teachers, prefer the teacher record's proper name
       if (role == 'teacher') {
         try {
           final lecSnap = await FirebaseFirestore.instance
@@ -150,12 +126,9 @@ class _LoginScreenState extends State<LoginScreen> {
               displayName = teacherName;
             }
           }
-        } catch (_) {
-          // ignore lookup errors and keep existing displayName
-        }
+        } catch (_) {}
       }
 
-      // if faculty not found on admins doc, try users doc
       if (Session.facultyRef == null) {
         final userFac =
             userData['faculty_ref'] ??
@@ -166,32 +139,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Session.name = displayName;
 
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
+      await Future.delayed(const Duration(milliseconds: 500));
+
       if (role == 'Super admin') {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const SuperAdminPage()),
+          MaterialPageRoute(builder: (_) => const SuperAdminPage()),
         );
       } else if (role == 'admin') {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const FacultyAdminPage()),
+          MaterialPageRoute(builder: (_) => const FacultyAdminPage()),
         );
       } else if (role == 'teacher') {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const TeacherMainPage()),
+          MaterialPageRoute(builder: (_) => const TeacherMainPage()),
         );
       } else if (role == 'student') {
         if (!_isMobilePlatform()) {
@@ -200,23 +166,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 'Student login is allowed only on mobile (Android/iOS).';
             _isLoggingIn = false;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Student login is allowed only on mobile (Android/iOS).',
-              ),
-            ),
-          );
           return;
         }
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-        await Future.delayed(const Duration(milliseconds: 700));
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => const StudentViewAttendanceMobile(),
+            builder: (_) => const StudentViewAttendanceMobile(),
           ),
         );
       } else {
@@ -225,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
           _isLoggingIn = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
       setState(() {
         _errorMessage = 'An error occurred during login';
         _isLoggingIn = false;
@@ -244,8 +199,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
-    // Use ValueListenableBuilder to react to theme changes for the whole login page
+    final isMobile = MediaQuery.of(context).size.width < 650;
+
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeController.themeMode,
       builder: (context, themeMode, _) {
@@ -254,262 +209,229 @@ class _LoginScreenState extends State<LoginScreen> {
         final isDark =
             themeMode == ThemeMode.dark ||
             (themeMode == ThemeMode.system && systemDark);
+
         return Scaffold(
-          body: Stack(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  gradient: isDark
-                      ? const LinearGradient(
-                          colors: [Color(0xFF23283A), Color(0xFF181C2A)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        )
-                      : (isMobile
-                            ? const LinearGradient(
-                                colors: [Color(0xFF9D83D7), Color(0xFFB39AF6)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              )
-                            : const LinearGradient(
-                                colors: [Color(0xFFF5F8FB), Color(0xFFF1F6FB)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              )),
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: isDark
+                  ? const LinearGradient(
+                      colors: [Color(0xFF0B1220), Color(0xFF111B2E)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : const LinearGradient(
+                      colors: [Color(0xFFEFF6FF), Color(0xFFEDE9FE)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+            ),
+            child: Stack(
+              children: [
+                // soft glow blobs (like SaaS)
+                Positioned(
+                  top: -120,
+                  left: -120,
+                  child: _GlowBlob(isDark: isDark),
                 ),
-                child: Center(
+                Positioned(
+                  bottom: -140,
+                  right: -140,
+                  child: _GlowBlob(isDark: isDark),
+                ),
+
+                Center(
                   child: isMobile
-                      ? _buildMobileForm(context)
-                      : _buildWebForm(context),
+                      ? _buildMobileForm(context, isDark: isDark)
+                      : _buildWebForm(context, isDark: isDark),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildMobileForm(BuildContext context) {
-    final themeMode = ThemeController.themeMode.value;
-    final systemDark =
-        MediaQuery.of(context).platformBrightness == Brightness.dark;
-    final isDark =
-        themeMode == ThemeMode.dark ||
-        (themeMode == ThemeMode.system && systemDark);
+  Widget _buildMobileForm(BuildContext context, {required bool isDark}) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
-      child: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 420),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF262C3A) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black26.withOpacity(0.12),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 44),
+      child: _LoginCard(
+        isDark: isDark,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 4),
+            _BrandHeader(isDark: isDark),
+            const SizedBox(height: 18),
+
+            Text(
+              "Welcome Back",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.w800,
+                color: isDark
+                    ? const Color(0xFFE6EAF1)
+                    : const Color(0xFF1F2937),
               ),
-            ],
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
-          child: AutofillGroup(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 4),
-                Text(
-                  "LOGIN",
-                  style: isDark ? _headerStyleDark : _headerStyleLight,
-                  textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Please enter your details to log in.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark
+                    ? const Color(0xFF9EA5B5)
+                    : const Color(0xFF6B7280),
+              ),
+            ),
+            const SizedBox(height: 22),
+
+            _buildStyledInput(
+              controller: _usernameController,
+              icon: Icons.person_outline_rounded,
+              hint: "Enter your username",
+              isPassword: false,
+              focusNode: _usernameFocus,
+              onSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_passwordFocus),
+              autofillHints: const [AutofillHints.username],
+              isDark: isDark,
+            ),
+            const SizedBox(height: 14),
+            _buildStyledInput(
+              controller: _passwordController,
+              icon: Icons.lock_outline_rounded,
+              hint: "Enter your password",
+              isPassword: true,
+              focusNode: _passwordFocus,
+              onSubmitted: (_) => _handleLogin(),
+              autofillHints: const [AutofillHints.password],
+              isDark: isDark,
+            ),
+
+            const SizedBox(height: 18),
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                const SizedBox(height: 18),
-                Text(
-                  "Welcome Please enter your details to log in.",
-                  style: isDark ? _subtitleStyleDark : _subtitleStyleLight,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 18),
-                _buildStyledInput(
-                  controller: _usernameController,
-                  icon: Icons.person_outline,
-                  hint: "Enter your username",
-                  isPassword: false,
-                  focusNode: _usernameFocus,
-                  onSubmitted: (_) =>
-                      FocusScope.of(context).requestFocus(_passwordFocus),
-                  autofillHints: const [AutofillHints.username],
-                  isDark: isDark,
-                ),
-                const SizedBox(height: 14),
-                _buildStyledInput(
-                  controller: _passwordController,
-                  icon: Icons.lock_outline,
-                  hint: "Enter your password",
-                  isPassword: true,
-                  focusNode: _passwordFocus,
-                  onSubmitted: (_) => _handleLogin(),
-                  autofillHints: const [AutofillHints.password],
-                  isDark: isDark,
-                ),
-                const SizedBox(height: 20),
-                if (_errorMessage != null)
-                  Text(
-                    _errorMessage!,
-                    style: const TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 14,
+              ),
+
+            _isLoggingIn
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: CircularProgressIndicator(),
+                  )
+                : SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: _GradientButton(
+                      text: "LOG IN",
+                      onPressed: _handleLogin,
+                      isDark: isDark,
                     ),
                   ),
-                const SizedBox(height: 8),
-                _isLoggingIn
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: CircularProgressIndicator(
-                          color: Color(0xFF6A46FF),
-                        ),
-                      )
-                    : SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6A46FF),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            "Log In",
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildWebForm(BuildContext context) {
-    final themeMode = ThemeController.themeMode.value;
-    final systemDark =
-        MediaQuery.of(context).platformBrightness == Brightness.dark;
-    final isDark =
-        themeMode == ThemeMode.dark ||
-        (themeMode == ThemeMode.system && systemDark);
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-        constraints: const BoxConstraints(maxWidth: 1000),
-        child: Center(
-          child: Container(
-            width: 460,
-            padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 34),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF262C3A) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: AutofillGroup(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    "LOGIN",
-                    style: isDark ? _headerStyleDark : _headerStyleLight,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "Welcome Please enter your details to log in.",
-                    style: isDark ? _subtitleStyleDark : _subtitleStyleLight,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  _buildStyledInput(
-                    controller: _usernameController,
-                    icon: Icons.person,
-                    hint: "Enter your username",
-                    isPassword: false,
-                    focusNode: _usernameFocus,
-                    onSubmitted: (_) =>
-                        FocusScope.of(context).requestFocus(_passwordFocus),
-                    filledColor: isDark
-                        ? const Color(0xFF2B303D)
-                        : const Color(0xFFF7F9FB),
-                    autofillHints: const [AutofillHints.username],
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: 14),
-                  _buildStyledInput(
-                    controller: _passwordController,
-                    icon: Icons.lock,
-                    hint: "Enter your password",
-                    isPassword: true,
-                    focusNode: _passwordFocus,
-                    onSubmitted: (_) => _handleLogin(),
-                    filledColor: isDark
-                        ? const Color(0xFF2B303D)
-                        : const Color(0xFFF7F9FB),
-                    autofillHints: const [AutofillHints.password],
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: 18),
-                  if (_errorMessage != null)
-                    Text(
-                      _errorMessage!,
-                      style: const TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 14,
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  _isLoggingIn
-                      ? const CircularProgressIndicator(
-                          color: Color(0xFF3B82F6),
-                        )
-                      : SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _handleLogin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3B82F6),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              "LOG IN",
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                ],
+  Widget _buildWebForm(BuildContext context, {required bool isDark}) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 520),
+      child: _LoginCard(
+        isDark: isDark,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _BrandHeader(isDark: isDark),
+            const SizedBox(height: 18),
+
+            Text(
+              "Welcome Back",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 34,
+                fontWeight: FontWeight.w800,
+                color: isDark
+                    ? const Color(0xFFE6EAF1)
+                    : const Color(0xFF1F2937),
               ),
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              "Please enter your details to log in.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark
+                    ? const Color(0xFF9EA5B5)
+                    : const Color(0xFF6B7280),
+              ),
+            ),
+            const SizedBox(height: 22),
+
+            _buildStyledInput(
+              controller: _usernameController,
+              icon: Icons.person_outline_rounded,
+              hint: "Enter your username",
+              isPassword: false,
+              focusNode: _usernameFocus,
+              onSubmitted: (_) =>
+                  FocusScope.of(context).requestFocus(_passwordFocus),
+              autofillHints: const [AutofillHints.username],
+              isDark: isDark,
+            ),
+            const SizedBox(height: 14),
+            _buildStyledInput(
+              controller: _passwordController,
+              icon: Icons.lock_outline_rounded,
+              hint: "Enter your password",
+              isPassword: true,
+              focusNode: _passwordFocus,
+              onSubmitted: (_) => _handleLogin(),
+              autofillHints: const [AutofillHints.password],
+              isDark: isDark,
+            ),
+
+            const SizedBox(height: 18),
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+
+            _isLoggingIn
+                ? const Padding(      
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: CircularProgressIndicator(),
+                  )
+                : SizedBox(
+                    width: double.infinity,
+                    height: 46,
+                    child: _GradientButton(
+                      text: "LOG IN",
+                      onPressed: _handleLogin,
+                      isDark: isDark,
+                    ),
+                  ),
+          ],
         ),
       ),
     );
@@ -522,60 +444,219 @@ class _LoginScreenState extends State<LoginScreen> {
     bool isPassword = false,
     FocusNode? focusNode,
     void Function(String)? onSubmitted,
-    Color? filledColor,
     List<String>? autofillHints,
-    bool isDark = false,
+    required bool isDark,
   }) {
-    final inputFill =
-        filledColor ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
-    final bool showObscure = isPassword ? _obscurePassword : false;
-    final textColor = isDark ? const Color(0xFFE6EAF1) : Colors.black87;
-    final hintTextColor = isDark ? const Color(0xFF9EA5B5) : Colors.black45;
+    final fill = isDark
+        ? const Color(0xFF0F172A).withOpacity(0.55)
+        : Colors.white.withOpacity(0.75);
+    final textColor = isDark
+        ? const Color(0xFFE6EAF1)
+        : const Color(0xFF111827);
+    final hintColor = isDark
+        ? const Color(0xFF9EA5B5)
+        : const Color(0xFF6B7280);
+
     return TextField(
       controller: controller,
-      obscureText: showObscure,
-      style: TextStyle(color: textColor, fontSize: 16),
       focusNode: focusNode,
       onSubmitted: onSubmitted,
       autofillHints: autofillHints,
+      obscureText: isPassword ? _obscurePassword : false,
+      style: TextStyle(
+        color: textColor,
+        fontSize: 15.5,
+        fontWeight: FontWeight.w600,
+      ),
       decoration: InputDecoration(
         filled: true,
-        fillColor: inputFill,
-        prefixIcon: Icon(icon, color: hintTextColor),
+        fillColor: fill,
+        prefixIcon: Icon(icon, color: hintColor),
         hintText: hint,
-        hintStyle: TextStyle(color: hintTextColor),
+        hintStyle: TextStyle(color: hintColor, fontWeight: FontWeight.w500),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
-                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                  color: hintTextColor,
+                  _obscurePassword
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                  color: hintColor,
                 ),
-                onPressed: () {
-                  setState(() {
-                    _obscurePassword = !_obscurePassword;
-                  });
-                },
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
               )
             : null,
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 14,
+          horizontal: 14,
+        ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
             color: isDark
-                ? const Color(0xFF3A404E)
-                : Colors.black12.withOpacity(0.04),
+                ? const Color(0xFF334155).withOpacity(0.55)
+                : const Color(0xFFE5E7EB),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: isDark
-                ? const Color(0xFFE6EAF1)
-                : Colors.black12.withOpacity(0.04),
+            color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF7C3AED),
+            width: 1.4,
           ),
         ),
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 14,
-          horizontal: 12,
+      ),
+    );
+  }
+}
+
+/// ---------- UI helpers ----------
+
+class _LoginCard extends StatelessWidget {
+  final Widget child;
+  final bool isDark;
+
+  const _LoginCard({required this.child, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 34),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF0B1220).withOpacity(0.55)
+            : Colors.white.withOpacity(0.70),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF334155).withOpacity(0.45)
+              : Colors.white.withOpacity(0.55),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
+            blurRadius: 30,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _GradientButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onPressed;
+  final bool isDark;
+
+  const _GradientButton({
+    required this.text,
+    required this.onPressed,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      borderRadius: BorderRadius.circular(14),
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF7C3AED), Color(0xFF3B82F6)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandHeader extends StatelessWidget {
+  final bool isDark;
+  const _BrandHeader({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isDark
+        ? const Color.fromARGB(255, 255, 255, 255)
+        : const Color(0xFF1F2937);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/lightLogo.png',
+            height: 82,
+            width: 82,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(height: 10),
+          RichText(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: 'QScan',
+                  style: GoogleFonts.playfairDisplay(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 26,
+                    color: textColor,
+                  ),
+                ),
+                TextSpan(
+                  text: ' Smart',
+                  style: GoogleFonts.playfairDisplay(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 26,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GlowBlob extends StatelessWidget {
+  final bool isDark;
+  const _GlowBlob({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 280,
+      height: 280,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: isDark
+              ? [const Color(0xFF7C3AED).withOpacity(0.22), Colors.transparent]
+              : [const Color(0xFF7C3AED).withOpacity(0.22), Colors.transparent],
         ),
       ),
     );

@@ -20,9 +20,8 @@ class SearchAddBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final Color addBgColor = isDark
-        ? const Color(0xFF0E1A60) // keep dark-mode button as set
-        : const Color(0xFF3B4B9B); // restore original light-mode background
-
+        ? const Color(0xFF4234A4) // keep dark-mode button as set
+        : const Color(0xFF8372FE); // restore original light-mode background
     return Row(
       children: [
         // Search Field
@@ -56,7 +55,7 @@ class SearchAddBar extends StatelessWidget {
               backgroundColor: addBgColor,
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
           ),

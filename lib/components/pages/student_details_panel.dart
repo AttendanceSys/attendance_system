@@ -338,7 +338,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         record['total'] = totalSessions;
         record['present'] = presentCount;
         final total = (record['total'] is num) ? (record['total'] as num) : 0;
-        final absence = (total is num && total > 0) ? ((total - presentCount) / total) * 100 : 0.0;
+        final absence = (total > 0) ? ((total - presentCount) / total) * 100 : 0.0;
         record['percentage'] = "${absence.toStringAsFixed(1)}%";
       } catch (e) {
         record['total'] = 0;
@@ -590,11 +590,11 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                             columnSpacing: 48.0,
                                             headingRowHeight: 46,
                                             dataRowHeight: 44,
-                                            headingRowColor: MaterialStateProperty.all<Color?>(
+                                            headingRowColor: WidgetStateProperty.all<Color?>(
                                               palette?.surfaceHigh,
                                             ),
-                                            dataRowColor: MaterialStateProperty.resolveWith<Color?>(
-                                              (states) => states.contains(MaterialState.hovered)
+                                            dataRowColor: WidgetStateProperty.resolveWith<Color?>(
+                                              (states) => states.contains(WidgetState.hovered)
                                                   ? palette?.overlay
                                                   : palette?.surface,
                                             ),

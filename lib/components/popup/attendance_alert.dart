@@ -169,7 +169,6 @@ class _AttendanceAlertDialog extends StatelessWidget {
         return Colors.orange.shade700;
       case AttendanceAlertType.notYourClass:
       case AttendanceAlertType.qrExpired:
-      default:
         return Colors.red.shade600;
     }
   }
@@ -186,7 +185,6 @@ class _AttendanceAlertDialog extends StatelessWidget {
       case AttendanceAlertType.qrExpired:
         return Icons.timer_off;
       case AttendanceAlertType.info:
-      default:
         return Icons.info_outline;
     }
   }
@@ -204,7 +202,6 @@ class _AttendanceAlertDialog extends StatelessWidget {
       case AttendanceAlertType.qrExpired:
         return 'Session Ended';
       case AttendanceAlertType.info:
-      default:
         return 'Notice';
     }
   }
@@ -221,7 +218,6 @@ class _AttendanceAlertDialog extends StatelessWidget {
       case AttendanceAlertType.qrExpired:
         return 'This QR/session has expired. Please request a new active session.';
       case AttendanceAlertType.info:
-      default:
         return '';
     }
   }
@@ -282,7 +278,7 @@ class _AttendanceAlertDialog extends StatelessWidget {
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       backgroundColor: surface,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: dialogW, maxHeight: dialogH),
@@ -391,7 +387,7 @@ class _AttendanceAlertDialog extends StatelessWidget {
                           vertical: 14,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         elevation: 4,
                       ),

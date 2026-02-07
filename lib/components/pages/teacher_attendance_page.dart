@@ -1219,7 +1219,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                   vertical: 12,
                 ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
               child: submitting

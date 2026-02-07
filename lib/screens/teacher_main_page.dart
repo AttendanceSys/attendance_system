@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../components/sidebars/teacher_sidebar.dart';
 import '../components/pages/teacher_qr_generation_page.dart';
 import '../components/pages/teacher_attendance_page.dart';
 import '../components/popup/logout_confirmation_popup.dart'; // <-- reusable popup
 import 'login_screen.dart';
 import '../services/theme_controller.dart';
+import '../services/session.dart';
 import '../theme/teacher_theme.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class TeacherMainPage extends StatefulWidget {
   const TeacherMainPage({super.key});
@@ -16,24 +19,64 @@ class TeacherMainPage extends StatefulWidget {
 
 class _TeacherMainPageState extends State<TeacherMainPage> {
   int selectedIndex = 0;
-  bool collapsed = true;
   // Removed local dark mode state, use global ThemeController
+  String _displayName = 'Teacher';
 
   final List<Widget> pages = const [
     TeacherQRGenerationPage(),
     TeacherAttendancePage(),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _displayName = (Session.name != null && Session.name!.trim().isNotEmpty)
+        ? Session.name!.trim()
+        : (Session.username != null && Session.username!.trim().isNotEmpty)
+        ? Session.username!.trim()
+        : 'Teacher';
+
+    if ((Session.name == null || Session.name!.trim().isEmpty) &&
+        Session.username != null &&
+        Session.username!.trim().isNotEmpty) {
+      _loadTeacherName();
+    }
+  }
+
+  Future<void> _loadTeacherName() async {
+    try {
+      final username = Session.username?.trim();
+      if (username == null || username.isEmpty) return;
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('teachers')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+
+      String? resolved;
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        final value =
+            (data['teacher_name'] ?? data['name'] ?? data['display_name']);
+        if (value is String && value.trim().isNotEmpty) {
+          resolved = value.trim();
+        }
+      }
+
+      resolved ??= username;
+
+      if (!mounted) return;
+      setState(() => _displayName = resolved!);
+      Session.name = resolved;
+    } catch (_) {
+      // ignore errors
+    }
+  }
+
   void onSidebarItemSelected(int index) {
     setState(() {
       selectedIndex = index;
-      collapsed = true; // collapse sidebar after selection (desktop behavior)
-    });
-  }
-
-  void onCollapseToggle() {
-    setState(() {
-      collapsed = !collapsed;
     });
   }
 
@@ -50,10 +93,82 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final sidebarColor = isDark
-        ? const Color(0xFF0E1A60)
-        : const Color(0xFF3B4B9B);
+
+    Widget themeToggle({Color? color}) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final iconColor = color ?? (isDark ? Colors.white : Colors.black87);
+      final bgColor = isDark ? const Color(0xFF2E3545) : Colors.white;
+      return Container(
+        decoration: BoxDecoration(
+          color: bgColor,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IconButton(
+          icon: Icon(
+            isDark ? Icons.light_mode : Icons.dark_mode,
+            color: iconColor,
+          ),
+          tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+          onPressed: () {
+            ThemeController.setThemeMode(
+              isDark ? ThemeMode.light : ThemeMode.dark,
+            );
+          },
+        ),
+      );
+    }
+
+    Widget profileName() {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final textColor = isDark ? Colors.white : const Color(0xFF7A4CE0);
+      final avatarBg = isDark
+          ? const Color(0xFF4234A4)
+          : const Color(0xFF8372FE);
+      final displayName = _displayName.trim().isNotEmpty
+          ? _displayName.trim()
+          : 'Teacher';
+      final initial = displayName.isNotEmpty
+          ? displayName[0].toUpperCase()
+          : 'T';
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: avatarBg,
+            child: Text(
+              initial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.playfairDisplay(
+                color: textColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     Widget themeSwitchButton({Color? color}) {
       return Builder(
@@ -89,40 +204,21 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
       appBar: isMobile
           ? AppBar(
               title: const Text('Teacher Panel'),
-              backgroundColor: Colors.indigo.shade100,
+              backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
               leading: Builder(
                 builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu),
+                  icon: const Icon(Icons.chevron_right),
                   onPressed: () => Scaffold.of(context).openDrawer(),
                 ),
               ),
               actions: [
-                Builder(
-                  builder: (context) {
-                    final palette = Theme.of(
-                      context,
-                    ).extension<TeacherThemeColors>();
-                    final iconColor = palette?.iconColor ?? Colors.black87;
-                    return Row(
-                      children: [
-                        themeSwitchButton(color: iconColor),
-                        ValueListenableBuilder<ThemeMode>(
-                          valueListenable: ThemeController.themeMode,
-                          builder: (context, mode, _) {
-                            final isDark = mode == ThemeMode.dark;
-                            final logoutIconColor = isDark
-                                ? Colors.white
-                                : iconColor;
-                            return IconButton(
-                              icon: Icon(Icons.logout, color: logoutIconColor),
-                              tooltip: 'Logout',
-                              onPressed: () => _logout(context),
-                            );
-                          },
-                        ),
-                      ],
-                    );
-                  },
+                themeToggle(),
+                const SizedBox(width: 8),
+                profileName(),
+                IconButton(
+                  icon: const Icon(Icons.logout),
+                  tooltip: 'Logout',
+                  onPressed: () => _logout(context),
                 ),
               ],
             )
@@ -137,7 +233,8 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
                   });
                   Navigator.pop(context);
                 },
-                collapsed: false,
+                enableHoverExpand: false,
+                forceExpanded: true,
               ),
             )
           : null,
@@ -146,47 +243,21 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
           Row(
             children: [
               if (!isMobile)
-                Container(
-                  color: sidebarColor,
-                  width: collapsed ? 60 : 220,
-                  child: Column(
-                    children: [
-                      if (collapsed)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Align(
-                            alignment: Alignment.center,
-                            child: IconButton(
-                              icon: const Icon(Icons.menu, color: Colors.white),
-                              onPressed: onCollapseToggle,
-                              tooltip: 'Expand menu',
-                              padding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                      Expanded(
-                        child: TeacherSidebar(
-                          selectedIndex: selectedIndex,
-                          onItemSelected: onSidebarItemSelected,
-                          collapsed: collapsed,
-                        ),
+                Column(
+                  children: [
+                    Expanded(
+                      child: TeacherSidebar(
+                        selectedIndex: selectedIndex,
+                        onItemSelected: onSidebarItemSelected,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onTap: () {
-                    // If the sidebar is expanded (collapsed == false), collapse it when
-                    // the user taps the main content / blank area.
-                    if (!collapsed) {
-                      setState(() {
-                        collapsed = true;
-                      });
-                    }
-                  },
+                  onTap: () {},
                   child: pages[selectedIndex],
                 ),
               ),
@@ -207,6 +278,8 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       themeSwitchButton(color: iconColor),
+                      const SizedBox(width: 8),
+                      profileName(),
                       ValueListenableBuilder<ThemeMode>(
                         valueListenable: ThemeController.themeMode,
                         builder: (context, mode, _) {

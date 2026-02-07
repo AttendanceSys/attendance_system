@@ -287,6 +287,9 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
     final accent =
         palette?.accent ??
         (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final saveButtonBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
@@ -456,11 +459,10 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                     value: _semester,
                     decoration: input('Semester'),
                     items: [
-                      ...List.generate(14, (i) => (i + 1).toString())
-                          .map(
-                            (s) => DropdownMenuItem(value: s, child: Text(s)),
-                          )
-                          .toList(),
+                      ...List.generate(
+                        14,
+                        (i) => (i + 1).toString(),
+                      ).map((s) => DropdownMenuItem(value: s, child: Text(s))),
                       DropdownMenuItem(value: 'Custom', child: Text('Custom')),
                     ],
                     onChanged: (v) => setState(() {
@@ -497,7 +499,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(color: border),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             minimumSize: const Size(90, 40),
                           ),
@@ -517,9 +519,9 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                         child: ElevatedButton(
                           onPressed: _save,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: accent,
+                            backgroundColor: saveButtonBg,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             minimumSize: const Size(90, 40),
                           ),

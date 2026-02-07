@@ -121,8 +121,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
             teacherDocId,
             teacherUsername,
             teacherName,
-          ))
+          )) {
             continue;
+          }
           final cls =
               (td['class'] ??
                       td['className'] ??
@@ -220,8 +221,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                 teacherDocId,
                 teacherUsername,
                 teacherName,
-              ))
+              )) {
                 continue;
+              }
               final dep =
                   (td['department'] ??
                           td['department_name'] ??
@@ -331,8 +333,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                 teacherDocId,
                 teacherUsername,
                 teacherName,
-              ))
+              )) {
                 continue;
+              }
               // Only include QR codes for the current week (teacher report)
               DateTime? psDt;
               try {
@@ -361,8 +364,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
               final endOfWeek = startOfWeek.add(const Duration(days: 7));
               if (!(psDt.isAtSameMomentAs(startOfWeek) ||
                   (psDt.isAfter(startOfWeek) && psDt.isBefore(endOfWeek)) ||
-                  psDt.isAtSameMomentAs(endOfWeek)))
+                  psDt.isAtSameMomentAs(endOfWeek))) {
                 continue;
+              }
               final code = (qd['code'] ?? '').toString();
               if (code.isEmpty) continue;
               classCodes.putIfAbsent(cls, () => []).add(code);
@@ -503,7 +507,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         rows.add({
           'no': i + 1,
           'class': cls,
-          'd0': dayList.length > 0 ? dayList[0] : 0,
+          'd0': dayList.isNotEmpty ? dayList[0] : 0,
           'd1': dayList.length > 1 ? dayList[1] : 0,
           'd2': dayList.length > 2 ? dayList[2] : 0,
           'd3': dayList.length > 3 ? dayList[3] : 0,
@@ -533,8 +537,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   ) {
     if (teacherDocId.isEmpty &&
         (teacherUsername.isEmpty &&
-            (teacherName == null || teacherName.isEmpty)))
+            (teacherName == null || teacherName.isEmpty))) {
       return false;
+    }
 
     bool checkString(String s) {
       if (s.isEmpty) return false;
@@ -542,13 +547,15 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       if (teacherUsername.isNotEmpty) {
         final low = s.toLowerCase();
         if (low == teacherUsername.toLowerCase() ||
-            low.contains(teacherUsername.toLowerCase()))
+            low.contains(teacherUsername.toLowerCase())) {
           return true;
+        }
       }
       if (teacherName != null &&
           teacherName.isNotEmpty &&
-          _looseNameMatch(s, teacherName))
+          _looseNameMatch(s, teacherName)) {
         return true;
+      }
       return false;
     }
 
@@ -556,8 +563,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       if (v == null) return false;
       if (v is DocumentReference) {
         if (teacherDocId.isNotEmpty && v.id == teacherDocId) return true;
-        if (teacherDocId.isNotEmpty && v.path.contains(teacherDocId))
+        if (teacherDocId.isNotEmpty && v.path.contains(teacherDocId)) {
           return true;
+        }
         return false;
       }
       if (v is String) return checkString(v);
@@ -1810,24 +1818,24 @@ class _FiltersRow extends StatelessWidget {
                     (selectedDepartment == null || onPercentagePressed == null)
                     ? null
                     : onPercentagePressed,
-                child: const Text('Percentage'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 12,
                   ),
                 ),
+                child: const Text('Percentage'),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: onRefreshPressed,
-                child: const Text('Refresh'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 12,
                   ),
                 ),
+                child: const Text('Refresh'),
               ),
             ],
           ),

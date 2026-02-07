@@ -36,10 +36,12 @@ class AdminDashboardStatsGrid extends StatelessWidget {
         final lecturersCount = snapshot.data![2];
 
         final labels = ["Faculties", "Admins", "Lecturers"];
+        // Keep dashboard icons aligned with the Super Admin sidebar.
+        // Sidebar uses: Faculties=apartment_rounded, Admins=admin_panel_settings_rounded, Lecturers=person_rounded.
         final icons = [
-          Icons.account_tree_outlined,
-          Icons.groups,
-          Icons.school_outlined,
+          Icons.apartment_rounded,
+          Icons.admin_panel_settings_rounded,
+          Icons.person_rounded,
         ];
         final colors = [
           const Color(0xFFB9EEB6),
@@ -194,7 +196,8 @@ class _StatsCard extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: 16 * scale,
-                vertical: 8 * scale, // Reduce vertical padding for smaller screens
+                vertical:
+                    8 * scale, // Reduce vertical padding for smaller screens
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -233,7 +236,10 @@ class _StatsCard extends StatelessWidget {
                           if (size.maxHeight > 70)
                             SizedBox(
                               // Make sparkline very compact
-                              height: math.min((14 * scale).clamp(8.0, 16.0), size.maxHeight * 0.3),
+                              height: math.min(
+                                (14 * scale).clamp(8.0, 16.0),
+                                size.maxHeight * 0.3,
+                              ),
                               child: _buildSparkline(value, theme, isDark),
                             ),
                         ],
@@ -255,7 +261,9 @@ class _StatsCard extends StatelessWidget {
                       child: Icon(
                         icon,
                         size: 20 * scale,
-                        color: isDark ? color.withOpacity(0.95) : color,
+                        color: isDark
+                            ? theme.colorScheme.onSurface.withOpacity(0.95)
+                            : color,
                       ),
                     ),
                   ),
@@ -545,13 +553,13 @@ class _DepartmentsPerFacultyChartState
                           final txt = values[idx].toString();
                           return SideTitleWidget(
                             axisSide: meta.axisSide,
+                            space: 6,
                             child: Text(
                               txt,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            space: 6,
                           );
                         },
                       ),
@@ -830,13 +838,13 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
                           final txt = values[idx].toString();
                           return SideTitleWidget(
                             axisSide: meta.axisSide,
+                            space: 6,
                             child: Text(
                               txt,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            space: 6,
                           );
                         },
                       ),

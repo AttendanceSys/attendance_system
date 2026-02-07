@@ -147,6 +147,9 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
     final accent =
         palette?.accent ??
         (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final saveButtonBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
@@ -299,7 +302,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: border),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
@@ -428,9 +431,9 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: accent,
+                          backgroundColor: saveButtonBg,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),

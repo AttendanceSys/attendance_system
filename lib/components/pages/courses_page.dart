@@ -433,6 +433,10 @@ class _CoursesPageState extends State<CoursesPage> {
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isDesktop = screenWidth > 800;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final disabledActionBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
 
     return Padding(
       padding: const EdgeInsets.all(32.0),
@@ -489,7 +493,7 @@ class _CoursesPageState extends State<CoursesPage> {
                                 80,
                               ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                           ),
@@ -506,8 +510,10 @@ class _CoursesPageState extends State<CoursesPage> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green,
+                              disabledBackgroundColor: disabledActionBg,
+                              disabledForegroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                             onPressed: _selectedIndex == null
@@ -531,8 +537,10 @@ class _CoursesPageState extends State<CoursesPage> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,
+                              disabledBackgroundColor: disabledActionBg,
+                              disabledForegroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                             onPressed: _selectedIndex == null
@@ -591,8 +599,9 @@ class _CoursesPageState extends State<CoursesPage> {
     final path = 'teachers/$teacherRef';
     final pathWithSlash = '/$path';
     if (_teacherNames.containsKey(path)) return _teacherNames[path]!;
-    if (_teacherNames.containsKey(pathWithSlash))
+    if (_teacherNames.containsKey(pathWithSlash)) {
       return _teacherNames[pathWithSlash]!;
+    }
     // maybe teacherRef already contains a path; try last segment
     if (teacherRef.contains('/')) {
       final parts = teacherRef.split('/').where((p) => p.isNotEmpty).toList();
@@ -885,8 +894,9 @@ class _CoursesPageState extends State<CoursesPage> {
       final List<Map<String, dynamic>> parsed = [];
       for (var i = 1; i < rows.length; i++) {
         final row = rows[i];
-        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty))
+        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty)) {
           continue;
+        }
         final map = <String, dynamic>{};
         for (var c = 0; c < headers.length && c < row.length; c++) {
           map[headers[c]] = row[c]?.toString() ?? '';
@@ -980,10 +990,11 @@ class _CoursesPageState extends State<CoursesPage> {
         );
 
         final ok = await _addCourseFromUpload(course);
-        if (ok)
+        if (ok) {
           added.add(courseCode);
-        else
+        } else {
           skipped.add(courseCode);
+        }
       }
 
       if (mounted) {

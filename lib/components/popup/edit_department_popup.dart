@@ -32,6 +32,9 @@ class _EditDepartmentPopupState extends State<EditDepartmentPopup> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final saveButtonBg =
+        isDark ? const Color(0xFF4234A4) : const Color(0xFF8372FE);
     return AlertDialog(
       title: const Text('Edit Department'),
       content: Column(
@@ -57,6 +60,7 @@ class _EditDepartmentPopupState extends State<EditDepartmentPopup> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: saveButtonBg),
           onPressed: () {
             widget.onEdit(
               _codeController.text.trim(),

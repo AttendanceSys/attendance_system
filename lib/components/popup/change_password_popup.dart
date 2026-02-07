@@ -56,7 +56,7 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
     final scheme = theme.colorScheme;
     final borderColor = scheme.outline.withOpacity(0.7);
     final fillColor = theme.inputDecorationTheme.fillColor ??
-        (scheme.surfaceVariant.withOpacity(0.6));
+        (scheme.surfaceContainerHighest.withOpacity(0.6));
     final primary = scheme.primary;
     return InputDecoration(
       labelText: hint,
@@ -133,6 +133,10 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
         : double.infinity;
 
     final scheme = theme.colorScheme;
+    final saveButtonBg =
+        theme.brightness == Brightness.dark
+            ? const Color(0xFF4234A4)
+            : const Color(0xFF8372FE);
 
     return Dialog(
       elevation: 10,
@@ -213,8 +217,9 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
                   obscureText: !_showOld,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Enter current password';
-                    if (v.length < 6)
+                    if (v.length < 6) {
                       return 'Password must be at least 6 characters';
+                    }
                     return null;
                   },
                 ),
@@ -242,10 +247,12 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
                   obscureText: !_showNew,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Enter new password';
-                    if (v.length < 6)
+                    if (v.length < 6) {
                       return 'New password must be at least 6 characters';
-                    if (v == _oldController.text)
+                    }
+                    if (v == _oldController.text) {
                       return 'New password must be different';
+                    }
                     return null;
                   },
                 ),
@@ -268,8 +275,9 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
                   obscureText: !_showConfirm,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Confirm new password';
-                    if (v != _newController.text)
+                    if (v != _newController.text) {
                       return 'Passwords do not match';
+                    }
                     return null;
                   },
                 ),
@@ -279,19 +287,19 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
                   children: [
                     OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(100, 40),
                         foregroundColor: scheme.onSurface,
                         side: BorderSide(color: scheme.outline),
                       ),
+                      child: const Text('Cancel'),
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton(
                       onPressed: _loading ? null : _onSave,
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size(100, 40),
-                        backgroundColor: scheme.primary,
+                        backgroundColor: saveButtonBg,
                         foregroundColor: scheme.onPrimary,
                       ),
                       child: _loading

@@ -34,7 +34,7 @@ class StudentProfilePopup extends StatelessWidget {
     final accent = palette?.accent ?? const Color(0xFF2196F3);
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
       backgroundColor: surface,
       child: Padding(
@@ -89,7 +89,7 @@ class StudentProfilePopup extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       padding: EdgeInsets.zero,
                     ),
@@ -111,7 +111,7 @@ class StudentProfilePopup extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       padding: EdgeInsets.zero,
                     ),

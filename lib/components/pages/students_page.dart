@@ -439,6 +439,10 @@ class _StudentsPageState extends State<StudentsPage> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final disabledActionBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     return Padding(
       padding: const EdgeInsets.all(32.0),
       child: Column(
@@ -494,7 +498,7 @@ class _StudentsPageState extends State<StudentsPage> {
                                 80,
                               ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                           ),
@@ -511,8 +515,10 @@ class _StudentsPageState extends State<StudentsPage> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green,
+                              disabledBackgroundColor: disabledActionBg,
+                              disabledForegroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               padding: const EdgeInsets.symmetric(
                                 vertical: 0,
@@ -538,8 +544,10 @@ class _StudentsPageState extends State<StudentsPage> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,
+                              disabledBackgroundColor: disabledActionBg,
+                              disabledForegroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               padding: const EdgeInsets.symmetric(
                                 vertical: 0,
@@ -750,8 +758,9 @@ class _StudentsPageState extends State<StudentsPage> {
       final List<Map<String, dynamic>> parsed = [];
       for (var i = 1; i < rows.length; i++) {
         final row = rows[i];
-        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty))
+        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty)) {
           continue;
+        }
         final map = <String, dynamic>{};
         for (var c = 0; c < headers.length && c < row.length; c++) {
           map[headers[c]] = row[c]?.toString() ?? '';
@@ -830,10 +839,11 @@ class _StudentsPageState extends State<StudentsPage> {
         );
 
         final ok = await _addStudentFromUpload(stud);
-        if (ok)
+        if (ok) {
           added.add(username);
-        else
+        } else {
           skipped.add(username);
+        }
       }
 
       if (mounted) {

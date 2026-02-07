@@ -255,9 +255,9 @@ class _AdminAnomaliesPageState extends State<AdminAnomaliesPage> {
     if (v == null) return '';
     try {
       DateTime dt;
-      if (v is Timestamp)
+      if (v is Timestamp) {
         dt = v.toDate();
-      else if (v is DateTime)
+      } else if (v is DateTime)
         dt = v;
       else
         dt = DateTime.parse(v.toString());
@@ -444,7 +444,9 @@ class _AdminAnomaliesPageState extends State<AdminAnomaliesPage> {
   List<String> _availableFraudTypes() {
     final set = <String>{};
     for (final e in _items) {
-      for (final f in e.flags) set.add(f);
+      for (final f in e.flags) {
+        set.add(f);
+      }
     }
     final list = set.toList()..sort();
     return list;

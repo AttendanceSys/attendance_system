@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../services/session.dart';
-import '../services/attendance_service.dart';
 import 'dart:math' as math;
 
 /// Dashboard grid with four focused charts:
@@ -76,11 +75,13 @@ class DashboardStatsGrid extends StatelessWidget {
                       "Classes",
                       "Students",
                     ];
+                    // Keep dashboard icons aligned with the Faculty Admin sidebar.
+                    // Sidebar uses: Departments=account_tree_rounded, Classes=class_rounded, Students=groups_rounded, Courses=menu_book_rounded.
                     final icons = [
-                      Icons.account_tree_outlined,
-                      Icons.menu_book_outlined,
-                      Icons.groups_2_outlined,
-                      Icons.people_alt_outlined,
+                      Icons.account_tree_rounded,
+                      Icons.menu_book_rounded,
+                      Icons.class_rounded,
+                      Icons.groups_rounded,
                     ];
                     final colors = [
                       Colors.blue,
@@ -370,7 +371,9 @@ class _StatsCard extends StatelessWidget {
                       child: Icon(
                         icon,
                         size: 22 * scale,
-                        color: isDark ? color.withOpacity(0.95) : color,
+                        color: isDark
+                            ? theme.colorScheme.onSurface.withOpacity(0.95)
+                            : color,
                       ),
                     ),
                   ),
@@ -454,7 +457,7 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
       final counts = List<int>.filled(7, 0);
       final seen = <String>{};
 
-      for (final doc in snap!.docs) {
+      for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
 
@@ -524,6 +527,10 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
                   onPressed: (i) => setState(
                     () => _type = i == 0 ? _ChartType.line : _ChartType.bar,
                   ),
+                  color: theme.textTheme.bodySmall?.color,
+                  selectedColor: theme.brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black,
                   borderRadius: BorderRadius.circular(8),
                   children: const [
                     Padding(
@@ -551,6 +558,9 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
   }
 
   Widget _buildLine(ThemeData theme, List<int> counts) {
+    final isLight = theme.brightness == Brightness.light;
+    final tooltipBg = isLight ? theme.colorScheme.primary : Colors.white;
+    final tooltipText = isLight ? Colors.white : Colors.black;
     final spots = counts
         .asMap()
         .entries
@@ -562,6 +572,25 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
       LineChartData(
         minY: 0,
         maxY: maxY <= 0 ? 10 : maxY,
+        lineTouchData: LineTouchData(
+          enabled: true,
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (touchedSpot) => tooltipBg,
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots
+                  .map(
+                    (spot) => LineTooltipItem(
+                      spot.y.toInt().toString(),
+                      TextStyle(
+                        color: tooltipText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                  .toList();
+            },
+          ),
+        ),
         gridData: FlGridData(show: true),
         titlesData: FlTitlesData(
           bottomTitles: AxisTitles(
@@ -579,8 +608,9 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
                   return weekDays[d.weekday % 7];
                 });
                 final idx = value.toInt();
-                if (idx < 0 || idx >= labels.length)
+                if (idx < 0 || idx >= labels.length) {
                   return const SizedBox.shrink();
+                }
                 return Text(labels[idx], style: theme.textTheme.bodySmall);
               },
             ),
@@ -606,6 +636,9 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
   }
 
   Widget _buildBar(ThemeData theme, List<int> counts) {
+    final isLight = theme.brightness == Brightness.light;
+    final tooltipBg = isLight ? theme.colorScheme.primary : Colors.white;
+    final tooltipText = isLight ? Colors.white : Colors.black;
     final bars = counts
         .asMap()
         .entries
@@ -643,8 +676,9 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
                   return weekDays[d.weekday % 7];
                 });
                 final idx = value.toInt();
-                if (idx < 0 || idx >= labels.length)
+                if (idx < 0 || idx >= labels.length) {
                   return const SizedBox.shrink();
+                }
                 return Text(labels[idx], style: theme.textTheme.bodySmall);
               },
             ),
@@ -790,6 +824,9 @@ class _DepartmentsByStudentsChartState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final tooltipBg = isLight ? theme.colorScheme.primary : Colors.white;
+    final tooltipText = isLight ? Colors.white : Colors.black;
     return FutureBuilder<Map<String, int>>(
       future: _futureCounts,
       builder: (c, s) {
@@ -832,6 +869,7 @@ class _DepartmentsByStudentsChartState
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
+                      getTooltipColor: (group) => tooltipBg,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         final idx = group.x.toInt();
                         final label = (idx >= 0 && idx < labels.length)
@@ -841,7 +879,7 @@ class _DepartmentsByStudentsChartState
                         return BarTooltipItem(
                           '$label\n$value',
                           TextStyle(
-                            color: theme.colorScheme.onSurface,
+                            color: tooltipText,
                             fontWeight: FontWeight.w600,
                           ),
                         );
@@ -854,18 +892,19 @@ class _DepartmentsByStudentsChartState
                         showTitles: true,
                         getTitlesWidget: (value, meta) {
                           final idx = value.toInt();
-                          if (idx < 0 || idx >= values.length)
+                          if (idx < 0 || idx >= values.length) {
                             return const SizedBox.shrink();
+                          }
                           final txt = values[idx].toString();
                           return SideTitleWidget(
                             axisSide: meta.axisSide,
+                            space: 6,
                             child: Text(
                               txt,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            space: 6,
                           );
                         },
                       ),
@@ -875,8 +914,9 @@ class _DepartmentsByStudentsChartState
                         showTitles: true,
                         getTitlesWidget: (value, meta) {
                           final idx = value.toInt();
-                          if (idx < 0 || idx >= labels.length)
+                          if (idx < 0 || idx >= labels.length) {
                             return const SizedBox.shrink();
+                          }
                           final txt = labels[idx];
                           return SideTitleWidget(
                             axisSide: meta.axisSide,
@@ -1150,8 +1190,9 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
           final tsString =
               (data['scannedAt'] ?? data['timestamp'] ?? data['created_at'])
                   ?.toString();
-          if (tsString != null && tsString.isNotEmpty)
+          if (tsString != null && tsString.isNotEmpty) {
             dt = DateTime.tryParse(tsString);
+          }
         }
         if (dt == null) continue;
         final dateOnly = DateTime(dt.year, dt.month, dt.day);
@@ -1192,8 +1233,9 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
         if (s.hasError) return Center(child: Text('Error loading data'));
         if (!s.hasData) return const _ChartLoading();
         final data = s.data!;
-        if (data.isEmpty)
+        if (data.isEmpty) {
           return const Center(child: Text('No attendance data'));
+        }
         final maxCount = data
             .map((e) => e.count)
             .fold<int>(0, (a, b) => math.max(a, b));
@@ -1256,7 +1298,7 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
                     ],
                   ),
                 );
-              }).toList(),
+              }),
               const SizedBox(height: 6),
               Align(
                 alignment: Alignment.centerLeft,

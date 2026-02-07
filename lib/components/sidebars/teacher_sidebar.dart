@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/session.dart';
-import '../../theme/teacher_theme.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class TeacherSidebar extends StatefulWidget {
   final Function(int) onItemSelected;
   final int selectedIndex;
-  final bool collapsed; // parent-controlled collapsed state
-  final String teacherName; // optional fallback
+  final bool enableHoverExpand;
+  final bool forceExpanded;
 
   const TeacherSidebar({
     super.key,
     required this.onItemSelected,
     required this.selectedIndex,
-    this.collapsed = false,
-    this.teacherName = "",
+    this.enableHoverExpand = true,
+    this.forceExpanded = false,
   });
 
   @override
@@ -22,216 +20,227 @@ class TeacherSidebar extends StatefulWidget {
 }
 
 class _TeacherSidebarState extends State<TeacherSidebar> {
-  String? displayName;
-
-  @override
-  void initState() {
-    super.initState();
-    displayName = widget.teacherName.isNotEmpty
-        ? widget.teacherName
-        : Session.name;
-    if ((displayName == null || displayName!.isEmpty) &&
-        Session.username != null &&
-        Session.username!.isNotEmpty) {
-      _loadDisplayName();
-    }
-  }
-
-  Future<void> _loadDisplayName() async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('teachers')
-          .where('username', isEqualTo: Session.username)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
-        final name =
-            (data['teacher_name'] ??
-                    data['name'] ??
-                    data['display_name'] ??
-                    Session.username)
-                as String;
-        if (mounted) setState(() => displayName = name);
-        Session.name = name;
-        return;
-      }
-
-      // Fallback to users collection
-      final q2 = await FirebaseFirestore.instance
-          .collection('users')
-          .where('username', isEqualTo: Session.username)
-          .limit(1)
-          .get();
-      if (q2.docs.isNotEmpty) {
-        final d = q2.docs.first.data();
-        final name =
-            (d['name'] ?? d['display_name'] ?? Session.username) as String;
-        if (mounted) setState(() => displayName = name);
-        Session.name = name;
-      }
-    } catch (_) {
-      // ignore errors
-    }
-  }
+  bool isCollapsed = true;
 
   @override
   Widget build(BuildContext context) {
-    final collapsed = widget.collapsed;
+    final collapsed = widget.forceExpanded ? false : isCollapsed;
     final selectedIndex = widget.selectedIndex;
     final onItemSelected = widget.onItemSelected;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final sidebarColor = isDark
-        ? const Color(0xFF0E1A60)
-        : const Color(0xFF3B4B9B);
 
-    return Container(
-      width: collapsed ? 60 : 220,
-      color: sidebarColor,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const SizedBox(height: 24),
-          // Avatar on top
-          CircleAvatar(
-            radius: collapsed ? 22 : 42,
-            backgroundColor: const Color(0xFF70C2FF),
-            child: Text(
-              (displayName != null && displayName!.isNotEmpty)
-                  ? displayName![0].toUpperCase()
-                  : 'T',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: collapsed ? 18 : 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          // Name at the bottom of the avatar (hidden when collapsed)
-          if (!collapsed)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                displayName ?? 'Teacher',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                softWrap: true,
-                overflow: TextOverflow.visible,
-              ),
-            ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              children: [
-                SidebarItem(
-                  icon: Icons.qr_code_2,
-                  title: "QR Generation",
-                  isSelected: selectedIndex == 0,
-                  onTap: () => onItemSelected(0),
-                  collapsed: collapsed,
-                ),
-                SidebarItem(
-                  icon: Icons.calendar_month_outlined,
-                  title: "Attendance",
-                  isSelected: selectedIndex == 1,
-                  onTap: () => onItemSelected(1),
-                  collapsed: collapsed,
-                ),
-              ],
-            ),
-          ),
-        ],
+    const sidebarWidthExpanded = 270.0;
+    const sidebarWidthCollapsed = 90.0;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sidebarBg = isDark
+        ? const Color.fromARGB(255, 11, 16, 29)
+        : const Color(0xFF3E54A0);
+    const borderColor = Color(0xFF1F2937);
+    final inactiveIcon = isDark
+        ? const Color.fromARGB(255, 255, 255, 255)
+        : const Color.fromARGB(255, 255, 255, 255);
+    final activeBg = isDark ? const Color(0xFF4234A4) : const Color(0xFF8372FE);
+    const selectedIcon = Colors.white;
+
+    final sidebar = AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      width: collapsed ? sidebarWidthCollapsed : sidebarWidthExpanded,
+      decoration: BoxDecoration(
+        color: sidebarBg,
+        border: const Border(right: BorderSide(color: borderColor, width: 1)),
       ),
-    );
-  }
-}
-
-class SidebarItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final bool isSelected;
-  final VoidCallback onTap;
-  final bool collapsed;
-
-  const SidebarItem({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.isSelected,
-    required this.onTap,
-    this.collapsed = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<TeacherThemeColors>();
-    final Color selectedBg =
-        (palette?.selectedBg ??
-        (isDark
-            ? Colors.white.withOpacity(0.13)
-            : Colors.white.withOpacity(0.25)));
-    final Color selectedText = Colors.white;
-    final Color unselectedText = Colors.white;
-    final Color selectedIcon = Colors.white;
-    final Color unselectedIcon = Colors.white;
-    return Tooltip(
-      message: collapsed ? title : "",
-      verticalOffset: 0,
-      preferBelow: false,
-      waitDuration: const Duration(milliseconds: 300),
-      child: Material(
-        color: isSelected ? selectedBg : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        elevation: isSelected ? 2 : 0,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: collapsed ? 0 : 16,
-              vertical: 12,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: isSelected ? selectedBg : Colors.transparent,
-            ),
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
-              mainAxisAlignment: collapsed
-                  ? MainAxisAlignment.center
-                  : MainAxisAlignment.start,
               children: [
-                Icon(
-                  icon,
-                  color: isSelected ? selectedIcon : unselectedIcon,
-                  size: 24,
+                Image.asset(
+                  'assets/lightLogo.png',
+                  height: 40,
+                  fit: BoxFit.contain,
                 ),
                 if (!collapsed) ...[
-                  const SizedBox(width: 12),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: isSelected ? selectedText : unselectedText,
-                      fontSize: 16,
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.normal,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'QScan',
+                            style: GoogleFonts.playfairDisplay(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 25,
+                              color: const Color.fromARGB(255, 255, 255, 255),
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' Smart',
+                            style: GoogleFonts.playfairDisplay(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 25,
+                              color: const Color.fromARGB(255, 255, 255, 255),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ],
             ),
           ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _SidebarItem(
+                  icon: Icons.qr_code_rounded,
+                  title: "QR Generation",
+                  isSelected: selectedIndex == 0,
+                  onTap: () => onItemSelected(0),
+                  collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
+                ),
+                _SidebarItem(
+                  icon: Icons.fact_check_rounded,
+                  title: "Attendance",
+                  isSelected: selectedIndex == 1,
+                  onTap: () => onItemSelected(1),
+                  collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+    );
+
+    if (widget.forceExpanded || !widget.enableHoverExpand) {
+      return sidebar;
+    }
+
+    return MouseRegion(
+      onEnter: (_) {
+        if (isCollapsed) setState(() => isCollapsed = false);
+      },
+      onExit: (_) {
+        if (!isCollapsed) setState(() => isCollapsed = true);
+      },
+      child: sidebar,
+    );
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final bool collapsed;
+  final Color inactiveIcon;
+  final Color activeBg;
+  final Color selectedIcon;
+
+  const _SidebarItem({
+    required this.icon,
+    required this.title,
+    required this.isSelected,
+    required this.onTap,
+    required this.collapsed,
+    required this.inactiveIcon,
+    required this.activeBg,
+    required this.selectedIcon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          width: collapsed ? null : double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: isSelected ? activeBg : Colors.transparent,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // During the AnimatedContainer width transition, the sidebar may still be narrow
+              // while `collapsed` is already false. Only show the spacer/label once there's room.
+              const iconWidth = 25.0;
+              const labelSpacing = 12.0;
+              final canShowLabel =
+                  !collapsed &&
+                  constraints.maxWidth >= (iconWidth + labelSpacing);
+
+              return Row(
+                mainAxisSize: collapsed ? MainAxisSize.min : MainAxisSize.max,
+                children: [
+                  Icon(
+                    icon,
+                    color: isSelected ? selectedIcon : inactiveIcon,
+                    size: 25,
+                  ),
+                  if (canShowLabel) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : inactiveIcon,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
         ),
       ),
+    );
+
+    final item = Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        hoverColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        onTap: onTap,
+        child: content,
+      ),
+    );
+
+    if (!collapsed) {
+      return item;
+    }
+
+    return Tooltip(
+      message: title,
+      verticalOffset: 0,
+      preferBelow: false,
+      waitDuration: const Duration(milliseconds: 200),
+      child: item,
     );
   }
 }

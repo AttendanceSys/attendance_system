@@ -20,6 +20,7 @@ import 'dart:convert';
 import '../cards/searchBar.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../theme/super_admin_theme.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -528,31 +529,58 @@ class _TimetablePageState extends State<TimetablePage> {
     });
 
     try {
-      Query query = _firestore.collection('courses');
+      final coursesCol = _firestore.collection('courses');
+      final results = <String, Map<String, dynamic>>{};
+
+      Future<void> addFrom(Query q) async {
+        try {
+          final snap = await q.get();
+          for (final d in snap.docs) {
+            results[d.id] = (d.data() as Map<String, dynamic>? ?? {});
+          }
+        } catch (_) {
+          // Ignore a failed query variant and continue.
+        }
+      }
+
       if (classArg is DocumentReference) {
-        query = query.where('class', isEqualTo: classArg);
+        // Most common schema: `class` or `class_ref` stored as DocumentReference
+        await addFrom(coursesCol.where('class', isEqualTo: classArg));
+        await addFrom(coursesCol.where('class_ref', isEqualTo: classArg));
+        await addFrom(coursesCol.where('classRef', isEqualTo: classArg));
       } else if (classArg != null) {
-        final clsId = classArg.toString();
-        query = query.where('class_id', isEqualTo: clsId);
+        final clsId = classArg.toString().trim();
+        if (clsId.isNotEmpty) {
+          // Common string-id schemas
+          await addFrom(coursesCol.where('class_id', isEqualTo: clsId));
+          await addFrom(coursesCol.where('classId', isEqualTo: clsId));
+
+          // Also try the classes/{id} DocumentReference in case courses store refs
+          final classRef = _firestore.collection('classes').doc(clsId);
+          await addFrom(coursesCol.where('class', isEqualTo: classRef));
+          await addFrom(coursesCol.where('class_ref', isEqualTo: classRef));
+          await addFrom(coursesCol.where('classRef', isEqualTo: classRef));
+        }
       }
 
-      QuerySnapshot snap;
-      try {
-        snap = await query.get();
-      } catch (_) {
-        snap = await _firestore.collection('courses').get();
+      // If all queries returned empty, do a safe fallback so the editor isn't unusable.
+      if (results.isEmpty) {
+        final snap = await coursesCol.limit(200).get();
+        for (final d in snap.docs) {
+          results[d.id] = (d.data() as Map<String, dynamic>? ?? {});
+        }
       }
 
-      var courses = snap.docs.map((d) {
-        final data = d.data() as Map<String, dynamic>? ?? {};
-        final name = (data['course_name'] ?? data['name'] ?? d.id)
+      var courses = results.entries.map((e) {
+        final data = e.value;
+        final name = (data['course_name'] ?? data['name'] ?? e.key)
             .toString()
             .trim();
         return {
-          'id': d.id,
-          'course_name': name.isNotEmpty ? name : d.id,
+          'id': e.key,
+          'course_name': name.isNotEmpty ? name : e.key,
           'raw': data,
-          'ref': d.reference,
+          // no stable reference available from merged results; omit `ref`
         };
       }).toList();
 
@@ -731,7 +759,8 @@ class _TimetablePageState extends State<TimetablePage> {
           orElse: () => <String, dynamic>{},
         );
         if (classMap.isNotEmpty) {
-          await _loadCoursesForClass(classMap['id']);
+          // Prefer DocumentReference matching (most Firestore schemas store refs)
+          await _loadCoursesForClass(classMap['ref'] ?? classMap['id']);
         } else {
           await _loadCoursesForClass(classDisplay);
         }
@@ -2807,6 +2836,29 @@ class _TimetablePageState extends State<TimetablePage> {
     await _generatePdf(_ExportChoice.entireClass);
   }
 
+  Future<pw.ImageProvider?> _loadPdfHeaderImage() async {
+    try {
+      final data = await rootBundle.load('assets/jus1.jpeg');
+      final bytes = data.buffer.asUint8List();
+      if (bytes.isEmpty) return null;
+      return pw.MemoryImage(bytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  pw.Widget _pdfHeaderImage(pw.ImageProvider? image) {
+    if (image == null) return pw.SizedBox();
+    return pw.Container(
+      width: double.infinity,
+      alignment: pw.Alignment.center,
+      child: pw.Image(
+        image,
+        fit: pw.BoxFit.fitWidth,
+      ),
+    );
+  }
+
   Future<void> _generatePdf(_ExportChoice choice) async {
     final depDisplay = selectedDepartment != null
         ? _displayNameForDeptCached(selectedDepartment!)
@@ -2824,6 +2876,7 @@ class _TimetablePageState extends State<TimetablePage> {
     }
 
     final pdf = pw.Document();
+    final headerImage = await _loadPdfHeaderImage();
     final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
     final periods = (classPeriods[depKey]?[classKey] ?? currentPeriods);
@@ -2869,7 +2922,7 @@ class _TimetablePageState extends State<TimetablePage> {
           ),
         ),
         build: (ctx) => [
-          _pdfHeader(depKey, classKey, dateStr),
+          _pdfHeader(depKey, classKey, dateStr, headerImage: headerImage),
           pw.SizedBox(height: 8),
           if (periods.isEmpty)
             pw.Text(
@@ -2908,10 +2961,17 @@ class _TimetablePageState extends State<TimetablePage> {
     );
   }
 
-  pw.Widget _pdfHeader(String dep, String cls, String dateStr) {
+  pw.Widget _pdfHeader(
+    String dep,
+    String cls,
+    String dateStr, {
+    pw.ImageProvider? headerImage,
+  }) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
+        _pdfHeaderImage(headerImage),
+        if (headerImage != null) pw.SizedBox(height: 8),
         pw.Text(
           'Class Timetable',
           style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
@@ -3130,6 +3190,7 @@ class _TimetablePageState extends State<TimetablePage> {
         : '';
     final lecturerName = selectedLecturer ?? '';
     final pdf = pw.Document();
+    final headerImage = await _loadPdfHeaderImage();
     final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
 
     pdf.addPage(
@@ -3143,6 +3204,8 @@ class _TimetablePageState extends State<TimetablePage> {
         ),
         build: (ctx) {
           return [
+            _pdfHeaderImage(headerImage),
+            if (headerImage != null) pw.SizedBox(height: 8),
             pw.Text(
               'Lecturer Schedule',
               style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
@@ -3663,8 +3726,10 @@ class _TimetableGrid extends StatelessWidget {
                                       if (lecturerOnly.isNotEmpty)
                                         Text(
                                           lecturerOnly,
-                                          style: const TextStyle(
-                                            color: Colors.black87,
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.black87,
                                             fontSize: 12,
                                           ),
                                           maxLines: 2,

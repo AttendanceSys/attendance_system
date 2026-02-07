@@ -71,8 +71,9 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
       builder: (context) => ChangePasswordPopup(
         onSubmit: (oldPass, newPass) async {
           try {
-            if (newPass.length < 6)
+            if (newPass.length < 6) {
               return 'New password must be at least 6 characters';
+            }
 
             final studentsRef = FirebaseFirestore.instance.collection(
               'students',
@@ -108,14 +109,16 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               debugPrint('Password change onSubmit lookup error: $e');
             }
 
-            if (studentDoc == null || !studentDoc.exists)
+            if (studentDoc == null || !studentDoc.exists) {
               return 'Student record not found';
+            }
 
             final data = (studentDoc.data() ?? {}) as Map<String, dynamic>;
             final stored = (data['password'] ?? '').toString();
 
-            if (stored.trim() != oldPass)
+            if (stored.trim() != oldPass) {
               return 'Current password is incorrect';
+            }
 
             try {
               await studentsRef.doc(studentDoc.id).update({
@@ -167,7 +170,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
     debugPrint('ChangePassword dialog returned: $success');
     if (success == true) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text(
@@ -177,6 +180,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
             backgroundColor: Colors.greenAccent,
           ),
         );
+      }
     }
   }
 

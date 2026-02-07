@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../services/session.dart';
-import '../../theme/super_admin_theme.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class FacultyAdminSidebar extends StatefulWidget {
   final Function(int) onItemSelected;
   final int selectedIndex;
-  final bool collapsed;
+  final bool enableHoverExpand;
+  final bool forceExpanded;
 
   const FacultyAdminSidebar({
     super.key,
     required this.onItemSelected,
     required this.selectedIndex,
-    this.collapsed = false,
+    this.enableHoverExpand = true,
+    this.forceExpanded = false,
   });
 
   @override
@@ -20,160 +20,184 @@ class FacultyAdminSidebar extends StatefulWidget {
 }
 
 class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
-  String? displayName;
-
-  @override
-  void initState() {
-    super.initState();
-    displayName = Session.name;
-    if ((displayName == null || displayName!.isEmpty) &&
-        Session.username != null &&
-        Session.username!.isNotEmpty) {
-      _loadDisplayName();
-    }
-  }
-
-  Future<void> _loadDisplayName() async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('admins')
-          .where('username', isEqualTo: Session.username)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
-        final name =
-            (data['name'] ?? data['full_name'] ?? data['display_name'] ?? Session.username)
-                as String;
-        if (mounted) {
-          setState(() {
-            displayName = name;
-          });
-        }
-        Session.name = name;
-      }
-    } catch (_) {
-      // ignore errors silently; we'll fallback to username
-    }
-  }
-
-  void _emit(int idx) {
-    debugPrint('FacultyAdminSidebar: item tapped -> $idx');
-    widget.onItemSelected(idx);
-  }
+  bool isCollapsed = true;
 
   @override
   Widget build(BuildContext context) {
-    final collapsed = widget.collapsed;
+    final collapsed = widget.forceExpanded ? false : isCollapsed;
     final selectedIndex = widget.selectedIndex;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final sidebarColor =
-        palette?.sidebarColor ?? (isDark ? const Color(0xFF0E1A60) : const Color(0xFF3B4B9B));
+    final onItemSelected = widget.onItemSelected;
 
-    return Container(
-      width: collapsed ? 60 : 220,
-      color: sidebarColor,
+    const sidebarWidthExpanded = 270.0;
+    const sidebarWidthCollapsed = 90.0;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sidebarBg = isDark
+        ? const Color.fromARGB(255, 11, 16, 29)
+        : const Color(0xFF3E54A0);
+    const borderColor = Color(0xFF1F2937);
+    final inactiveIcon = isDark
+        ? const Color.fromARGB(255, 255, 255, 255)
+        : const Color.fromARGB(255, 255, 255, 255);
+    final activeBg = isDark ? const Color(0xFF4234A4) : const Color(0xFF8372FE);
+    const selectedIcon = Colors.white;
+
+    final sidebar = AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      width: collapsed ? sidebarWidthCollapsed : sidebarWidthExpanded,
+      decoration: BoxDecoration(
+        color: sidebarBg,
+        border: const Border(right: BorderSide(color: borderColor, width: 1)),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const SizedBox(height: 24),
-          CircleAvatar(
-            radius: collapsed ? 22 : 42,
-            backgroundColor: const Color(0xFF70C2FF),
-            child: Text(
-              (displayName != null && displayName!.isNotEmpty) ? displayName![0].toUpperCase() : 'U',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: collapsed ? 18 : 28,
-                fontWeight: FontWeight.bold,
-              ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Image.asset(
+                  'assets/lightLogo.png',
+                  height: 40,
+                  fit: BoxFit.contain,
+                ),
+                if (!collapsed) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      text: TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'QScan',
+                            style: GoogleFonts.playfairDisplay(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 25,
+                              color: const Color.fromARGB(255, 255, 255, 255),
+                            ),
+                          ),
+                          TextSpan(
+                            text: ' Smart',
+                            style: GoogleFonts.playfairDisplay(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 25,
+                              color: const Color.fromARGB(255, 255, 255, 255),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 14),
-          if (!collapsed)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                displayName ?? 'User',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
           const SizedBox(height: 20),
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
                 _SidebarItem(
-                  icon: Icons.home_outlined,
+                  icon: Icons.space_dashboard_rounded,
                   title: "Dashboard",
                   isSelected: selectedIndex == 0,
-                  onTap: () => _emit(0),
+                  onTap: () => onItemSelected(0),
                   collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
                 ),
                 _SidebarItem(
-                  icon: Icons.settings,
+                  icon: Icons.account_tree_rounded,
                   title: "Departments",
                   isSelected: selectedIndex == 1,
-                  onTap: () => _emit(1),
+                  onTap: () => onItemSelected(1),
                   collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
                 ),
                 _SidebarItem(
-                  icon: Icons.class_outlined,
+                  icon: Icons.class_rounded,
                   title: "Classes",
                   isSelected: selectedIndex == 2,
-                  onTap: () => _emit(2),
+                  onTap: () => onItemSelected(2),
                   collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
                 ),
                 _SidebarItem(
-                  icon: Icons.people_outline,
+                  icon: Icons.groups_rounded,
                   title: "Students",
                   isSelected: selectedIndex == 3,
-                  onTap: () => _emit(3),
+                  onTap: () => onItemSelected(3),
                   collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
                 ),
                 _SidebarItem(
-                  icon: Icons.menu_book_outlined,
+                  icon: Icons.menu_book_rounded,
                   title: "Courses",
                   isSelected: selectedIndex == 4,
-                  onTap: () => _emit(4),
+                  onTap: () => onItemSelected(4),
                   collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
                 ),
                 _SidebarItem(
-                  icon: Icons.assignment_outlined,
+                  icon: Icons.fact_check_rounded,
                   title: "Attendance",
                   isSelected: selectedIndex == 5,
-                  onTap: () => _emit(5),
+                  onTap: () => onItemSelected(5),
                   collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
                 ),
                 _SidebarItem(
-                  icon: Icons.calendar_today_outlined,
+                  icon: Icons.calendar_month_rounded,
                   title: "TimeTable",
                   isSelected: selectedIndex == 6,
-                  onTap: () => _emit(6),
+                  onTap: () => onItemSelected(6),
                   collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
                 ),
                 _SidebarItem(
-                  icon: Icons.person,
+                  icon: Icons.manage_accounts_rounded,
                   title: "User Handling",
                   isSelected: selectedIndex == 7,
-                  onTap: () => _emit(7),
+                  onTap: () => onItemSelected(7),
                   collapsed: collapsed,
+                  inactiveIcon: inactiveIcon,
+                  activeBg: activeBg,
+                  selectedIcon: selectedIcon,
                 ),
-
-                // "Anomalies" item at index 8 (Faculty)
-                
               ],
             ),
           ),
+          const SizedBox(height: 12),
         ],
       ),
+    );
+
+    if (widget.forceExpanded || !widget.enableHoverExpand) {
+      return sidebar;
+    }
+
+    return MouseRegion(
+      onEnter: (_) {
+        if (isCollapsed) setState(() => isCollapsed = false);
+      },
+      onExit: (_) {
+        if (!isCollapsed) setState(() => isCollapsed = true);
+      },
+      child: sidebar,
     );
   }
 }
@@ -184,6 +208,9 @@ class _SidebarItem extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final bool collapsed;
+  final Color inactiveIcon;
+  final Color activeBg;
+  final Color selectedIcon;
 
   const _SidebarItem({
     required this.icon,
@@ -191,61 +218,89 @@ class _SidebarItem extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
     required this.collapsed,
+    required this.inactiveIcon,
+    required this.activeBg,
+    required this.selectedIcon,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final Color selectedBg = palette?.selectedBg ??
-        (isDark ? Colors.white.withOpacity(0.13) : Colors.white.withOpacity(0.25));
-    final Color iconColor = palette?.iconColor ?? Colors.white;
-    final Color textColor = palette?.textPrimary ?? Colors.white;
-    final overlay = WidgetStateProperty.resolveWith<Color?>((states) {
-      if (states.contains(WidgetState.hovered)) {
-        return palette?.hoverOverlay ??
-            (isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.20));
-      }
-      if (states.contains(WidgetState.pressed)) {
-        return palette?.pressedOverlay ??
-            (isDark ? Colors.white.withOpacity(0.16) : Colors.white.withOpacity(0.28));
-      }
-      return null;
-    });
-    return Tooltip(
-      message: collapsed ? title : "",
-      verticalOffset: 0,
-      preferBelow: false,
-      waitDuration: const Duration(milliseconds: 300),
-      child: Material(
-        color: isSelected ? selectedBg : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          overlayColor: overlay,
-          borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: collapsed ? 0 : 16,
-              vertical: 12,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: isSelected ? selectedBg : Colors.transparent,
-            ),
-            child: Row(
-              mainAxisAlignment: collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
-              children: [
-                Icon(icon, color: iconColor, size: 22),
-                if (!collapsed) ...[
-                  const SizedBox(width: 12),
-                  Text(title, style: TextStyle(color: textColor, fontSize: 14)),
+    final content = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          width: collapsed ? null : double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: isSelected ? activeBg : Colors.transparent,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // During the AnimatedContainer width transition, the sidebar may still be narrow
+              // while `collapsed` is already false. Only show the spacer/label once there's room.
+              const iconWidth = 25.0;
+              const labelSpacing = 12.0;
+              final canShowLabel =
+                  !collapsed &&
+                  constraints.maxWidth >= (iconWidth + labelSpacing);
+
+              return Row(
+                mainAxisSize: collapsed ? MainAxisSize.min : MainAxisSize.max,
+                children: [
+                  Icon(
+                    icon,
+                    color: isSelected ? selectedIcon : inactiveIcon,
+                    size: 25,
+                  ),
+                  if (canShowLabel) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : inactiveIcon,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
+    );
+
+    final item = Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        hoverColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        onTap: onTap,
+        child: content,
+      ),
+    );
+
+    if (!collapsed) {
+      return item;
+    }
+
+    return Tooltip(
+      message: title,
+      verticalOffset: 0,
+      preferBelow: false,
+      waitDuration: const Duration(milliseconds: 200),
+      child: item,
     );
   }
 }

@@ -60,6 +60,9 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
     final saveBg =
         palette?.accent ??
         (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final saveButtonBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
@@ -211,7 +214,7 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: cancelBorderColor),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
@@ -262,9 +265,9 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: saveBg,
+                          backgroundColor: saveButtonBg,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),

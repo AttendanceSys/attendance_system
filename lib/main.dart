@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 // import 'package:flutter/services.dart';
 import 'screens/login_screen.dart'; // Correct import for LoginScreen
+import 'screens/onboarding_screen_1.dart';
 import 'services/theme_controller.dart';
 
 // Add a method to initialize Firebase
@@ -30,6 +31,8 @@ Future<void> initializeFirebase() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  static const double _kButtonRadius = 10;
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
@@ -42,9 +45,58 @@ class MyApp extends StatelessWidget {
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
             useMaterial3: true,
+            dialogTheme: const DialogThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+              ),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(_kButtonRadius),
+                  ),
+                ),
+              ),
+            ),
+            outlinedButtonTheme: OutlinedButtonThemeData(
+              style: OutlinedButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(_kButtonRadius),
+                  ),
+                ),
+              ),
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(_kButtonRadius),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
+            filledButtonTheme: FilledButtonThemeData(
+              style: FilledButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(_kButtonRadius),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
           ),
           darkTheme: _darkTheme(),
-          home: const LoginScreen(),
+          home: kIsWeb ? const LoginScreen() : const OnboardingScreen1(),
         );
       },
     );
@@ -94,7 +146,22 @@ class MyApp extends StatelessWidget {
       dialogTheme: const DialogThemeData(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: textPrimary,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(_kButtonRadius)),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(_kButtonRadius)),
+          ),
         ),
       ),
       inputDecorationTheme: const InputDecorationTheme(
@@ -130,6 +197,14 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(_kButtonRadius)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
       dataTableTheme: DataTableThemeData(
         headingRowColor: WidgetStateProperty.all(surfaceHigh),
         dataRowColor: WidgetStateProperty.all(scaffold),
@@ -154,4 +229,4 @@ class MyApp extends StatelessWidget {
 void main() async {
   await initializeFirebase(); // Ensure Firebase is initialized
   runApp(const MyApp());
-} 
+}

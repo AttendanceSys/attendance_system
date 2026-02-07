@@ -11,13 +11,13 @@ class AnimatedBottomBar extends StatefulWidget {
   final double activeSize;
 
   const AnimatedBottomBar({
-    Key? key,
+    super.key,
     required this.currentIndex,
     required this.onTap,
     this.lift = 30.0,
     this.duration = const Duration(milliseconds: 180),
     this.activeSize = 70.0,
-  }) : super(key: key);
+  });
 
   @override
   State<AnimatedBottomBar> createState() => _AnimatedBottomBarState();
@@ -98,7 +98,6 @@ class _BarItem extends StatelessWidget {
   final dynamic theme;
 
   const _BarItem({
-    Key? key,
     required this.icon,
     required this.label,
     required this.active,
@@ -107,7 +106,7 @@ class _BarItem extends StatelessWidget {
     required this.activeSize,
     required this.onTap,
     required this.theme,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

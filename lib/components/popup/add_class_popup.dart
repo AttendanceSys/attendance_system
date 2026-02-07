@@ -41,7 +41,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
     // If editing, split class name into base and section if possible
     if (widget.schoolClass != null) {
       // Prefer explicit section field if present
-      final existingSection = widget.schoolClass!.section?.trim() ?? '';
+      final existingSection = widget.schoolClass!.section.trim() ?? '';
       if (existingSection.isNotEmpty) {
         if (_sections.contains(existingSection)) {
           _section = existingSection;
@@ -156,6 +156,9 @@ class _AddClassPopupState extends State<AddClassPopup> {
     final accent =
         palette?.accent ??
         (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final saveButtonBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
@@ -284,14 +287,15 @@ class _AddClassPopupState extends State<AddClassPopup> {
                         initialValue: _customSection,
                         decoration: input('Custom section (e.g. X)'),
                         onChanged: (v) =>
-                            setState(() => _customSection = v?.toUpperCase()),
+                            setState(() => _customSection = v.toUpperCase()),
                         validator: (v) {
                           if (_section != 'Custom') return null;
                           final s = (v ?? '').trim();
                           if (s.isEmpty) return 'Enter custom section';
                           final creg = RegExp(r'^[A-Z0-9]{1,5}$');
-                          if (!creg.hasMatch(s.toUpperCase()))
+                          if (!creg.hasMatch(s.toUpperCase())) {
                             return 'Invalid section format';
+                          }
                           return null;
                         },
                       ),
@@ -319,7 +323,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: border),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
@@ -339,9 +343,9 @@ class _AddClassPopupState extends State<AddClassPopup> {
                       child: ElevatedButton(
                         onPressed: _save,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: accent,
+                          backgroundColor: saveButtonBg,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
