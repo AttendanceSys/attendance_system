@@ -2175,12 +2175,12 @@ class _TimetablePageState extends State<TimetablePage> {
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: palette?.surface ?? Theme.of(context).colorScheme.surface,
+                  color:
+                      palette?.surface ?? Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(
-                    color:
-                        (palette?.border ?? Theme.of(context).dividerColor)
-                            .withOpacity(0.25),
+                    color: (palette?.border ?? Theme.of(context).dividerColor)
+                        .withOpacity(0.25),
                   ),
                 ),
                 child: Column(
@@ -2192,88 +2192,92 @@ class _TimetablePageState extends State<TimetablePage> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ).merge(
-                            isDark
-                                ? ElevatedButton.styleFrom(
-                                    backgroundColor: palette?.accent,
-                                    foregroundColor: palette?.textPrimary,
-                                  )
-                                : null,
-                          ),
+                          style:
+                              ElevatedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ).merge(
+                                isDark
+                                    ? ElevatedButton.styleFrom(
+                                        backgroundColor: palette?.accent,
+                                        foregroundColor: palette?.textPrimary,
+                                      )
+                                    : null,
+                              ),
                           icon: const Icon(Icons.add, size: 18),
                           label: const Text('Create Time Table'),
                           onPressed: () async {
-                      // compute initial names and loaderArg (dep DocumentReference or id string)
-                      String? initialDepName;
-                      String? initialClassName;
-                      dynamic depArg;
-                      if (selectedDepartment != null) {
-                        try {
-                          final depMap = _departments.firstWhere(
-                            (d) => d['id'] == selectedDepartment,
-                            orElse: () => <String, dynamic>{},
-                          );
-                          if (depMap.isNotEmpty) {
-                            initialDepName = (depMap['name'] as String?)
-                                ?.toString();
-                            depArg = depMap['ref'] is DocumentReference
-                                ? depMap['ref']
-                                : selectedDepartment;
-                          }
-                        } catch (_) {
-                          initialDepName = null;
-                          depArg = selectedDepartment;
-                        }
-                      }
-                      if (selectedClass != null) {
-                        try {
-                          final classMap = _classes.firstWhere(
-                            (c) => c['id'] == selectedClass,
-                            orElse: () => <String, dynamic>{},
-                          );
-                          if (classMap.isNotEmpty) {
-                            initialClassName = (classMap['name'] as String?)
-                                ?.toString();
-                          }
-                        } catch (_) {
-                          initialClassName = null;
-                        }
-                      }
+                            // compute initial names and loaderArg (dep DocumentReference or id string)
+                            String? initialDepName;
+                            String? initialClassName;
+                            dynamic depArg;
+                            if (selectedDepartment != null) {
+                              try {
+                                final depMap = _departments.firstWhere(
+                                  (d) => d['id'] == selectedDepartment,
+                                  orElse: () => <String, dynamic>{},
+                                );
+                                if (depMap.isNotEmpty) {
+                                  initialDepName = (depMap['name'] as String?)
+                                      ?.toString();
+                                  depArg = depMap['ref'] is DocumentReference
+                                      ? depMap['ref']
+                                      : selectedDepartment;
+                                }
+                              } catch (_) {
+                                initialDepName = null;
+                                depArg = selectedDepartment;
+                              }
+                            }
+                            if (selectedClass != null) {
+                              try {
+                                final classMap = _classes.firstWhere(
+                                  (c) => c['id'] == selectedClass,
+                                  orElse: () => <String, dynamic>{},
+                                );
+                                if (classMap.isNotEmpty) {
+                                  initialClassName =
+                                      (classMap['name'] as String?)?.toString();
+                                }
+                              } catch (_) {
+                                initialClassName = null;
+                              }
+                            }
 
-                      // Keep period labels and pass existing sessions so the dialog can filter them per course.
-                      List<String>? existingLabels;
-                      if (currentTimetable != null) {
-                        existingLabels = List<String>.from(currentPeriods);
-                      }
-                      final prefilledSessions = _prefillSessionsFromCurrent();
+                            // Keep period labels and pass existing sessions so the dialog can filter them per course.
+                            List<String>? existingLabels;
+                            if (currentTimetable != null) {
+                              existingLabels = List<String>.from(
+                                currentPeriods,
+                              );
+                            }
+                            final prefilledSessions =
+                                _prefillSessionsFromCurrent();
 
-                      final payload =
-                          await showDialog<CreateTimetableTimePayload>(
-                            context: context,
-                            builder: (_) => CreateTimetableDialog(
-                              departments: _departments
-                                  .map((d) => d['name'] as String)
-                                  .toList(),
-                              departmentClasses: {},
-                              lecturers: _teachers
-                                  .map((t) => t['name'] as String)
-                                  .toList(),
-                              days: days,
-                              courses: const [],
-                              initialDepartment: initialDepName,
-                              initialClass: initialClassName,
-                              preconfiguredLabels: existingLabels,
-                              prefilledSessions: prefilledSessions,
-                              departmentArg: depArg,
-                            ),
-                          );
+                            final payload =
+                                await showDialog<CreateTimetableTimePayload>(
+                                  context: context,
+                                  builder: (_) => CreateTimetableDialog(
+                                    departments: _departments
+                                        .map((d) => d['name'] as String)
+                                        .toList(),
+                                    departmentClasses: {},
+                                    lecturers: _teachers
+                                        .map((t) => t['name'] as String)
+                                        .toList(),
+                                    days: days,
+                                    courses: const [],
+                                    initialDepartment: initialDepName,
+                                    initialClass: initialClassName,
+                                    preconfiguredLabels: existingLabels,
+                                    prefilledSessions: prefilledSessions,
+                                    departmentArg: depArg,
+                                  ),
+                                );
 
-                      if (payload == null) return;
-                      await _applyCreatePayload(payload);
+                            if (payload == null) return;
+                            await _applyCreatePayload(payload);
                           },
                         ),
                         SizedBox(
@@ -2290,14 +2294,16 @@ class _TimetablePageState extends State<TimetablePage> {
                               'Reload',
                               style: TextStyle(
                                 color: isDark
-                                    ? (palette?.accent ?? const Color(0xFFFFFFFF))
+                                    ? (palette?.accent ??
+                                          const Color(0xFFFFFFFF))
                                     : Colors.purple,
                               ),
                             ),
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(
                                 color: isDark
-                                    ? (palette?.accent ?? const Color(0xFFFFFFFF))
+                                    ? (palette?.accent ??
+                                          const Color(0xFFFFFFFF))
                                     : Colors.purple,
                               ),
                               foregroundColor: isDark
@@ -2308,21 +2314,21 @@ class _TimetablePageState extends State<TimetablePage> {
                               ),
                             ),
                             onPressed: () async {
-                        setState(() {
-                          selectedDepartment = null;
-                          selectedClass = null;
-                          selectedLecturer = null;
-                          selectedCourse = null;
-                          _classes = [];
-                          _teachers = [];
-                          _coursesForSelectedClass = [];
-                          timetableData.clear();
-                          classPeriods.clear();
-                          spans.clear();
-                          editingEnabled = false;
-                        });
-                        await _loadDepartments();
-                        // teachers/courses reload after re-selection
+                              setState(() {
+                                selectedDepartment = null;
+                                selectedClass = null;
+                                selectedLecturer = null;
+                                selectedCourse = null;
+                                _classes = [];
+                                _teachers = [];
+                                _coursesForSelectedClass = [];
+                                timetableData.clear();
+                                classPeriods.clear();
+                                spans.clear();
+                                editingEnabled = false;
+                              });
+                              await _loadDepartments();
+                              // teachers/courses reload after re-selection
                             },
                           ),
                         ),
@@ -2342,8 +2348,8 @@ class _TimetablePageState extends State<TimetablePage> {
                             onPressed: !canEdit
                                 ? null
                                 : () => setState(
-                                      () => editingEnabled = !editingEnabled,
-                                    ),
+                                    () => editingEnabled = !editingEnabled,
+                                  ),
                             child: Text(
                               editingEnabled ? "Done" : "Edit",
                               style: TextStyle(
@@ -2368,40 +2374,43 @@ class _TimetablePageState extends State<TimetablePage> {
                             onPressed: selectedClass == null
                                 ? null
                                 : () async {
-                              final classDisplayName =
-                                  await _resolveClassDisplayName(
-                                    selectedClass!,
-                                  );
+                                    final classDisplayName =
+                                        await _resolveClassDisplayName(
+                                          selectedClass!,
+                                        );
 
-                              final confirmDelete = await showDialog<bool>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('Delete Timetable'),
-                                  content: Text(
-                                    'Are you sure you want to delete the timetable for class "$classDisplayName"?',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(ctx, false),
-                                      child: const Text('Cancel'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx, true),
-                                      child: const Text('Delete'),
-                                    ),
-                                  ],
-                                ),
-                              );
+                                    final confirmDelete = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('Delete Timetable'),
+                                        content: Text(
+                                          'Are you sure you want to delete the timetable for class "$classDisplayName"?',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(ctx, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(ctx, true),
+                                            child: const Text('Delete'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
 
-                              if (confirmDelete == true) {
-                                _deleteTimetable(deleteEntireClass: true);
-                              }
-                            },
+                                    if (confirmDelete == true) {
+                                      _deleteTimetable(deleteEntireClass: true);
+                                    }
+                                  },
                             child: const Text(
                               "Delete",
-                              style:
-                                  TextStyle(fontSize: 15, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -2421,331 +2430,349 @@ class _TimetablePageState extends State<TimetablePage> {
                       runSpacing: 12,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                  // Department dropdown
-                  Container(
-                    constraints: const BoxConstraints(
-                      minWidth: 130,
-                      maxWidth: 240,
-                    ),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 5,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: isDark
-                                ? (palette?.border ?? const Color(0xFF3A3F4A))
-                                : const Color(0xFFE5E7EB),
+                        // Department dropdown
+                        Container(
+                          constraints: const BoxConstraints(
+                            minWidth: 130,
+                            maxWidth: 240,
                           ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: isDark
-                                ? (palette?.border ?? const Color(0xFF3A3F4A))
-                                : const Color(0xFFE5E7EB),
-                          ),
-                        ),
-                        focusedBorder: isDark
-                            ? OutlineInputBorder(
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 5,
+                              ),
+                              border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(
-                                  color:
-                                      palette?.accent ??
-                                      const Color(0xFF7C3AED),
+                                  color: isDark
+                                      ? (palette?.border ??
+                                            const Color(0xFF3A3F4A))
+                                      : const Color(0xFFE5E7EB),
                                 ),
-                              )
-                            : null,
-                        isDense: true,
-                        filled: true,
-                        fillColor: isDark
-                            ? (palette?.inputFill ?? const Color(0xFF2A2F3A))
-                            : Colors.white,
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          dropdownColor: isDark
-                              ? (palette?.surface ?? const Color(0xFF1F2430))
-                              : null,
-                          style: isDark
-                              ? TextStyle(
-                                  color: palette?.textPrimary ?? Colors.white,
-                                )
-                              : null,
-                          hint: _loadingDeps
-                              ? (isDark
-                                    ? Text(
-                                        'Loading...',
-                                        style: TextStyle(
-                                          color: palette?.textSecondary,
-                                        ),
-                                      )
-                                    : const Text('Loading...'))
-                              : (isDark
-                                    ? Text(
-                                        'Department',
-                                        style: TextStyle(
-                                          color: palette?.textSecondary,
-                                        ),
-                                      )
-                                    : const Text('Department')),
-                          isExpanded: true,
-                          value: selectedDepartment,
-                          items: _departments
-                              .map(
-                                (d) => DropdownMenuItem<String>(
-                                  value: d['id'] as String,
-                                  child: isDark
-                                      ? Text(
-                                          d['name'] as String,
-                                          style: TextStyle(
-                                            color: palette?.textPrimary,
-                                          ),
-                                        )
-                                      : Text(d['name'] as String),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? (palette?.border ??
+                                            const Color(0xFF3A3F4A))
+                                      : const Color(0xFFE5E7EB),
                                 ),
-                              )
-                              .toList(),
-                          onChanged: (v) async {
-                            setState(() {
-                              selectedDepartment = v;
-                              selectedClass = null;
-                              _classes = [];
-                              // clear previous lecturer selection when department changes
-                              selectedLecturer = null;
-                              _teachers = [];
-                            });
+                              ),
+                              focusedBorder: isDark
+                                  ? OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: BorderSide(
+                                        color:
+                                            palette?.accent ??
+                                            const Color(0xFF7C3AED),
+                                      ),
+                                    )
+                                  : null,
+                              isDense: true,
+                              filled: true,
+                              fillColor: isDark
+                                  ? (palette?.inputFill ??
+                                        const Color(0xFF2A2F3A))
+                                  : Colors.white,
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                dropdownColor: isDark
+                                    ? (palette?.surface ??
+                                          const Color(0xFF1F2430))
+                                    : null,
+                                style: isDark
+                                    ? TextStyle(
+                                        color:
+                                            palette?.textPrimary ??
+                                            Colors.white,
+                                      )
+                                    : null,
+                                hint: _loadingDeps
+                                    ? (isDark
+                                          ? Text(
+                                              'Loading...',
+                                              style: TextStyle(
+                                                color: palette?.textSecondary,
+                                              ),
+                                            )
+                                          : const Text('Loading...'))
+                                    : (isDark
+                                          ? Text(
+                                              'Department',
+                                              style: TextStyle(
+                                                color: palette?.textSecondary,
+                                              ),
+                                            )
+                                          : const Text('Department')),
+                                isExpanded: true,
+                                value: selectedDepartment,
+                                items: _departments
+                                    .map(
+                                      (d) => DropdownMenuItem<String>(
+                                        value: d['id'] as String,
+                                        child: isDark
+                                            ? Text(
+                                                d['name'] as String,
+                                                style: TextStyle(
+                                                  color: palette?.textPrimary,
+                                                ),
+                                              )
+                                            : Text(d['name'] as String),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) async {
+                                  setState(() {
+                                    selectedDepartment = v;
+                                    selectedClass = null;
+                                    _classes = [];
+                                    // clear previous lecturer selection when department changes
+                                    selectedLecturer = null;
+                                    _teachers = [];
+                                  });
 
-                            dynamic loaderArg;
-                            try {
-                              final found = _departments.firstWhere(
-                                (d) => d['id'] == v,
-                                orElse: () => <String, dynamic>{},
-                              );
-                              if (found.isNotEmpty &&
-                                  found['ref'] is DocumentReference) {
-                                loaderArg = found['ref'];
-                              } else {
-                                loaderArg = v;
-                              }
-                            } catch (_) {
-                              loaderArg = v;
-                            }
+                                  dynamic loaderArg;
+                                  try {
+                                    final found = _departments.firstWhere(
+                                      (d) => d['id'] == v,
+                                      orElse: () => <String, dynamic>{},
+                                    );
+                                    if (found.isNotEmpty &&
+                                        found['ref'] is DocumentReference) {
+                                      loaderArg = found['ref'];
+                                    } else {
+                                      loaderArg = v;
+                                    }
+                                  } catch (_) {
+                                    loaderArg = v;
+                                  }
 
-                            if (loaderArg != null) {
-                              await _loadClassesForDepartment(loaderArg);
-                            }
-                            // ensure teachers reflect current session/faculty
-                            await _loadTeachers();
-                            await _handleSelectionChangeSafe();
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Class dropdown
-                  Container(
-                    constraints: const BoxConstraints(
-                      minWidth: 130,
-                      maxWidth: 240,
-                    ),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 5,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: isDark
-                                ? (palette?.border ?? const Color(0xFF3A3F4A))
-                                : const Color(0xFFE5E7EB),
+                                  if (loaderArg != null) {
+                                    await _loadClassesForDepartment(loaderArg);
+                                  }
+                                  // ensure teachers reflect current session/faculty
+                                  await _loadTeachers();
+                                  await _handleSelectionChangeSafe();
+                                },
+                              ),
+                            ),
                           ),
                         ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: isDark
-                                ? (palette?.border ?? const Color(0xFF3A3F4A))
-                                : const Color(0xFFE5E7EB),
+                        // Class dropdown
+                        Container(
+                          constraints: const BoxConstraints(
+                            minWidth: 130,
+                            maxWidth: 240,
                           ),
-                        ),
-                        focusedBorder: isDark
-                            ? OutlineInputBorder(
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 5,
+                              ),
+                              border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(
-                                  color:
-                                      palette?.accent ??
-                                      const Color(0xFF7C3AED),
+                                  color: isDark
+                                      ? (palette?.border ??
+                                            const Color(0xFF3A3F4A))
+                                      : const Color(0xFFE5E7EB),
                                 ),
-                              )
-                            : null,
-                        isDense: true,
-                        filled: true,
-                        fillColor: isDark
-                            ? (palette?.inputFill ?? const Color(0xFF2A2F3A))
-                            : Colors.white,
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          dropdownColor: isDark
-                              ? (palette?.surface ?? const Color(0xFF1F2430))
-                              : null,
-                          style: isDark
-                              ? TextStyle(
-                                  color: palette?.textPrimary ?? Colors.white,
-                                )
-                              : null,
-                          hint: _loadingClasses
-                              ? (isDark
-                                    ? Text(
-                                        'Loading...',
-                                        style: TextStyle(
-                                          color: palette?.textSecondary,
-                                        ),
-                                      )
-                                    : const Text('Loading...'))
-                              : (isDark
-                                    ? Text(
-                                        'Class',
-                                        style: TextStyle(
-                                          color: palette?.textSecondary,
-                                        ),
-                                      )
-                                    : const Text('Class')),
-                          isExpanded: true,
-                          value: selectedClass,
-                          items: _classes
-                              .map(
-                                (c) => DropdownMenuItem<String>(
-                                  value: c['id'] as String,
-                                  child: isDark
-                                      ? Text(
-                                          c['name'] as String,
-                                          style: TextStyle(
-                                            color: palette?.textPrimary,
-                                          ),
-                                        )
-                                      : Text(c['name'] as String),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) async {
-                            setState(() {
-                              selectedClass = v;
-                            });
-                            try {
-                              // Ensure lecturer list refreshes after class selection
-                              await _loadTeachers();
-                              await _handleSelectionChangeSafe();
-                            } catch (err, st) {
-                              debugPrint(
-                                'Error in selection change after class select: $err\n$st',
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Lecturer dropdown
-                  Container(
-                    constraints: const BoxConstraints(
-                      minWidth: 130,
-                      maxWidth: 240,
-                    ),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 5,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: isDark
-                                ? (palette?.border ?? const Color(0xFF3A3F4A))
-                                : const Color(0xFFE5E7EB),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: isDark
-                                ? (palette?.border ?? const Color(0xFF3A3F4A))
-                                : const Color(0xFFE5E7EB),
-                          ),
-                        ),
-                        focusedBorder: isDark
-                            ? OutlineInputBorder(
+                              ),
+                              enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(
-                                  color:
-                                      palette?.accent ??
-                                      const Color(0xFF7C3AED),
+                                  color: isDark
+                                      ? (palette?.border ??
+                                            const Color(0xFF3A3F4A))
+                                      : const Color(0xFFE5E7EB),
                                 ),
-                              )
-                            : null,
-                        isDense: true,
-                        filled: true,
-                        fillColor: isDark
-                            ? (palette?.inputFill ?? const Color(0xFF2A2F3A))
-                            : Colors.white,
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          dropdownColor: isDark
-                              ? (palette?.surface ?? const Color(0xFF1F2430))
-                              : null,
-                          style: isDark
-                              ? TextStyle(
-                                  color: palette?.textPrimary ?? Colors.white,
-                                )
-                              : null,
-                          hint: _loadingTeachers
-                              ? (isDark
-                                    ? Text(
-                                        'Loading...',
-                                        style: TextStyle(
-                                          color: palette?.textSecondary,
-                                        ),
+                              ),
+                              focusedBorder: isDark
+                                  ? OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: BorderSide(
+                                        color:
+                                            palette?.accent ??
+                                            const Color(0xFF7C3AED),
+                                      ),
+                                    )
+                                  : null,
+                              isDense: true,
+                              filled: true,
+                              fillColor: isDark
+                                  ? (palette?.inputFill ??
+                                        const Color(0xFF2A2F3A))
+                                  : Colors.white,
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                dropdownColor: isDark
+                                    ? (palette?.surface ??
+                                          const Color(0xFF1F2430))
+                                    : null,
+                                style: isDark
+                                    ? TextStyle(
+                                        color:
+                                            palette?.textPrimary ??
+                                            Colors.white,
                                       )
-                                    : const Text('Loading...'))
-                              : (isDark
-                                    ? Text(
-                                        'Lecturer',
-                                        style: TextStyle(
-                                          color: palette?.textSecondary,
-                                        ),
-                                      )
-                                    : const Text('Lecturer')),
-                          isExpanded: true,
-                          value: selectedLecturer,
-                          items: _teachers
-                              .map(
-                                (t) => DropdownMenuItem<String>(
-                                  value: t['name'] as String,
-                                  child: isDark
-                                      ? Text(
-                                          t['name'] as String,
-                                          style: TextStyle(
-                                            color: palette?.textPrimary,
-                                          ),
-                                        )
-                                      : Text(t['name'] as String),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => selectedLecturer = v),
+                                    : null,
+                                hint: _loadingClasses
+                                    ? (isDark
+                                          ? Text(
+                                              'Loading...',
+                                              style: TextStyle(
+                                                color: palette?.textSecondary,
+                                              ),
+                                            )
+                                          : const Text('Loading...'))
+                                    : (isDark
+                                          ? Text(
+                                              'Class',
+                                              style: TextStyle(
+                                                color: palette?.textSecondary,
+                                              ),
+                                            )
+                                          : const Text('Class')),
+                                isExpanded: true,
+                                value: selectedClass,
+                                items: _classes
+                                    .map(
+                                      (c) => DropdownMenuItem<String>(
+                                        value: c['id'] as String,
+                                        child: isDark
+                                            ? Text(
+                                                c['name'] as String,
+                                                style: TextStyle(
+                                                  color: palette?.textPrimary,
+                                                ),
+                                              )
+                                            : Text(c['name'] as String),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) async {
+                                  setState(() {
+                                    selectedClass = v;
+                                  });
+                                  try {
+                                    // Ensure lecturer list refreshes after class selection
+                                    await _loadTeachers();
+                                    await _handleSelectionChangeSafe();
+                                  } catch (err, st) {
+                                    debugPrint(
+                                      'Error in selection change after class select: $err\n$st',
+                                    );
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
+                        // Lecturer dropdown
+                        Container(
+                          constraints: const BoxConstraints(
+                            minWidth: 130,
+                            maxWidth: 240,
+                          ),
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 5,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? (palette?.border ??
+                                            const Color(0xFF3A3F4A))
+                                      : const Color(0xFFE5E7EB),
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                      ? (palette?.border ??
+                                            const Color(0xFF3A3F4A))
+                                      : const Color(0xFFE5E7EB),
+                                ),
+                              ),
+                              focusedBorder: isDark
+                                  ? OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: BorderSide(
+                                        color:
+                                            palette?.accent ??
+                                            const Color(0xFF7C3AED),
+                                      ),
+                                    )
+                                  : null,
+                              isDense: true,
+                              filled: true,
+                              fillColor: isDark
+                                  ? (palette?.inputFill ??
+                                        const Color(0xFF2A2F3A))
+                                  : Colors.white,
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                dropdownColor: isDark
+                                    ? (palette?.surface ??
+                                          const Color(0xFF1F2430))
+                                    : null,
+                                style: isDark
+                                    ? TextStyle(
+                                        color:
+                                            palette?.textPrimary ??
+                                            Colors.white,
+                                      )
+                                    : null,
+                                hint: _loadingTeachers
+                                    ? (isDark
+                                          ? Text(
+                                              'Loading...',
+                                              style: TextStyle(
+                                                color: palette?.textSecondary,
+                                              ),
+                                            )
+                                          : const Text('Loading...'))
+                                    : (isDark
+                                          ? Text(
+                                              'Lecturer',
+                                              style: TextStyle(
+                                                color: palette?.textSecondary,
+                                              ),
+                                            )
+                                          : const Text('Lecturer')),
+                                isExpanded: true,
+                                value: selectedLecturer,
+                                items: _teachers
+                                    .map(
+                                      (t) => DropdownMenuItem<String>(
+                                        value: t['name'] as String,
+                                        child: isDark
+                                            ? Text(
+                                                t['name'] as String,
+                                                style: TextStyle(
+                                                  color: palette?.textPrimary,
+                                                ),
+                                              )
+                                            : Text(t['name'] as String),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) =>
+                                    setState(() => selectedLecturer = v),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -2885,10 +2912,7 @@ class _TimetablePageState extends State<TimetablePage> {
     return pw.Container(
       width: double.infinity,
       alignment: pw.Alignment.center,
-      child: pw.Image(
-        image,
-        fit: pw.BoxFit.fitWidth,
-      ),
+      child: pw.Image(image, fit: pw.BoxFit.fitWidth),
     );
   }
 

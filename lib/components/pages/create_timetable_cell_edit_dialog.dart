@@ -504,9 +504,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                       isDense: true,
                       filled: true,
                       fillColor: palette?.inputFill ?? scheme.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: fieldRadius,
-                      ),
+                      border: OutlineInputBorder(borderRadius: fieldRadius),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: fieldRadius,
                         borderSide: BorderSide(
@@ -536,7 +534,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                               dropdownColor: isDark
                                   ? (palette?.surface ??
                                         const Color(0xFF262C3A))
-                                : (palette?.surface ?? scheme.surface),
+                                  : (palette?.surface ?? scheme.surface),
                               value:
                                   (_selectedCourseId != null &&
                                       _selectedCourseId!.trim().isNotEmpty)
@@ -601,9 +599,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                       isDense: true,
                       filled: true,
                       fillColor: palette?.inputFill ?? scheme.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: fieldRadius,
-                      ),
+                      border: OutlineInputBorder(borderRadius: fieldRadius),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: fieldRadius,
                         borderSide: BorderSide(
@@ -645,7 +641,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                               dropdownColor: isDark
                                   ? (palette?.surface ??
                                         const Color(0xFF262C3A))
-                                : (palette?.surface ?? scheme.surface),
+                                  : (palette?.surface ?? scheme.surface),
                               value:
                                   (_selectedLecturerId != null &&
                                       _selectedLecturerId!.trim().isNotEmpty)

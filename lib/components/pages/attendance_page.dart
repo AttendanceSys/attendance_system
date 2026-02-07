@@ -1397,9 +1397,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                   decoration: BoxDecoration(
                     color: surfaceColor,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: borderColor.withOpacity(0.25),
-                    ),
+                    border: Border.all(color: borderColor.withOpacity(0.25)),
                   ),
                   child: _FiltersRow(
                     departments: departments,

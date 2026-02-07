@@ -169,7 +169,10 @@ class _AddClassPopupState extends State<AddClassPopup> {
         hintText: hint,
         filled: true,
         fillColor: inputFill,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         hintStyle: TextStyle(color: textPrimary.withOpacity(0.65)),
         labelStyle: TextStyle(color: textPrimary.withOpacity(0.85)),
         border: OutlineInputBorder(
