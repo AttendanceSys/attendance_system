@@ -480,6 +480,8 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final palette = Theme.of(context).extension<SuperAdminColors>();
+    final scheme = Theme.of(context).colorScheme;
+    final fieldRadius = BorderRadius.circular(10);
     return AlertDialog(
       backgroundColor: isDark
           ? (palette?.surfaceHigh ?? const Color(0xFF323746))
@@ -500,26 +502,26 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                     decoration: InputDecoration(
                       labelText: 'Course',
                       isDense: true,
-                      border: const OutlineInputBorder(),
+                      filled: true,
+                      fillColor: palette?.inputFill ?? scheme.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: fieldRadius,
+                      ),
                       enabledBorder: OutlineInputBorder(
+                        borderRadius: fieldRadius,
                         borderSide: BorderSide(
                           color: isDark
                               ? (palette?.border ?? const Color(0xFF3A404E))
                               : const Color(0xFFE5E7EB),
                         ),
                       ),
-                      focusedBorder: isDark
-                          ? OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color:
-                                    palette?.accent ?? const Color(0xFF0A1E90),
-                              ),
-                            )
-                          : null,
-                      filled: isDark,
-                      fillColor: isDark
-                          ? (palette?.inputFill ?? const Color(0xFF2B303D))
-                          : null,
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: fieldRadius,
+                        borderSide: BorderSide(
+                          color: palette?.accent ?? scheme.primary,
+                          width: 1.4,
+                        ),
+                      ),
                     ),
                     child: _loadingCourses
                         ? const SizedBox(
@@ -534,7 +536,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                               dropdownColor: isDark
                                   ? (palette?.surface ??
                                         const Color(0xFF262C3A))
-                                  : null,
+                                : (palette?.surface ?? scheme.surface),
                               value:
                                   (_selectedCourseId != null &&
                                       _selectedCourseId!.trim().isNotEmpty)
@@ -597,26 +599,26 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                     decoration: InputDecoration(
                       labelText: 'Lecturer',
                       isDense: true,
-                      border: const OutlineInputBorder(),
+                      filled: true,
+                      fillColor: palette?.inputFill ?? scheme.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: fieldRadius,
+                      ),
                       enabledBorder: OutlineInputBorder(
+                        borderRadius: fieldRadius,
                         borderSide: BorderSide(
                           color: isDark
                               ? (palette?.border ?? const Color(0xFF3A404E))
                               : const Color(0xFFE5E7EB),
                         ),
                       ),
-                      focusedBorder: isDark
-                          ? OutlineInputBorder(
-                              borderSide: BorderSide(
-                                color:
-                                    palette?.accent ?? const Color(0xFF0A1E90),
-                              ),
-                            )
-                          : null,
-                      filled: isDark,
-                      fillColor: isDark
-                          ? (palette?.inputFill ?? const Color(0xFF2B303D))
-                          : null,
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: fieldRadius,
+                        borderSide: BorderSide(
+                          color: palette?.accent ?? scheme.primary,
+                          width: 1.4,
+                        ),
+                      ),
                     ),
                     child: _useCustomLecturer
                         ? TextFormField(
@@ -643,7 +645,7 @@ class _TimetableCellEditDialogState extends State<TimetableCellEditDialog> {
                               dropdownColor: isDark
                                   ? (palette?.surface ??
                                         const Color(0xFF262C3A))
-                                  : null,
+                                : (palette?.surface ?? scheme.surface),
                               value:
                                   (_selectedLecturerId != null &&
                                       _selectedLecturerId!.trim().isNotEmpty)

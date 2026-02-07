@@ -66,15 +66,25 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
+    final fieldRadius = BorderRadius.circular(10);
+
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
-      border: OutlineInputBorder(borderSide: BorderSide(color: borderColor)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      hintStyle: TextStyle(color: titleColor.withOpacity(0.65)),
+      labelStyle: TextStyle(color: titleColor.withOpacity(0.85)),
+      border: OutlineInputBorder(
+        borderRadius: fieldRadius,
+        borderSide: BorderSide(color: borderColor),
+      ),
       enabledBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
         borderSide: BorderSide(color: borderColor),
       ),
       focusedBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
         borderSide: BorderSide(color: saveBg, width: 1.4),
       ),
     );
@@ -169,6 +179,8 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 DropdownButtonFormField<String>(
                   value: _facultyId,
                   decoration: input("Faculty Name"),
+                  dropdownColor: containerBg,
+                  style: TextStyle(color: titleColor),
                   items: widget.facultyNames
                       .map(
                         (name) =>

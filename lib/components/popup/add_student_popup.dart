@@ -282,13 +282,25 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
+    final fieldRadius = BorderRadius.circular(10);
+
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
-      border: OutlineInputBorder(borderSide: BorderSide(color: border)),
-      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: border)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      hintStyle: TextStyle(color: textPrimary.withOpacity(0.65)),
+      labelStyle: TextStyle(color: textPrimary.withOpacity(0.85)),
+      border: OutlineInputBorder(
+        borderRadius: fieldRadius,
+        borderSide: BorderSide(color: border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
+        borderSide: BorderSide(color: border),
+      ),
       focusedBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
         borderSide: BorderSide(color: accent, width: 1.4),
       ),
     );
@@ -380,6 +392,8 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                         child: DropdownButtonFormField<String>(
                           value: _gender,
                           decoration: input('Gender'),
+                          dropdownColor: surface,
+                          style: TextStyle(color: textPrimary),
                           items: ['Male', 'Female']
                               .map(
                                 (g) =>
@@ -397,6 +411,8 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                           value: _departmentId,
                           decoration: input('Department'),
                           isExpanded: true,
+                          dropdownColor: surface,
+                          style: TextStyle(color: textPrimary),
                           items: _departments
                               .map(
                                 (d) => DropdownMenuItem(
@@ -421,6 +437,8 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                   DropdownButtonFormField<String>(
                     value: _classId,
                     decoration: input('Class'),
+                    dropdownColor: surface,
+                    style: TextStyle(color: textPrimary),
                     items: _filteredClassesByDepartment
                         .map(
                           (c) => DropdownMenuItem(

@@ -462,12 +462,10 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
           : totalQr;
       final expected = totalStudents * expectedSessions;
       int absence = 0;
-      int attendancePercent = 0;
       int absencePercent = 0;
       if (expected > 0) {
         absence = expected - totalAttendances;
         if (absence < 0) absence = 0;
-        attendancePercent = ((totalAttendances / expected) * 100).round();
         absencePercent = ((absence / expected) * 100).round();
       }
 
@@ -1351,6 +1349,11 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final surfaceColor =
+        palette?.surface ?? Theme.of(context).colorScheme.surface;
+    final borderColor = palette?.border ?? Theme.of(context).dividerColor;
+
     final showTable =
         selectedDepartment != null &&
         selectedClass != null &&
@@ -1389,99 +1392,111 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                   onChanged: (value) => setState(() => searchText = value),
                 ),
                 const SizedBox(height: 10),
-                _FiltersRow(
-                  departments: departments,
-                  classes: classes,
-                  courses: courses,
-                  teachers: teachersForDept,
-                  selectedDepartment: selectedDepartment,
-                  selectedClass: selectedClass,
-                  selectedCourse: selectedCourse,
-                  selectedTeacher: selectedTeacher,
-                  loadingDepartments: loadingDepartments,
-                  loadingClasses: loadingClasses,
-                  loadingCourses: loadingSubjects,
-                  loadingTeachers: loadingTeachers,
-                  onChanged:
-                      ({
-                        String? department,
-                        String? className,
-                        String? course,
-                        String? lecturer,
-                      }) {
-                        setState(() {
-                          if (department != null &&
-                              department != selectedDepartment) {
-                            selectedDepartment = department;
-                            selectedClass = null;
-                            selectedCourse = null;
-                            selectedTeacher = null;
-                            classesForDept = [];
-                            coursesForClass = [];
-                            teachersForDept = [];
-                            classSectionStudents = {};
-                            percentageRows = [];
-                            _loadClassesForDepartment(department);
-                            _loadTeachersForDepartment(department);
-                          }
-                          if (className != null && className != selectedClass) {
-                            selectedClass = className;
-                            selectedCourse = null;
-                            coursesForClass = [];
-                            classSectionStudents = {};
-                            percentageRows = [];
-                            _loadSubjectsForClass(className);
-                          }
-                          if (course != null && course != selectedCourse) {
-                            selectedCourse = course;
-                            classSectionStudents = {};
-                            if (selectedDepartment != null &&
-                                selectedClass != null &&
-                                selectedCourse != null) {
-                              _fetchStudentsForSelection();
-                            }
-                          }
-                          if (lecturer != null && lecturer != selectedTeacher) {
-                            selectedTeacher = lecturer;
-                            // Clear class/course selections when a teacher is chosen
-                            selectedClass = null;
-                            selectedCourse = null;
-                            classesForDept = [];
-                            coursesForClass = [];
-                            classSectionStudents = {};
-                            percentageRows = [];
-                          }
-                        });
-                      },
-                  onPercentagePressed: selectedDepartment == null
-                      ? null
-                      : () {
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: surfaceColor,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: borderColor.withOpacity(0.25),
+                    ),
+                  ),
+                  child: _FiltersRow(
+                    departments: departments,
+                    classes: classes,
+                    courses: courses,
+                    teachers: teachersForDept,
+                    selectedDepartment: selectedDepartment,
+                    selectedClass: selectedClass,
+                    selectedCourse: selectedCourse,
+                    selectedTeacher: selectedTeacher,
+                    loadingDepartments: loadingDepartments,
+                    loadingClasses: loadingClasses,
+                    loadingCourses: loadingSubjects,
+                    loadingTeachers: loadingTeachers,
+                    onChanged:
+                        ({
+                          String? department,
+                          String? className,
+                          String? course,
+                          String? lecturer,
+                        }) {
                           setState(() {
-                            // Clear selected class and course boxes when Percentage is requested
-                            // but preserve selectedTeacher so department+teacher percentages work.
-                            selectedClass = null;
-                            selectedCourse = null;
-                            // Clear dependent UI lists/state to reflect cleared selections
-                            coursesForClass = [];
-                            classSectionStudents = {};
-                            percentageRows = [];
+                            if (department != null &&
+                                department != selectedDepartment) {
+                              selectedDepartment = department;
+                              selectedClass = null;
+                              selectedCourse = null;
+                              selectedTeacher = null;
+                              classesForDept = [];
+                              coursesForClass = [];
+                              teachersForDept = [];
+                              classSectionStudents = {};
+                              percentageRows = [];
+                              _loadClassesForDepartment(department);
+                              _loadTeachersForDepartment(department);
+                            }
+                            if (className != null &&
+                                className != selectedClass) {
+                              selectedClass = className;
+                              selectedCourse = null;
+                              coursesForClass = [];
+                              classSectionStudents = {};
+                              percentageRows = [];
+                              _loadSubjectsForClass(className);
+                            }
+                            if (course != null && course != selectedCourse) {
+                              selectedCourse = course;
+                              classSectionStudents = {};
+                              if (selectedDepartment != null &&
+                                  selectedClass != null &&
+                                  selectedCourse != null) {
+                                _fetchStudentsForSelection();
+                              }
+                            }
+                            if (lecturer != null &&
+                                lecturer != selectedTeacher) {
+                              selectedTeacher = lecturer;
+                              // Clear class/course selections when a teacher is chosen
+                              selectedClass = null;
+                              selectedCourse = null;
+                              classesForDept = [];
+                              coursesForClass = [];
+                              classSectionStudents = {};
+                              percentageRows = [];
+                            }
                           });
-                          _fetchPercentageForDepartment();
                         },
-                  onRefreshPressed: () {
-                    setState(() {
-                      selectedDepartment = null;
-                      selectedClass = null;
-                      selectedCourse = null;
-                      selectedTeacher = null;
-                      classesForDept = [];
-                      coursesForClass = [];
-                      teachersForDept = [];
-                      classSectionStudents = {};
-                      percentageRows = [];
-                    });
-                    _loadDepartments();
-                  },
+                    onPercentagePressed: selectedDepartment == null
+                        ? null
+                        : () {
+                            setState(() {
+                              // Clear selected class and course boxes when Percentage is requested
+                              // but preserve selectedTeacher so department+teacher percentages work.
+                              selectedClass = null;
+                              selectedCourse = null;
+                              // Clear dependent UI lists/state to reflect cleared selections
+                              coursesForClass = [];
+                              classSectionStudents = {};
+                              percentageRows = [];
+                            });
+                            _fetchPercentageForDepartment();
+                          },
+                    onRefreshPressed: () {
+                      setState(() {
+                        selectedDepartment = null;
+                        selectedClass = null;
+                        selectedCourse = null;
+                        selectedTeacher = null;
+                        classesForDept = [];
+                        coursesForClass = [];
+                        teachersForDept = [];
+                        classSectionStudents = {};
+                        percentageRows = [];
+                      });
+                      _loadDepartments();
+                    },
+                  ),
                 ),
                 const SizedBox(height: 12),
                 // Inline percentage results
@@ -1823,6 +1838,9 @@ class _FiltersRow extends StatelessWidget {
                     horizontal: 16,
                     vertical: 12,
                   ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 child: const Text('Percentage'),
               ),
@@ -1833,6 +1851,9 @@ class _FiltersRow extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 child: const Text('Refresh'),
@@ -1882,7 +1903,7 @@ class _DropdownFilter extends StatelessWidget {
         palette?.border ??
         (isDark ? const Color(0xFF3A404E) : const Color(0xFFC7BECF));
     final borderShape = OutlineInputBorder(
-      borderRadius: const BorderRadius.all(Radius.circular(8)),
+      borderRadius: const BorderRadius.all(Radius.circular(10)),
       borderSide: BorderSide(color: borderColor, width: 1.1),
     );
     return ConstrainedBox(

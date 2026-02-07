@@ -41,7 +41,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
     // If editing, split class name into base and section if possible
     if (widget.schoolClass != null) {
       // Prefer explicit section field if present
-      final existingSection = widget.schoolClass!.section.trim() ?? '';
+      final existingSection = widget.schoolClass!.section.trim();
       if (existingSection.isNotEmpty) {
         if (_sections.contains(existingSection)) {
           _section = existingSection;
@@ -162,16 +162,26 @@ class _AddClassPopupState extends State<AddClassPopup> {
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
+    final fieldRadius = BorderRadius.circular(10);
+
     InputDecoration input(String hint) {
       return InputDecoration(
         hintText: hint,
         filled: true,
         fillColor: inputFill,
-        border: OutlineInputBorder(borderSide: BorderSide(color: border)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        hintStyle: TextStyle(color: textPrimary.withOpacity(0.65)),
+        labelStyle: TextStyle(color: textPrimary.withOpacity(0.85)),
+        border: OutlineInputBorder(
+          borderRadius: fieldRadius,
+          borderSide: BorderSide(color: border),
+        ),
         enabledBorder: OutlineInputBorder(
+          borderRadius: fieldRadius,
           borderSide: BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
+          borderRadius: fieldRadius,
           borderSide: BorderSide(color: accent, width: 1.4),
         ),
       );
@@ -253,6 +263,8 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 DropdownButtonFormField<String>(
                   value: _department,
                   decoration: input("Department"),
+                  dropdownColor: surface,
+                  style: TextStyle(color: textPrimary),
                   items: _departments.map((d) {
                     return DropdownMenuItem(
                       value: d['id'],
@@ -267,6 +279,8 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 DropdownButtonFormField<String>(
                   value: _section,
                   decoration: input("Section"),
+                  dropdownColor: surface,
+                  style: TextStyle(color: textPrimary),
                   items: _sections
                       .map(
                         (sec) => DropdownMenuItem(

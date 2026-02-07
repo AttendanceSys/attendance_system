@@ -2172,21 +2172,41 @@ class _TimetablePageState extends State<TimetablePage> {
                 onChanged: (v) => setState(() => searchText = v),
               ),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  ElevatedButton.icon(
-                    style: isDark
-                        ? ElevatedButton.styleFrom(
-                            backgroundColor: palette?.accent,
-                            foregroundColor: palette?.textPrimary,
-                          )
-                        : null,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Create Time Table'),
-                    onPressed: () async {
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: palette?.surface ?? Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color:
+                        (palette?.border ?? Theme.of(context).dividerColor)
+                            .withOpacity(0.25),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ).merge(
+                            isDark
+                                ? ElevatedButton.styleFrom(
+                                    backgroundColor: palette?.accent,
+                                    foregroundColor: palette?.textPrimary,
+                                  )
+                                : null,
+                          ),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Create Time Table'),
+                          onPressed: () async {
                       // compute initial names and loaderArg (dep DocumentReference or id string)
                       String? initialDepName;
                       String? initialClassName;
@@ -2254,37 +2274,40 @@ class _TimetablePageState extends State<TimetablePage> {
 
                       if (payload == null) return;
                       await _applyCreatePayload(payload);
-                    },
-                  ),
-                  SizedBox(
-                    height: 36,
-                    child: OutlinedButton.icon(
-                      icon: Icon(
-                        Icons.refresh,
-                        size: 18,
-                        color: isDark
-                            ? (palette?.accent ?? const Color(0xFFFFFFFF))
-                            : Colors.purple,
-                      ),
-                      label: Text(
-                        'Reload',
-                        style: TextStyle(
-                          color: isDark
-                              ? (palette?.accent ?? const Color(0xFFFFFFFF))
-                              : Colors.purple,
+                          },
                         ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: isDark
-                              ? (palette?.accent ?? const Color(0xFFFFFFFF))
-                              : Colors.purple,
-                        ),
-                        foregroundColor: isDark
-                            ? (palette?.accent ?? const Color(0xFFFFFFFF))
-                            : Colors.purple,
-                      ),
-                      onPressed: () async {
+                        SizedBox(
+                          height: 36,
+                          child: OutlinedButton.icon(
+                            icon: Icon(
+                              Icons.refresh,
+                              size: 18,
+                              color: isDark
+                                  ? (palette?.accent ?? const Color(0xFFFFFFFF))
+                                  : Colors.purple,
+                            ),
+                            label: Text(
+                              'Reload',
+                              style: TextStyle(
+                                color: isDark
+                                    ? (palette?.accent ?? const Color(0xFFFFFFFF))
+                                    : Colors.purple,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(
+                                color: isDark
+                                    ? (palette?.accent ?? const Color(0xFFFFFFFF))
+                                    : Colors.purple,
+                              ),
+                              foregroundColor: isDark
+                                  ? (palette?.accent ?? const Color(0xFFFFFFFF))
+                                  : Colors.purple,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: () async {
                         setState(() {
                           selectedDepartment = null;
                           selectedClass = null;
@@ -2300,45 +2323,51 @@ class _TimetablePageState extends State<TimetablePage> {
                         });
                         await _loadDepartments();
                         // teachers/courses reload after re-selection
-                      },
-                    ),
-                  ),
-                  SizedBox(
-                    width: 100,
-                    height: 36,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isDark
-                            ? (palette?.accent ?? Colors.green)
-                            : Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                      onPressed: !canEdit
-                          ? null
-                          : () => setState(
-                              () => editingEnabled = !editingEnabled,
-                            ),
-                      child: Text(
-                        editingEnabled ? "Done" : "Edit",
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: isDark
-                              ? (palette?.textPrimary ?? Colors.white)
-                              : Colors.white,
+                            },
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 100,
-                    height: 36,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                      ),
-                      onPressed: selectedClass == null
-                          ? null
-                          : () async {
+                        SizedBox(
+                          width: 100,
+                          height: 36,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isDark
+                                  ? (palette?.accent ?? Colors.green)
+                                  : Colors.green,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: !canEdit
+                                ? null
+                                : () => setState(
+                                      () => editingEnabled = !editingEnabled,
+                                    ),
+                            child: Text(
+                              editingEnabled ? "Done" : "Edit",
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: isDark
+                                    ? (palette?.textPrimary ?? Colors.white)
+                                    : Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 100,
+                          height: 36,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: selectedClass == null
+                                ? null
+                                : () async {
                               final classDisplayName =
                                   await _resolveClassDisplayName(
                                     selectedClass!,
@@ -2369,28 +2398,29 @@ class _TimetablePageState extends State<TimetablePage> {
                                 _deleteTimetable(deleteEntireClass: true);
                               }
                             },
-                      child: const Text(
-                        "Delete",
-                        style: TextStyle(fontSize: 15, color: Colors.white),
-                      ),
+                            child: const Text(
+                              "Delete",
+                              style:
+                                  TextStyle(fontSize: 15, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Export PDF',
+                          onPressed: canExport ? _exportPdfFlow : null,
+                          icon: Icon(
+                            Icons.picture_as_pdf_outlined,
+                            color: isDark ? Colors.white : palette?.iconColor,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  IconButton(
-                    tooltip: 'Export PDF',
-                    onPressed: canExport ? _exportPdfFlow : null,
-                    icon: Icon(
-                      Icons.picture_as_pdf_outlined,
-                      color: isDark ? Colors.white : palette?.iconColor,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
                   // Department dropdown
                   Container(
                     constraints: const BoxConstraints(
@@ -2404,7 +2434,7 @@ class _TimetablePageState extends State<TimetablePage> {
                           vertical: 5,
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
                             color: isDark
                                 ? (palette?.border ?? const Color(0xFF3A3F4A))
@@ -2412,7 +2442,7 @@ class _TimetablePageState extends State<TimetablePage> {
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
                             color: isDark
                                 ? (palette?.border ?? const Color(0xFF3A3F4A))
@@ -2421,7 +2451,7 @@ class _TimetablePageState extends State<TimetablePage> {
                         ),
                         focusedBorder: isDark
                             ? OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(
                                   color:
                                       palette?.accent ??
@@ -2529,7 +2559,7 @@ class _TimetablePageState extends State<TimetablePage> {
                           vertical: 5,
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
                             color: isDark
                                 ? (palette?.border ?? const Color(0xFF3A3F4A))
@@ -2537,7 +2567,7 @@ class _TimetablePageState extends State<TimetablePage> {
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
                             color: isDark
                                 ? (palette?.border ?? const Color(0xFF3A3F4A))
@@ -2546,7 +2576,7 @@ class _TimetablePageState extends State<TimetablePage> {
                         ),
                         focusedBorder: isDark
                             ? OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(
                                   color:
                                       palette?.accent ??
@@ -2635,7 +2665,7 @@ class _TimetablePageState extends State<TimetablePage> {
                           vertical: 5,
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
                             color: isDark
                                 ? (palette?.border ?? const Color(0xFF3A3F4A))
@@ -2643,7 +2673,7 @@ class _TimetablePageState extends State<TimetablePage> {
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
                             color: isDark
                                 ? (palette?.border ?? const Color(0xFF3A3F4A))
@@ -2652,7 +2682,7 @@ class _TimetablePageState extends State<TimetablePage> {
                         ),
                         focusedBorder: isDark
                             ? OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(
                                   color:
                                       palette?.accent ??
@@ -2716,7 +2746,10 @@ class _TimetablePageState extends State<TimetablePage> {
                       ),
                     ),
                   ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
               Expanded(
