@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 // import 'package:flutter/services.dart';
 import 'screens/login_screen.dart'; // Correct import for LoginScreen
 import 'screens/onboarding_screen_1.dart';
@@ -96,10 +97,15 @@ class MyApp extends StatelessWidget {
             ),
           ),
           darkTheme: _darkTheme(),
-          home: kIsWeb ? const LoginScreen() : const OnboardingScreen1(),
+          home: kIsWeb ? const LoginScreen() : const _StartGate(),
         );
       },
     );
+  }
+
+  static Future<bool> _hasSeenOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('has_seen_onboarding') ?? false;
   }
 
   ThemeData _darkTheme() {
@@ -221,6 +227,26 @@ class MyApp extends StatelessWidget {
         contentTextStyle: TextStyle(color: textPrimary),
         behavior: SnackBarBehavior.floating,
       ),
+    );
+  }
+}
+
+class _StartGate extends StatelessWidget {
+  const _StartGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: MyApp._hasSeenOnboarding(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final seen = snapshot.data ?? false;
+        return seen ? const LoginScreen() : const OnboardingScreen1();
+      },
     );
   }
 }

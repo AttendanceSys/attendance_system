@@ -235,7 +235,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
                   },
                   validator: (val) {
                     final value = (val ?? '').trim();
-                    if (value.isEmpty) return "Enter base class name";
+                    if (value.isEmpty) return "Enter class name";
                     String sectionSuffix = '';
                     if (_section != null &&
                         _section!.isNotEmpty &&

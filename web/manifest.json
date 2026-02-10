@@ -1,6 +1,6 @@
 {
-    "name": "attendance_system",
-    "short_name": "attendance_system",
+    "name": "QScan Smart",
+    "short_name": "QScan Smart",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
@@ -10,24 +10,24 @@
     "prefer_related_applications": false,
     "icons": [
         {
-            "src": "icons/Icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png"
-        },
-        {
-            "src": "icons/Icon-512.png",
+            "src": "assets/lightLogo.png",
             "sizes": "512x512",
             "type": "image/png"
         },
         {
-            "src": "icons/Icon-maskable-192.png",
+            "src": "assets/lightLogo.png",
             "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "assets/lightLogo.png",
+            "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
         },
         {
-            "src": "icons/Icon-maskable-512.png",
-            "sizes": "512x512",
+            "src": "assets/lightLogo.png",
+            "sizes": "192x192",
             "type": "image/png",
             "purpose": "maskable"
         }

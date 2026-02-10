@@ -55,6 +55,7 @@ dependencies:
   path_provider: ^2.1.5
   csv: ^5.0.0
   geolocator: ^9.0.2
+  shimmer: ^3.0.0
   # shared_preferences: ^2.5.4
 
 
@@ -88,7 +89,10 @@ flutter:
     - assets/scanHand.png
     - assets/darkLogo.png
     - assets/lightLogo.png
+    - assets/first.png
     - assets/jus1.jpeg
+    - assets/man.png
+    - assets/onboarding3.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

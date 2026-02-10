@@ -1,11 +1,11 @@
-import 'package:attendance_system/screens/onboarding_screen_1.dart';
-import 'package:attendance_system/screens/onboarding_screen_3.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
+import 'onboarding_screen_2.dart';
 
-class OnboardingScreen2 extends StatelessWidget {
-  const OnboardingScreen2({super.key});
+class OnboardingScreen3 extends StatelessWidget {
+  const OnboardingScreen3({super.key});
 
   Route _slideRoute(Widget page) {
     return PageRouteBuilder(
@@ -68,7 +68,7 @@ class OnboardingScreen2 extends StatelessWidget {
                             children: [
                               SizedBox(height: isWide ? 16 : 6),
                               Text(
-                                "Scan In Seconds",
+                                "Track Progress",
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Colors.white,
@@ -79,7 +79,7 @@ class OnboardingScreen2 extends StatelessWidget {
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                "Mark attendance from your phone with a quick QR scan.",
+                                "Stay updated with attendance insights anytime.",
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: const Color(0xFFB2B9D6),
@@ -97,7 +97,7 @@ class OnboardingScreen2 extends StatelessWidget {
                                       onPressed: () {
                                         Navigator.of(context).pushReplacement(
                                           _slideRoute(
-                                            const OnboardingScreen1(),
+                                            const OnboardingScreen2(),
                                           ),
                                         );
                                       },
@@ -130,11 +130,16 @@ class OnboardingScreen2 extends StatelessWidget {
                                   const SizedBox(width: 14),
                                   Expanded(
                                     child: ElevatedButton(
-                                      onPressed: () {
+                                      onPressed: () async {
+                                        final prefs = await SharedPreferences
+                                            .getInstance();
+                                        await prefs.setBool(
+                                          'has_seen_onboarding',
+                                          true,
+                                        );
+                                        if (!context.mounted) return;
                                         Navigator.of(context).pushReplacement(
-                                          _slideRoute(
-                                            const OnboardingScreen3(),
-                                          ),
+                                          _slideRoute(const LoginScreen()),
                                         );
                                       },
                                       style: ElevatedButton.styleFrom(
@@ -150,7 +155,7 @@ class OnboardingScreen2 extends StatelessWidget {
                                         elevation: 0,
                                       ),
                                       child: const Text(
-                                        "Next",
+                                        "Get Started",
                                         style: TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
@@ -162,7 +167,7 @@ class OnboardingScreen2 extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 14),
-                              const _PageDots(activeIndex: 1),
+                              const _PageDots(activeIndex: 2),
                               const SizedBox(height: 8),
                             ],
                           ),
@@ -189,12 +194,17 @@ class _HeroImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Image.asset(
-          "assets/scanHand.png",
-          fit: BoxFit.contain,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: const [
+            Image(
+              image: AssetImage("assets/man.png"),
+              fit: BoxFit.contain,
+            ),
+          ],
         ),
       ),
     );

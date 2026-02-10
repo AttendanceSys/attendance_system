@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:attendance_system/screens/super_admin_page.dart';
 import 'package:attendance_system/screens/faculty_admin_page.dart';
 import 'package:attendance_system/screens/teacher_main_page.dart';
 import 'package:attendance_system/components/pages/student_view_attendance_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../services/session.dart';
 import '../services/theme_controller.dart';
 
@@ -33,12 +33,12 @@ class _LoginScreenState extends State<LoginScreen> {
     return p == TargetPlatform.android || p == TargetPlatform.iOS;
   }
 
-  void _handleLogin() async {
+  Future<void> _handleLogin() async {
     if (_isLoggingIn) return;
     setState(() => _isLoggingIn = true);
 
-    String username = _usernameController.text.trim();
-    String password = _passwordController.text;
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
 
     try {
       final userSnap = await FirebaseFirestore.instance
@@ -89,24 +89,22 @@ class _LoginScreenState extends State<LoginScreen> {
           final adminData = adminSnap.docs.first.data();
           displayName =
               (adminData['full_name'] ??
-                      adminData['name'] ??
-                      adminData['display_name'])
-                  as String?;
+                  adminData['name'] ??
+                  adminData['display_name']) as String?;
 
           final facCandidate =
               adminData['faculty_ref'] ??
-              adminData['faculty_id'] ??
-              adminData['faculty'];
+                  adminData['faculty_id'] ??
+                  adminData['faculty'];
           Session.setFacultyFromField(facCandidate);
         }
       } catch (_) {}
 
       displayName ??=
-          (userData['name'] ??
-                  userData['full_name'] ??
-                  userData['display_name'] ??
-                  username)
-              as String;
+      (userData['name'] ??
+          userData['full_name'] ??
+          userData['display_name'] ??
+          username) as String;
 
       if (role == 'teacher') {
         try {
@@ -118,10 +116,9 @@ class _LoginScreenState extends State<LoginScreen> {
           if (lecSnap.docs.isNotEmpty) {
             final lecData = lecSnap.docs.first.data();
             final teacherName =
-                (lecData['teacher_name'] ??
-                        lecData['name'] ??
-                        lecData['display_name'])
-                    as String?;
+            (lecData['teacher_name'] ??
+                lecData['name'] ??
+                lecData['display_name']) as String?;
             if (teacherName != null && teacherName.isNotEmpty) {
               displayName = teacherName;
             }
@@ -132,17 +129,18 @@ class _LoginScreenState extends State<LoginScreen> {
       if (Session.facultyRef == null) {
         final userFac =
             userData['faculty_ref'] ??
-            userData['faculty_id'] ??
-            userData['faculty'];
+                userData['faculty_id'] ??
+                userData['faculty'];
         Session.setFacultyFromField(userFac);
       }
 
       Session.name = displayName;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
-      await Future.delayed(const Duration(milliseconds: 500));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Welcome $displayName')));
+      await Future.delayed(const Duration(milliseconds: 350));
+
+      if (!mounted) return;
 
       if (role == 'Super admin') {
         Navigator.pushReplacement(
@@ -170,9 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => const StudentViewAttendanceMobile(),
-          ),
+          MaterialPageRoute(builder: (_) => const StudentViewAttendanceMobile()),
         );
       } else {
         setState(() {
@@ -210,41 +206,42 @@ class _LoginScreenState extends State<LoginScreen> {
             themeMode == ThemeMode.dark ||
             (themeMode == ThemeMode.system && systemDark);
 
-        return Scaffold(
-          body: Container(
-            decoration: BoxDecoration(
-              gradient: isDark
-                  ? const LinearGradient(
-                      colors: [Color(0xFF0B1220), Color(0xFF111B2E)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : const LinearGradient(
-                      colors: [Color(0xFFEFF6FF), Color(0xFFEDE9FE)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-            ),
-            child: Stack(
-              children: [
-                // soft glow blobs (like SaaS)
-                Positioned(
-                  top: -120,
-                  left: -120,
-                  child: _GlowBlob(isDark: isDark),
-                ),
-                Positioned(
-                  bottom: -140,
-                  right: -140,
-                  child: _GlowBlob(isDark: isDark),
-                ),
-
-                Center(
-                  child: isMobile
-                      ? _buildMobileForm(context, isDark: isDark)
-                      : _buildWebForm(context, isDark: isDark),
-                ),
-              ],
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+          child: Scaffold(
+            body: Container(
+              decoration: BoxDecoration(
+                gradient: isDark
+                    ? const LinearGradient(
+                        colors: [Color(0xFF0B1220), Color(0xFF111B2E)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : const LinearGradient(
+                        colors: [Color(0xFFEFF6FF), Color(0xFFEDE9FE)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: -120,
+                    left: -120,
+                    child: _GlowBlob(isDark: isDark),
+                  ),
+                  Positioned(
+                    bottom: -140,
+                    right: -140,
+                    child: _GlowBlob(isDark: isDark),
+                  ),
+                  Center(
+                    child: isMobile
+                        ? _buildMobileForm(context, isDark: isDark)
+                        : _buildWebForm(context, isDark: isDark),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -262,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             const SizedBox(height: 4),
             _BrandHeader(isDark: isDark),
-            const SizedBox(height: 18),
+            const SizedBox(height: 6),
 
             Text(
               "Welcome Back",
@@ -270,9 +267,7 @@ class _LoginScreenState extends State<LoginScreen> {
               style: TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w800,
-                color: isDark
-                    ? const Color(0xFFE6EAF1)
-                    : const Color(0xFF1F2937),
+                color: isDark ? const Color(0xFFE6EAF1) : const Color(0xFF1F2937),
               ),
             ),
             const SizedBox(height: 8),
@@ -281,9 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
-                color: isDark
-                    ? const Color(0xFF9EA5B5)
-                    : const Color(0xFF6B7280),
+                color: isDark ? const Color(0xFF9EA5B5) : const Color(0xFF6B7280),
               ),
             ),
             const SizedBox(height: 22),
@@ -354,7 +347,7 @@ class _LoginScreenState extends State<LoginScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _BrandHeader(isDark: isDark),
-            const SizedBox(height: 18),
+            const SizedBox(height: 6),
 
             Text(
               "Welcome Back",
@@ -362,9 +355,7 @@ class _LoginScreenState extends State<LoginScreen> {
               style: TextStyle(
                 fontSize: 34,
                 fontWeight: FontWeight.w800,
-                color: isDark
-                    ? const Color(0xFFE6EAF1)
-                    : const Color(0xFF1F2937),
+                color: isDark ? const Color(0xFFE6EAF1) : const Color(0xFF1F2937),
               ),
             ),
             const SizedBox(height: 8),
@@ -373,9 +364,7 @@ class _LoginScreenState extends State<LoginScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
-                color: isDark
-                    ? const Color(0xFF9EA5B5)
-                    : const Color(0xFF6B7280),
+                color: isDark ? const Color(0xFF9EA5B5) : const Color(0xFF6B7280),
               ),
             ),
             const SizedBox(height: 22),
@@ -418,7 +407,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
 
             _isLoggingIn
-                ? const Padding(      
+                ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: CircularProgressIndicator(),
                   )
@@ -450,12 +439,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final fill = isDark
         ? const Color(0xFF0F172A).withOpacity(0.55)
         : Colors.white.withOpacity(0.75);
-    final textColor = isDark
-        ? const Color(0xFFE6EAF1)
-        : const Color(0xFF111827);
-    final hintColor = isDark
-        ? const Color(0xFF9EA5B5)
-        : const Color(0xFF6B7280);
+    final textColor = isDark ? const Color(0xFFE6EAF1) : const Color(0xFF111827);
+    final hintColor = isDark ? const Color(0xFF9EA5B5) : const Color(0xFF6B7280);
 
     return TextField(
       controller: controller,
@@ -486,10 +471,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     setState(() => _obscurePassword = !_obscurePassword),
               )
             : null,
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 14,
-          horizontal: 14,
-        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
@@ -521,7 +503,7 @@ class _LoginCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 34),
+      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 26),
       decoration: BoxDecoration(
         color: isDark
             ? const Color(0xFF0B1220).withOpacity(0.55)
@@ -589,54 +571,30 @@ class _GradientButton extends StatelessWidget {
   }
 }
 
+/// ✅ Banner header inside the card (no dot)
 class _BrandHeader extends StatelessWidget {
   final bool isDark;
   const _BrandHeader({required this.isDark});
 
   @override
   Widget build(BuildContext context) {
-    final textColor = isDark
-        ? const Color.fromARGB(255, 255, 255, 255)
-        : const Color(0xFF1F2937);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            'assets/lightLogo.png',
-            height: 82,
-            width: 82,
-            fit: BoxFit.contain,
-          ),
-          const SizedBox(height: 10),
-          RichText(
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: 'QScan',
-                  style: GoogleFonts.playfairDisplay(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 26,
-                    color: textColor,
-                  ),
-                ),
-                TextSpan(
-                  text: ' Smart',
-                  style: GoogleFonts.playfairDisplay(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 26,
-                    color: textColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+    return Container(
+      width: 900,
+      height: 190,
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF334155).withOpacity(0.35)
+              : const Color(0xFFE5E7EB),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        "assets/first.png",
+        fit: BoxFit.fitWidth,
+        alignment: Alignment.center,
       ),
     );
   }
@@ -654,9 +612,10 @@ class _GlowBlob extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: RadialGradient(
-          colors: isDark
-              ? [const Color(0xFF7C3AED).withOpacity(0.22), Colors.transparent]
-              : [const Color(0xFF7C3AED).withOpacity(0.22), Colors.transparent],
+          colors: [
+            const Color(0xFF7C3AED).withOpacity(0.22),
+            Colors.transparent,
+          ],
         ),
       ),
     );

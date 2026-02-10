@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import '../student_theme_controller.dart';
 
 Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
-  final brightness = Theme.of(context).brightness;
-  final isDark = brightness == Brightness.dark;
+  final studentTheme = StudentThemeController.instance.theme;
+  final isDark = StudentThemeController.instance.isDarkMode;
   final barrierOpacity = isDark ? 0.62 : 0.40;
   final barrierAlpha = (barrierOpacity * 255).round().clamp(0, 255);
 
@@ -11,12 +12,10 @@ Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
     barrierColor: Colors.black.withAlpha(barrierAlpha),
     barrierDismissible: false,
     builder: (context) {
-      final theme = Theme.of(context);
-      final colorScheme = theme.colorScheme;
-      final surface = theme.dialogTheme.backgroundColor ?? colorScheme.surface;
-      final borderColor = colorScheme.outlineVariant;
-      final textPrimary = colorScheme.onSurface;
-      final accent = colorScheme.primary;
+      final surface = studentTheme.card;
+      final borderColor = studentTheme.border;
+      final textPrimary = studentTheme.foreground;
+      final accent = studentTheme.button;
       final shadowOpacity = isDark ? 0.30 : 0.10;
       final shadowAlpha = (shadowOpacity * 255).round().clamp(0, 255);
 
@@ -92,12 +91,15 @@ Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: const Text(
-                          "Logout",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
+                        child: const Center(
+                          child: Text(
+                            "Log out",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
                       ),

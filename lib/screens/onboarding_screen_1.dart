@@ -1,8 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'login_screen.dart';
+import 'onboarding_screen_2.dart';
 
 class OnboardingScreen1 extends StatelessWidget {
   const OnboardingScreen1({super.key});
+
+  Route _slideRoute(Widget page) {
+    return PageRouteBuilder(
+      pageBuilder: (_, __, ___) => page,
+      transitionDuration: const Duration(milliseconds: 260),
+      transitionsBuilder: (_, animation, __, child) {
+        final offsetAnimation = Tween<Offset>(
+          begin: const Offset(1, 0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut));
+        return SlideTransition(position: offsetAnimation, child: child);
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,8 +35,14 @@ class OnboardingScreen1 extends StatelessWidget {
         final minHeight = height - MediaQuery.of(context).padding.vertical;
         final buttonVertical = isWide ? 16.0 : 14.0;
 
-        return Scaffold(
-          body: Container(
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            statusBarBrightness: Brightness.dark,
+          ),
+          child: Scaffold(
+            body: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xFF10142B), Color(0xFF1A2140)],
@@ -72,10 +94,7 @@ class OnboardingScreen1 extends StatelessWidget {
                                 child: ElevatedButton(
                                   onPressed: () {
                                     Navigator.of(context).pushReplacement(
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const LoginScreen(),
-                                      ),
+                                      _slideRoute(const OnboardingScreen2()),
                                     );
                                   },
                                   style: ElevatedButton.styleFrom(
@@ -89,7 +108,7 @@ class OnboardingScreen1 extends StatelessWidget {
                                     elevation: 0,
                                   ),
                                   child: const Text(
-                                    "Get Started",
+                                    "Next",
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
@@ -99,7 +118,7 @@ class OnboardingScreen1 extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 14),
-                              const _PageDots(activeIndex: 1),
+                              const _PageDots(activeIndex: 0),
                               const SizedBox(height: 8),
                             ],
                           ),
@@ -109,6 +128,7 @@ class OnboardingScreen1 extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         );

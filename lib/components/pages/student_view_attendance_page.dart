@@ -9,6 +9,7 @@ import 'student_profile_page.dart';
 import 'student_scan_attendance_page.dart';
 import '../../components/animated_bottom_bar.dart';
 import '../../components/student_theme_controller.dart';
+import 'package:shimmer/shimmer.dart';
 
 class StudentViewAttendanceMobile extends StatefulWidget {
   const StudentViewAttendanceMobile({super.key});
@@ -406,7 +407,7 @@ class _StudentViewAttendanceMobileState
 
                 Expanded(
                   child: isLoading
-                      ? const Center(child: CircularProgressIndicator())
+                      ? _SkeletonList(theme: theme)
                       : errorMessage != null
                       ? Center(
                           child: Text(
@@ -593,6 +594,116 @@ class _StudentViewAttendanceMobileState
           ),
         );
       },
+    );
+  }
+}
+
+class _SkeletonList extends StatelessWidget {
+  final StudentThemeProxy theme;
+  const _SkeletonList({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    final base = theme.inputBackground.withOpacity(0.65);
+    final highlight = theme.inputBackground.withOpacity(0.25);
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      itemCount: 6,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        return Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          elevation: 2,
+          margin: EdgeInsets.zero,
+          color: theme.card,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Shimmer.fromColors(
+              baseColor: base,
+              highlightColor: highlight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _SkeletonBox(
+                          color: base,
+                          height: 16,
+                          radius: 10,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          _SkeletonBox(
+                            color: base,
+                            height: 12,
+                            width: 76,
+                            radius: 8,
+                          ),
+                          const SizedBox(height: 6),
+                          _SkeletonBox(
+                            color: base,
+                            height: 12,
+                            width: 64,
+                            radius: 8,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: _SkeletonBox(
+                      color: base,
+                      height: 10,
+                      radius: 999,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _SkeletonBox(
+                    color: base,
+                    height: 12,
+                    width: 120,
+                    radius: 8,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SkeletonBox extends StatelessWidget {
+  final double height;
+  final double? width;
+  final Color color;
+  final double radius;
+
+  const _SkeletonBox({
+    required this.height,
+    required this.color,
+    this.width,
+    this.radius = 10,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      width: width ?? double.infinity,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(radius),
+      ),
     );
   }
 }
