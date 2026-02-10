@@ -871,21 +871,24 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
     Widget qrPreviewContent() {
       if (qrCodeData == null) {
+        final emptyBg =
+            isDarkMode ? const Color(0xFF1F2430) : Colors.white;
+        final emptyBorder =
+            isDarkMode ? const Color(0xFF2D3446) : Colors.grey[300]!;
+        final emptyText = isDarkMode ? const Color(0xFFE2E8F0) : Colors.grey;
         return Container(
           height: 260,
           width: double.infinity,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            color: isDarkMode
-                ? const Color.fromARGB(255, 143, 139, 139)
-                : Colors.white,
-            border: Border.all(color: Colors.grey[300]!, width: 2),
+            color: emptyBg,
+            border: Border.all(color: emptyBorder, width: 2),
           ),
           child: Text(
             "No QR Code generated yet.",
             style: TextStyle(
-              color: isDarkMode ? Colors.white : Colors.grey,
+              color: emptyText,
               fontSize: 18,
             ),
           ),
@@ -1252,8 +1255,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
           final generateBtn = ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: scheme.primary,
-              foregroundColor: scheme.onPrimary,
+              backgroundColor:
+                  isDarkMode ? const Color(0xFF4234A4) : const Color(0xFF8372FE),
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
               shape: RoundedRectangleBorder(borderRadius: buttonRadius),
             ),

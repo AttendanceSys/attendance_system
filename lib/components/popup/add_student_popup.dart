@@ -284,13 +284,21 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
 
     final fieldRadius = BorderRadius.circular(10);
 
+    const double fieldFontSize = 16;
+
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      hintStyle: TextStyle(color: textPrimary.withOpacity(0.65)),
-      labelStyle: TextStyle(color: textPrimary.withOpacity(0.85)),
+      hintStyle: TextStyle(
+        color: textPrimary.withOpacity(0.65),
+        fontSize: fieldFontSize,
+      ),
+      labelStyle: TextStyle(
+        color: textPrimary.withOpacity(0.85),
+        fontSize: fieldFontSize,
+      ),
       border: OutlineInputBorder(
         borderRadius: fieldRadius,
         borderSide: BorderSide(color: border),
@@ -391,13 +399,25 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _gender,
-                          decoration: input('Gender'),
+                          decoration: input('').copyWith(labelText: 'Gender'),
                           dropdownColor: surface,
-                          style: TextStyle(color: textPrimary),
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: fieldFontSize,
+                          ),
                           items: ['Male', 'Female']
                               .map(
                                 (g) =>
-                                    DropdownMenuItem(value: g, child: Text(g)),
+                                    DropdownMenuItem(
+                                      value: g,
+                                      child: Text(
+                                        g,
+                                        style: TextStyle(
+                                          color: textPrimary,
+                                          fontSize: fieldFontSize,
+                                        ),
+                                      ),
+                                    ),
                               )
                               .toList(),
                           onChanged: (v) => setState(() => _gender = v),
@@ -409,15 +429,25 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _departmentId,
-                          decoration: input('Department'),
+                          decoration:
+                              input('').copyWith(labelText: 'Department'),
                           isExpanded: true,
                           dropdownColor: surface,
-                          style: TextStyle(color: textPrimary),
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: fieldFontSize,
+                          ),
                           items: _departments
                               .map(
                                 (d) => DropdownMenuItem(
                                   value: d['id'],
-                                  child: Text(d['name'] ?? ''),
+                                  child: Text(
+                                    d['name'] ?? '',
+                                    style: TextStyle(
+                                      color: textPrimary,
+                                      fontSize: fieldFontSize,
+                                    ),
+                                  ),
                                 ),
                               )
                               .toList(),
@@ -436,14 +466,23 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
 
                   DropdownButtonFormField<String>(
                     value: _classId,
-                    decoration: input('Class'),
+                    decoration: input('').copyWith(labelText: 'Class'),
                     dropdownColor: surface,
-                    style: TextStyle(color: textPrimary),
+                    style: TextStyle(
+                      color: textPrimary,
+                      fontSize: fieldFontSize,
+                    ),
                     items: _filteredClassesByDepartment
                         .map(
                           (c) => DropdownMenuItem(
                             value: c['id'],
-                            child: Text(c['name'] ?? ''),
+                            child: Text(
+                              c['name'] ?? '',
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: fieldFontSize,
+                              ),
+                            ),
                           ),
                         )
                         .toList(),

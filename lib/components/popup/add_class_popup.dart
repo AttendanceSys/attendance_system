@@ -163,6 +163,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
     final fieldRadius = BorderRadius.circular(10);
+    const double fieldFontSize = 16;
 
     InputDecoration input(String hint) {
       return InputDecoration(
@@ -173,8 +174,14 @@ class _AddClassPopupState extends State<AddClassPopup> {
           horizontal: 14,
           vertical: 14,
         ),
-        hintStyle: TextStyle(color: textPrimary.withOpacity(0.65)),
-        labelStyle: TextStyle(color: textPrimary.withOpacity(0.85)),
+        hintStyle: TextStyle(
+          color: textPrimary.withOpacity(0.65),
+          fontSize: fieldFontSize,
+        ),
+        labelStyle: TextStyle(
+          color: textPrimary.withOpacity(0.85),
+          fontSize: fieldFontSize,
+        ),
         border: OutlineInputBorder(
           borderRadius: fieldRadius,
           borderSide: BorderSide(color: border),
@@ -228,7 +235,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
                   initialValue: _baseName,
                   decoration: input(
                     '',
-                  ).copyWith(labelText: 'Base Class Name (e.g. B3SC)'),
+                  ).copyWith(labelText: 'Class Name (e.g. B3SC)'),
                   onChanged: (val) {
                     final upper = val.toUpperCase();
                     setState(() => _baseName = upper);
@@ -265,13 +272,22 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _department,
-                  decoration: input("Department"),
+                  decoration: input('').copyWith(labelText: 'Department'),
                   dropdownColor: surface,
-                  style: TextStyle(color: textPrimary),
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: fieldFontSize,
+                  ),
                   items: _departments.map((d) {
                     return DropdownMenuItem(
                       value: d['id'],
-                      child: Text(d['name'] ?? ''),
+                      child: Text(
+                        d['name'] ?? '',
+                        style: TextStyle(
+                          color: textPrimary,
+                          fontSize: fieldFontSize,
+                        ),
+                      ),
                     );
                   }).toList(),
                   onChanged: (val) => setState(() => _department = val),
@@ -281,14 +297,23 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _section,
-                  decoration: input("Section"),
+                  decoration: input('').copyWith(labelText: 'Section'),
                   dropdownColor: surface,
-                  style: TextStyle(color: textPrimary),
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: fieldFontSize,
+                  ),
                   items: _sections
                       .map(
                         (sec) => DropdownMenuItem(
                           value: sec,
-                          child: Text(sec == 'NONE' ? '(none)' : sec),
+                          child: Text(
+                            sec == 'NONE' ? '(none)' : sec,
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: fieldFontSize,
+                            ),
+                          ),
                         ),
                       )
                       .toList(),

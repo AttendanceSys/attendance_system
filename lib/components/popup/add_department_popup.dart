@@ -154,14 +154,21 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
     final fieldRadius = BorderRadius.circular(10);
+    const double fieldFontSize = 16;
 
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      hintStyle: TextStyle(color: textPrimary.withOpacity(0.65)),
-      labelStyle: TextStyle(color: textPrimary.withOpacity(0.85)),
+      hintStyle: TextStyle(
+        color: textPrimary.withOpacity(0.65),
+        fontSize: fieldFontSize,
+      ),
+      labelStyle: TextStyle(
+        color: textPrimary.withOpacity(0.85),
+        fontSize: fieldFontSize,
+      ),
       border: OutlineInputBorder(
         borderRadius: fieldRadius,
         borderSide: BorderSide(color: border),
@@ -265,9 +272,13 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 _teachers.isEmpty
                     ? DropdownButtonFormField<String>(
                         value: null,
-                        decoration: input('Head of Department'),
+                        decoration:
+                            input('').copyWith(labelText: 'Head of Department'),
                         dropdownColor: surface,
-                        style: TextStyle(color: textPrimary),
+                        style: TextStyle(
+                          color: textPrimary,
+                          fontSize: fieldFontSize,
+                        ),
                         items: [
                           DropdownMenuItem(
                             value: '',
@@ -276,6 +287,10 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                               Session.facultyRef == null
                                   ? 'No teachers available'
                                   : 'No teachers found for your faculty',
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: fieldFontSize,
+                              ),
                             ),
                           ),
                         ],
@@ -286,13 +301,26 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                       )
                     : DropdownButtonFormField<String>(
                         value: _head,
-                        decoration: input('Head of Department'),
+                        decoration:
+                            input('').copyWith(labelText: 'Head of Department'),
                         dropdownColor: surface,
-                        style: TextStyle(color: textPrimary),
+                        style: TextStyle(
+                          color: textPrimary,
+                          fontSize: fieldFontSize,
+                        ),
                         items: _teachers.map((t) {
                           final id = t['id'] ?? '';
                           final name = t['name'] ?? '';
-                          return DropdownMenuItem(value: id, child: Text(name));
+                          return DropdownMenuItem(
+                            value: id,
+                            child: Text(
+                              name,
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: fieldFontSize,
+                              ),
+                            ),
+                          );
                         }).toList(),
                         onChanged: (val) => setState(() {
                           _headError = null;

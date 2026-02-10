@@ -989,6 +989,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<TeacherThemeColors>();
+    final surfaceColor =
+        palette?.surface ?? Theme.of(context).colorScheme.surface;
+    final borderColor = palette?.border ?? Theme.of(context).dividerColor;
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -1006,66 +1009,75 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
           ),
           const SizedBox(height: 18),
 
-          Wrap(
-            spacing: 14,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _styledDropdown(
-                value: department,
-                items: departments,
-                hint: 'Select Department',
-                onChanged: (v) {
-                  setState(() {
-                    department = v;
-                    classes = [];
-                    className = null;
-                    subjects = [];
-                    subject = null;
-                    students = [];
-                    _prefillAppliedForCurrentSelection = false;
-                    currentSessionId = null;
-                    currentSessionCode = null;
-                    _noActiveSessionMessage = null;
-                  });
-                  if (v != null) _loadClassesForDepartment(v);
-                },
-              ),
-              _styledDropdown(
-                value: className,
-                items: classes,
-                hint: 'Select Class',
-                onChanged: (v) {
-                  setState(() {
-                    className = v;
-                    subjects = [];
-                    subject = null;
-                    students = [];
-                    _prefillAppliedForCurrentSelection = false;
-                    currentSessionId = null;
-                    currentSessionCode = null;
-                    _noActiveSessionMessage = null;
-                  });
-                  if (v != null) _loadSubjectsForClass(v);
-                },
-              ),
-              _styledDropdown(
-                value: subject,
-                items: subjects,
-                hint: 'Select Subject',
-                onChanged: (v) {
-                  setState(() {
-                    subject = v;
-                    students = [];
-                    _prefillAppliedForCurrentSelection = false;
-                    currentSessionId = null;
-                    currentSessionCode = null;
-                    _noActiveSessionMessage = null;
-                  });
-                  if (v != null) _fetchStudentsForSelection(forceRefresh: true);
-                },
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor.withOpacity(0.35)),
+            ),
+            child: Wrap(
+              spacing: 14,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _styledDropdown(
+                  value: department,
+                  items: departments,
+                  hint: 'Select Department',
+                  onChanged: (v) {
+                    setState(() {
+                      department = v;
+                      classes = [];
+                      className = null;
+                      subjects = [];
+                      subject = null;
+                      students = [];
+                      _prefillAppliedForCurrentSelection = false;
+                      currentSessionId = null;
+                      currentSessionCode = null;
+                      _noActiveSessionMessage = null;
+                    });
+                    if (v != null) _loadClassesForDepartment(v);
+                  },
+                ),
+                _styledDropdown(
+                  value: className,
+                  items: classes,
+                  hint: 'Select Class',
+                  onChanged: (v) {
+                    setState(() {
+                      className = v;
+                      subjects = [];
+                      subject = null;
+                      students = [];
+                      _prefillAppliedForCurrentSelection = false;
+                      currentSessionId = null;
+                      currentSessionCode = null;
+                      _noActiveSessionMessage = null;
+                    });
+                    if (v != null) _loadSubjectsForClass(v);
+                  },
+                ),
+                _styledDropdown(
+                  value: subject,
+                  items: subjects,
+                  hint: 'Select Subject',
+                  onChanged: (v) {
+                    setState(() {
+                      subject = v;
+                      students = [];
+                      _prefillAppliedForCurrentSelection = false;
+                      currentSessionId = null;
+                      currentSessionCode = null;
+                      _noActiveSessionMessage = null;
+                    });
+                    if (v != null)
+                      _fetchStudentsForSelection(forceRefresh: true);
+                  },
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 20),
@@ -1234,6 +1246,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                   : const Text(
                       'Submit',
                       style: TextStyle(
+                        color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),

@@ -1385,6 +1385,9 @@ class _TimetablePageState extends State<TimetablePage> {
 
   // Robust currentTimetable: try aliases and inspect existing keys
   List<List<String>>? get currentTimetable {
+    if (selectedClass == null || selectedClass!.trim().isEmpty) {
+      return null;
+    }
     debugPrint(
       'currentTimetable lookup: selectedDepartment=$selectedDepartment selectedClass=$selectedClass',
     );
@@ -1421,7 +1424,9 @@ class _TimetablePageState extends State<TimetablePage> {
         classCandidates.add(_sanitizeForId(cachedCls));
         classCandidates.add(_sanitizeForId(selC));
       }
-      classCandidates.addAll(classesMap.keys.map((k) => k.toString()));
+      if (selectedClass == null || selectedClass!.trim().isEmpty) {
+        classCandidates.addAll(classesMap.keys.map((k) => k.toString()));
+      }
 
       final seenC = <String>{};
       final clsList = <String>[];
@@ -1498,12 +1503,14 @@ class _TimetablePageState extends State<TimetablePage> {
               ) ??
               _findKeyIgnoreCase(map, selectedClass);
           if (found != null) return copyPeriods(map[found])!;
+          return List<String>.from(seedPeriods, growable: true);
         }
         return copyPeriods(map.values.first)!;
       }
     }
 
-    if (classPeriods.isNotEmpty) {
+    if (classPeriods.isNotEmpty &&
+        (selectedDepartment == null || selectedClass == null)) {
       final firstDep = classPeriods.keys.first;
       final firstMap = classPeriods[firstDep]!;
       if (firstMap.isNotEmpty) return copyPeriods(firstMap.values.first)!;
@@ -1860,6 +1867,8 @@ class _TimetablePageState extends State<TimetablePage> {
       clearCacheKey(depSan, classSan);
 
       editingEnabled = false;
+      selectedClass = null;
+      selectedLecturer = null;
     });
   }
 
