@@ -897,7 +897,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         children: [
           QrImageView(
             data: qrCodeData!,
-            size: 260.0,
+            size: 350.0,
             backgroundColor: Colors.white,
           ),
           const SizedBox(height: 16),
@@ -1348,15 +1348,12 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
               builder: (context, constraints) {
                 final isWide = constraints.maxWidth >= 980;
 
-                final left = Expanded(
-                  flex: 2,
-                  child: sectionCard(
-                    title: 'Session Settings',
-                    child: sessionSettingsContent(),
-                  ),
+                final sessionCard = sectionCard(
+                  title: 'Session Settings',
+                  child: sessionSettingsContent(),
                 );
-                final right = Expanded(
-                  flex: 1,
+                final qrCard = ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
                   child: sectionCard(
                     title: 'QR Code Preview',
                     child: Center(child: qrPreviewContent()),
@@ -1364,23 +1361,27 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                 );
 
                 if (isWide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [left, const SizedBox(width: 22), right],
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      sessionCard,
+                      const SizedBox(height: 18),
+                      Align(
+                        alignment: Alignment.center,
+                        child: qrCard,
+                      ),
+                    ],
                   );
                 }
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    sectionCard(
-                      title: 'Session Settings',
-                      child: sessionSettingsContent(),
-                    ),
+                    sessionCard,
                     const SizedBox(height: 18),
-                    sectionCard(
-                      title: 'QR Code Preview',
-                      child: Center(child: qrPreviewContent()),
+                    Align(
+                      alignment: Alignment.center,
+                      child: qrCard,
                     ),
                   ],
                 );

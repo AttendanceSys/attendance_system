@@ -241,6 +241,8 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
       body: Stack(
         children: [
           Row(
+            crossAxisAlignment:
+                CrossAxisAlignment.start, // Ensures content starts at the top
             children: [
               if (!isMobile)
                 Column(
@@ -255,9 +257,10 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
                 ),
               if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
               Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () {},
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    top: 16,
+                  ), // Ensures no top padding
                   child: pages[selectedIndex],
                 ),
               ),

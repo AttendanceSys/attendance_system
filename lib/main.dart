@@ -40,7 +40,7 @@ class MyApp extends StatelessWidget {
       valueListenable: ThemeController.themeMode,
       builder: (context, mode, _) {
         return MaterialApp(
-          title: 'Attendance System',
+          title: 'QScan Smart',
           debugShowCheckedModeBanner: false,
           themeMode: mode,
           theme: ThemeData(

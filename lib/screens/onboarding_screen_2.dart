@@ -2,7 +2,7 @@ import 'package:attendance_system/screens/onboarding_screen_1.dart';
 import 'package:attendance_system/screens/onboarding_screen_3.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'login_screen.dart';
+// import 'login_screen.dart';
 
 class OnboardingScreen2 extends StatelessWidget {
   const OnboardingScreen2({super.key});
