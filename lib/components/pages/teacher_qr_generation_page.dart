@@ -729,6 +729,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         } else if (periodEndsAtTs != null) {
           // If only end exists, treat as ongoing if end > now and (expiresAt absent or expiresAt > now)
           final end = periodEndsAtTs.toDate();
+          
           if (end.isAfter(now)) {
             if (expiresAtTs == null) return true;
             if (expiresAtTs.toDate().isAfter(now)) return true;

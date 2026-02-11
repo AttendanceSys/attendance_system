@@ -23,7 +23,11 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
     with SingleTickerProviderStateMixin {
   final MobileScannerController _controller = MobileScannerController();
   String? scanResult;
+  bool _isProcessingScan = false;
   late final AnimationController _pulseController;
+  double _zoomScale = 0.0;
+  double _baseZoomScale = 0.0;
+  Map<String, dynamic>? _cachedStudentProfileData;
   // Loaded student profile fields (populated from Firestore)
   String? _profileName;
   String? _profileClassName;
@@ -39,8 +43,16 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
+    _controller.zoomScaleState.addListener(_onZoomScaleChanged);
     // Load the student's profile for use when opening the profile page
     _loadProfileForCurrentUser();
+  }
+
+  void _onZoomScaleChanged() {
+    if (!mounted) return;
+    final next = _controller.zoomScaleState.value.clamp(0.0, 1.0).toDouble();
+    if ((next - _zoomScale).abs() < 0.001) return;
+    setState(() => _zoomScale = next);
   }
 
   Future<void> _loadProfileForCurrentUser() async {
@@ -50,6 +62,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       final doc = await _loadStudentProfile(username);
       if (doc == null || !doc.exists) return;
       final data = doc.data() ?? <String, dynamic>{};
+      _cachedStudentProfileData = Map<String, dynamic>.from(data);
       final name =
           (data['fullname'] ??
                   data['fullName'] ??
@@ -85,9 +98,21 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
 
   @override
   void dispose() {
+    _controller.zoomScaleState.removeListener(_onZoomScaleChanged);
     _controller.dispose();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  Future<void> _setZoomScale(double value) async {
+    final next = value.clamp(0.0, 1.0).toDouble();
+    try {
+      await _controller.setZoomScale(next);
+      if (!mounted) return;
+      setState(() => _zoomScale = next);
+    } catch (e) {
+      debugPrint('Failed to set zoom scale: $e');
+    }
   }
 
   String _normalizeScanned(String s) {
@@ -361,27 +386,6 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
     final username = Session.username;
     if (username == null) throw Exception('User not authenticated');
 
-    final dupQuery = await firestore
-        .collection('attendance_records')
-        .where('username', isEqualTo: username)
-        .where('code', isEqualTo: code)
-        .limit(1)
-        .get();
-
-    if (dupQuery.docs.isNotEmpty) {
-      debugPrint(
-        'Duplicate attendance prevented for user=$username code=$code',
-      );
-      // Show "already recorded" dialog
-      if (mounted) {
-        await AttendanceAlert.showAlreadyRecorded(
-          context,
-          subject: sessionData['subject']?.toString(),
-        );
-      }
-      return;
-    }
-
     String subject = sessionData['subject']?.toString() ?? '';
     String department = sessionData['department']?.toString() ?? '';
     String className = sessionData['className']?.toString() ?? '';
@@ -449,40 +453,59 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       }
       return;
     }
+    if (!_isProcessingScan && mounted) {
+      setState(() {
+        _isProcessingScan = true;
+      });
+    }
 
     final firestore = FirebaseFirestore.instance;
     final nowUtc = DateTime.now().toUtc();
     final username = Session.username;
     if (username == null) throw Exception('User not authenticated');
 
-    final studentDocSnapshot = await _loadStudentProfile(username);
-    Map<String, dynamic>? studentData;
-    if (studentDocSnapshot != null && studentDocSnapshot.exists) {
-      studentData = studentDocSnapshot.data();
-      debugPrint(
-        'Loaded student profile for $username: ${studentDocSnapshot.id} -> $studentData',
-      );
-    } else {
-      debugPrint(
-        'Student profile not found for $username — blocking scan for safety',
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Student profile not found. Cannot verify class.'),
-          ),
-        );
-      }
-      return;
-    }
-
     try {
-      final dupQuery = await firestore
-          .collection('attendance_records')
-          .where('username', isEqualTo: username)
-          .where('code', isEqualTo: code)
-          .limit(1)
-          .get();
+      Map<String, dynamic>? studentData = _cachedStudentProfileData;
+      if (studentData == null) {
+        final studentDocSnapshot = await _loadStudentProfile(username);
+        if (studentDocSnapshot != null && studentDocSnapshot.exists) {
+          studentData = studentDocSnapshot.data();
+          if (studentData != null) {
+            _cachedStudentProfileData = Map<String, dynamic>.from(studentData);
+          }
+          debugPrint(
+            'Loaded student profile for $username: ${studentDocSnapshot.id} -> $studentData',
+          );
+        } else {
+          debugPrint(
+            'Student profile not found for $username — blocking scan for safety',
+          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Student profile not found. Cannot verify class.'),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      final requests = await Future.wait([
+        firestore
+            .collection('attendance_records')
+            .where('username', isEqualTo: username)
+            .where('code', isEqualTo: code)
+            .limit(1)
+            .get(),
+        firestore
+            .collection('qr_generation')
+            .where('code', isEqualTo: code)
+            .limit(1)
+            .get(),
+      ]);
+      final dupQuery = requests[0] as QuerySnapshot<Map<String, dynamic>>;
+      final sessionQuery = requests[1] as QuerySnapshot<Map<String, dynamic>>;
 
       if (dupQuery.docs.isNotEmpty) {
         debugPrint('Duplicate found while scanning code: $code');
@@ -492,18 +515,13 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
         return;
       }
 
-      final sessionQuery = await firestore
-          .collection('qr_generation')
-          .where('code', isEqualTo: code)
-          .limit(1)
-          .get();
-
       if (sessionQuery.docs.isEmpty) {
         debugPrint('Exact code match not found for scanned code: $code');
         if (mounted) {
-          await AttendanceAlert.showQrExpired(
+          await AttendanceAlert.showInvalidQr(
             context,
-            details: 'No active QR session found for this code.',
+            details:
+                'This code was not generated by your attendance system QR generator.',
           );
         }
         return;
@@ -582,15 +600,22 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
           context,
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessingScan = false;
+        });
+      }
     }
   }
 
   void _onDetect(BarcodeCapture capture) {
     if (capture.barcodes.isNotEmpty) {
       final String? code = capture.barcodes.first.rawValue;
-      if (scanResult == null && code != null) {
+      if (scanResult == null && code != null && !_isProcessingScan) {
         setState(() {
           scanResult = code;
+          _isProcessingScan = true;
         });
         _controller.stop();
         _handleMarkAttendance(code);
@@ -628,115 +653,192 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
             child: Column(
               children: [
                 Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 320,
-                          decoration: BoxDecoration(
-                            color: theme.card,
-                            borderRadius: BorderRadius.circular(18),
-                            boxShadow: [
-                              BoxShadow(
-                                color: theme.shadow,
-                                blurRadius: 18,
-                                offset: Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          padding: const EdgeInsets.all(16),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: theme.card,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: theme.card, width: 6),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final cutOutSize = constraints.maxWidth < 360 ? 250.0 : 285.0;
+                      final cutOutRect = Rect.fromCenter(
+                        center: Offset(
+                          constraints.maxWidth / 2,
+                          constraints.maxHeight / 2 - 20,
+                        ),
+                        width: cutOutSize,
+                        height: cutOutSize,
+                      );
+
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onScaleStart: (_) {
+                          _baseZoomScale = _zoomScale;
+                        },
+                        onScaleUpdate: (details) {
+                          _setZoomScale(_baseZoomScale + (details.scale - 1) * 0.5);
+                        },
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            MobileScanner(
+                              controller: _controller,
+                              fit: BoxFit.cover,
+                              scanWindow: cutOutRect,
+                              onDetect: _onDetect,
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                width: 280,
-                                height: 280,
-                                color: theme.qrBackground,
-                                child: MobileScanner(
-                                  controller: _controller,
-                                  fit: BoxFit.cover,
-                                  onDetect: _onDetect,
+                            IgnorePointer(
+                              child: CustomPaint(
+                                painter: _ScanWindowOverlayPainter(
+                                  cutOutRect: cutOutRect,
+                                  borderRadius: 18,
                                 ),
+                                child: const SizedBox.expand(),
                               ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                          child: Text(
-                            'Position the QR code within the frame to scan.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: theme.hint, fontSize: 13),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        if (scanResult != null)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 28.0,
+                            IgnorePointer(
+                              child: AnimatedBuilder(
+                                animation: _pulseController,
+                                builder: (context, _) {
+                                  final lineY =
+                                      cutOutRect.top +
+                                      (cutOutRect.height * _pulseController.value);
+                                  return CustomPaint(
+                                    painter: _ScanLinePainter(
+                                      cutOutRect: cutOutRect,
+                                      lineY: lineY,
+                                    ),
+                                    child: const SizedBox.expand(),
+                                  );
+                                },
+                              ),
                             ),
-                            child: Container(
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: theme.inputBackground,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: theme.inputBorder),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                            Positioned(
+                              left: 24,
+                              right: 24,
+                              bottom: 94,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.44),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'Align the QR inside the frame',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
                                       children: [
-                                        Text(
-                                          'Scanned:',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: theme.hint,
+                                        IconButton(
+                                          onPressed: () =>
+                                              _setZoomScale(_zoomScale - 0.1),
+                                          icon: const Icon(
+                                            Icons.remove_circle_outline,
+                                            color: Colors.white,
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          scanResult!,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: theme.foreground,
+                                        Expanded(
+                                          child: SliderTheme(
+                                            data: SliderTheme.of(context).copyWith(
+                                              activeTrackColor: Colors.white,
+                                              inactiveTrackColor: Colors.white24,
+                                              thumbColor: Colors.white,
+                                              overlayColor: Colors.white24,
+                                            ),
+                                            child: Slider(
+                                              min: 0,
+                                              max: 1,
+                                              value: _zoomScale
+                                                  .clamp(0.0, 1.0)
+                                                  .toDouble(),
+                                              onChanged: (value) =>
+                                                  _setZoomScale(value),
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          onPressed: () =>
+                                              _setZoomScale(_zoomScale + 0.1),
+                                          icon: const Icon(
+                                            Icons.add_circle_outline,
+                                            color: Colors.white,
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        scanResult = null;
-                                      });
-                                      _controller.start();
-                                    },
-                                    child: Text(
-                                      'Scan again',
-                                      style: TextStyle(color: theme.button),
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
+                            if (scanResult != null)
+                              Positioned(
+                                left: 24,
+                                right: 24,
+                                top: 24,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.5),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _isProcessingScan
+                                              ? 'Processing attendance...'
+                                              : 'Scanned: $scanResult',
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                      if (_isProcessingScan)
+                                        const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
+                                          ),
+                                        )
+                                      else
+                                        TextButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              scanResult = null;
+                                              _isProcessingScan = false;
+                                            });
+                                            _controller.start();
+                                          },
+                                          child: const Text(
+                                            'Scan again',
+                                            style: TextStyle(color: Colors.white),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
                 AnimatedBottomBar(
@@ -787,5 +889,83 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
         );
       },
     );
+  }
+}
+
+class _ScanWindowOverlayPainter extends CustomPainter {
+  _ScanWindowOverlayPainter({required this.cutOutRect, required this.borderRadius});
+
+  final Rect cutOutRect;
+  final double borderRadius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final overlayPaint = Paint()..color = Colors.black.withOpacity(0.55);
+    final clearPaint = Paint()..blendMode = BlendMode.clear;
+
+    canvas.saveLayer(Offset.zero & size, Paint());
+    canvas.drawRect(Offset.zero & size, overlayPaint);
+    final hole = RRect.fromRectAndRadius(
+      cutOutRect,
+      Radius.circular(borderRadius),
+    );
+    canvas.drawRRect(hole, clearPaint);
+    canvas.restore();
+
+    final cornerPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    const corner = 22.0;
+    final l = cutOutRect.left;
+    final t = cutOutRect.top;
+    final r = cutOutRect.right;
+    final b = cutOutRect.bottom;
+
+    canvas.drawLine(Offset(l, t + corner), Offset(l, t), cornerPaint);
+    canvas.drawLine(Offset(l, t), Offset(l + corner, t), cornerPaint);
+    canvas.drawLine(Offset(r - corner, t), Offset(r, t), cornerPaint);
+    canvas.drawLine(Offset(r, t), Offset(r, t + corner), cornerPaint);
+    canvas.drawLine(Offset(l, b - corner), Offset(l, b), cornerPaint);
+    canvas.drawLine(Offset(l, b), Offset(l + corner, b), cornerPaint);
+    canvas.drawLine(Offset(r - corner, b), Offset(r, b), cornerPaint);
+    canvas.drawLine(Offset(r, b - corner), Offset(r, b), cornerPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScanWindowOverlayPainter oldDelegate) {
+    return oldDelegate.cutOutRect != cutOutRect ||
+        oldDelegate.borderRadius != borderRadius;
+  }
+}
+
+class _ScanLinePainter extends CustomPainter {
+  _ScanLinePainter({required this.cutOutRect, required this.lineY});
+
+  final Rect cutOutRect;
+  final double lineY;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final linePaint = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          Colors.cyanAccent.withOpacity(0.0),
+          Colors.cyanAccent.withOpacity(0.95),
+          Colors.cyanAccent.withOpacity(0.0),
+        ],
+      ).createShader(
+        Rect.fromLTWH(cutOutRect.left, lineY - 1, cutOutRect.width, 2),
+      );
+    canvas.drawRect(
+      Rect.fromLTWH(cutOutRect.left + 6, lineY - 1, cutOutRect.width - 12, 2),
+      linePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScanLinePainter oldDelegate) {
+    return oldDelegate.lineY != lineY || oldDelegate.cutOutRect != cutOutRect;
   }
 }

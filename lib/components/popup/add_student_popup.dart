@@ -215,7 +215,44 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
     return _classes.where((c) => c['department'] == _departmentId).toList();
   }
 
+  List<String> _missingRequiredFields() {
+    final missing = <String>[];
+    if ((_username ?? '').trim().isEmpty) missing.add('Username');
+    if ((_fullname ?? '').trim().isEmpty) missing.add('Full name');
+    if ((_password ?? '').trim().isEmpty) missing.add('Password');
+    if ((_gender ?? '').trim().isEmpty) missing.add('Gender');
+    if ((_departmentId ?? '').trim().isEmpty) missing.add('Department');
+    if ((_classId ?? '').trim().isEmpty) missing.add('Class');
+    return missing;
+  }
+
+  Future<void> _showMissingFieldsDialog(List<String> missingFields) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Missing required fields'),
+        content: Text(
+          'Please fill the following: ${missingFields.join(', ')}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _save() async {
+    final missing = _missingRequiredFields();
+    if (missing.isNotEmpty) {
+      _formKey.currentState?.validate();
+      await _showMissingFieldsDialog(missing);
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     String facultyId = widget.student?.facultyRef ?? '';
@@ -487,7 +524,8 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                         )
                         .toList(),
                     onChanged: (v) => setState(() => _classId = v),
-                    validator: (v) => null,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Select class' : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -544,11 +582,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       SizedBox(
                         height: 40,
                         child: ElevatedButton(
-                          onPressed: () async {
-                            if (_formKey.currentState!.validate()) {
-                              await _save();
-                            }
-                          },
+                          onPressed: _save,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: saveButtonBg,
                             shape: RoundedRectangleBorder(

@@ -1,6 +1,7 @@
 //main.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,10 +43,24 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'QScan Smart',
           debugShowCheckedModeBanner: false,
+          scrollBehavior: const _SaasScrollBehavior(),
           themeMode: mode,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
             useMaterial3: true,
+            scrollbarTheme: ScrollbarThemeData(
+              thumbVisibility: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.hovered),
+              ),
+              trackVisibility: const WidgetStatePropertyAll(false),
+              radius: const Radius.circular(999),
+              thickness: const WidgetStatePropertyAll(8),
+              thumbColor: WidgetStateProperty.resolveWith(
+                (states) => Colors.black.withValues(
+                  alpha: states.contains(WidgetState.dragged) ? 0.45 : 0.30,
+                ),
+              ),
+            ),
             dialogTheme: const DialogThemeData(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.all(Radius.circular(10)),
@@ -222,6 +237,19 @@ class MyApp extends StatelessWidget {
         dividerThickness: 0.8,
         headingRowHeight: 48,
       ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbVisibility: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.hovered),
+        ),
+        trackVisibility: const WidgetStatePropertyAll(false),
+        radius: const Radius.circular(999),
+        thickness: const WidgetStatePropertyAll(8),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => textSecondary.withValues(
+            alpha: states.contains(WidgetState.dragged) ? 0.9 : 0.65,
+          ),
+        ),
+      ),
       snackBarTheme: const SnackBarThemeData(
         backgroundColor: surfaceHigh,
         contentTextStyle: TextStyle(color: textPrimary),
@@ -229,6 +257,18 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SaasScrollBehavior extends MaterialScrollBehavior {
+  const _SaasScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.trackpad,
+  };
 }
 
 class _StartGate extends StatelessWidget {

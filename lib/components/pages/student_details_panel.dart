@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/super_admin_theme.dart';
@@ -7,6 +6,8 @@ class StudentDetailsPanel extends StatefulWidget {
   final String studentId;
   final String? studentName;
   final String? studentClass;
+  final String? selectedCourse;
+  final bool compact;
   final DateTime? selectedDate;
   final List<Map<String, dynamic>> attendanceRecords;
   final String searchText;
@@ -18,6 +19,8 @@ class StudentDetailsPanel extends StatefulWidget {
     required this.studentId,
     this.studentName,
     this.studentClass,
+    this.selectedCourse,
+    this.compact = false,
     this.selectedDate,
     required this.attendanceRecords,
     required this.searchText,
@@ -40,6 +43,29 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
   String? _displayClass;
   String? _loadError;
 
+  bool _matchesSelectedCourse(String courseName) {
+    final selected = (widget.selectedCourse ?? '').trim().toLowerCase();
+    if (selected.isEmpty) return true;
+    return courseName.trim().toLowerCase() == selected;
+  }
+
+  bool _attendanceDocBelongsToStudent(Map<String, dynamic> data) {
+    final target = widget.studentId.trim().toLowerCase();
+    if (target.isEmpty) return false;
+    final candidates = [
+      data['username'],
+      data['user'],
+      data['student_username'],
+      data['studentId'],
+      data['student_id'],
+    ];
+    for (final c in candidates) {
+      final s = (c ?? '').toString().trim().toLowerCase();
+      if (s.isNotEmpty && s == target) return true;
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +73,25 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
     _displayName = widget.studentName;
     _displayClass = widget.studentClass;
     _loadAndCompute();
+  }
+
+  @override
+  void didUpdateWidget(covariant StudentDetailsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final studentChanged = oldWidget.studentId != widget.studentId;
+    final classChanged = oldWidget.studentClass != widget.studentClass;
+    final courseChanged = oldWidget.selectedCourse != widget.selectedCourse;
+    final recordsChanged = oldWidget.attendanceRecords != widget.attendanceRecords;
+
+    if (studentChanged || classChanged || courseChanged || recordsChanged) {
+      editRecords = widget.attendanceRecords
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      _displayName = widget.studentName;
+      _displayClass = widget.studentClass;
+      _noRecordsSnackShown = false;
+      _loadAndCompute();
+    }
   }
 
   Future<void> _loadAndCompute() async {
@@ -124,9 +169,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
 
   Future<List<Map<String, dynamic>>> _buildCoursesFromAttendanceRecords() async {
     try {
-      Query<Map<String, dynamic>> q = _firestore
-          .collection('attendance_records')
-          .where('username', isEqualTo: widget.studentId);
+      Query<Map<String, dynamic>> q = _firestore.collection('attendance_records');
       if (widget.studentClass != null && widget.studentClass!.isNotEmpty) {
         q = q.where('className', isEqualTo: widget.studentClass);
       }
@@ -136,8 +179,10 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
       final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> groups = {};
       for (final d in snap.docs) {
         final data = d.data();
+        if (!_attendanceDocBelongsToStudent(data)) continue;
         final subj = (data['subject'] ?? data['course'] ?? '').toString();
         if (subj.isEmpty) continue;
+        if (!_matchesSelectedCourse(subj)) continue;
         groups.putIfAbsent(subj, () => []).add(d);
       }
 
@@ -180,6 +225,7 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
       for (final d in snap.docs) {
         final subj = (d.data()['subject'] ?? '').toString();
         if (subj.isEmpty) continue;
+        if (!_matchesSelectedCourse(subj)) continue;
         groups.putIfAbsent(subj, () => []).add(d);
       }
 
@@ -206,10 +252,10 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
             );
             final q2 = await _firestore
                 .collection('attendance_records')
-                .where('username', isEqualTo: widget.studentId)
                 .where('session_id', whereIn: sub)
                 .get();
             for (final ad in q2.docs) {
+              if (!_attendanceDocBelongsToStudent(ad.data())) continue;
               countedAttendanceDocIds.add(ad.id);
             }
           }
@@ -226,10 +272,10 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
             );
             final q3 = await _firestore
                 .collection('attendance_records')
-                .where('username', isEqualTo: widget.studentId)
                 .where('code', whereIn: sub)
                 .get();
             for (final ad in q3.docs) {
+              if (!_attendanceDocBelongsToStudent(ad.data())) continue;
               countedAttendanceDocIds.add(ad.id);
             }
           }
@@ -295,10 +341,10 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
             );
             final q = await _firestore
                 .collection('attendance_records')
-                .where('username', isEqualTo: widget.studentId)
                 .where('session_id', whereIn: sub)
                 .get();
             for (final ad in q.docs) {
+              if (!_attendanceDocBelongsToStudent(ad.data())) continue;
               countedAttendanceDocIds.add(ad.id);
             }
           }
@@ -315,10 +361,10 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
             );
             final q = await _firestore
                 .collection('attendance_records')
-                .where('username', isEqualTo: widget.studentId)
                 .where('code', whereIn: sub)
                 .get();
             for (final ad in q.docs) {
+              if (!_attendanceDocBelongsToStudent(ad.data())) continue;
               countedAttendanceDocIds.add(ad.id);
             }
           }
@@ -329,10 +375,13 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         if (totalSessions == 0) {
           final q = await _firestore
               .collection('attendance_records')
-              .where('username', isEqualTo: widget.studentId)
               .where('subject', isEqualTo: courseName)
               .get();
-          presentCount = q.docs.map((d) => d.id).toSet().length;
+          presentCount = q.docs
+              .where((d) => _attendanceDocBelongsToStudent(d.data()))
+              .map((d) => d.id)
+              .toSet()
+              .length;
         }
 
         record['total'] = totalSessions;
@@ -397,9 +446,24 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                 widget.searchText.toLowerCase(),
               ),
         )
+        .where((rec) => _matchesSelectedCourse(rec["course"]?.toString() ?? ''))
         .toList();
 
-    if (!loading && filteredRecords.isEmpty && !_noRecordsSnackShown) {
+    final totalQr = filteredRecords.fold<int>(
+      0,
+      (sum, r) => sum + ((r['total'] as num?)?.toInt() ?? 0),
+    );
+    final totalPresent = filteredRecords.fold<int>(
+      0,
+      (sum, r) => sum + ((r['present'] as num?)?.toInt() ?? 0),
+    );
+    final totalAbsence = (totalQr - totalPresent) < 0 ? 0 : (totalQr - totalPresent);
+    final absencePct = totalQr > 0 ? ((totalAbsence / totalQr) * 100).round() : 0;
+
+    if (!loading &&
+        filteredRecords.isEmpty &&
+        !_noRecordsSnackShown &&
+        !widget.compact) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -410,6 +474,188 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
         );
       });
       _noRecordsSnackShown = true;
+    }
+
+    if (widget.compact) {
+      final scheme = Theme.of(context).colorScheme;
+      final displayName = _displayName ?? widget.studentName ?? widget.studentId;
+      final displayClass = _displayClass ?? widget.studentClass ?? '';
+      final selectedCourse = (widget.selectedCourse ?? '').trim();
+
+      return Container(
+        width: double.infinity,
+        color: palette?.surface,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 21,
+                    backgroundColor:
+                        palette?.highlight ??
+                        scheme.primaryContainer.withValues(alpha: 0.7),
+                    child: Text(
+                      _initials,
+                      style: TextStyle(
+                        color: palette?.textPrimary ?? scheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayName,
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                            color: palette?.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '@${widget.studentId}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: palette?.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _metaChip(label: 'Class: $displayClass'),
+                            if (selectedCourse.isNotEmpty)
+                              _metaChip(label: 'Course: $selectedCourse'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(child: _kpiCard('Total QR', totalQr.toString())),
+                  const SizedBox(width: 8),
+                  Expanded(child: _kpiCard('Present', totalPresent.toString())),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _kpiCard(
+                      'Absence %',
+                      '$absencePct%',
+                      emphasize: true,
+                      danger: absencePct > 25,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Attendance Summary',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: palette?.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: palette?.border ?? scheme.outline.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: filteredRecords.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          'No attendance records for this selection.',
+                          style: TextStyle(color: palette?.textSecondary),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: palette?.surfaceHigh,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(10),
+                              ),
+                            ),
+                            child: const Row(
+                              children: [
+                                Expanded(flex: 4, child: Text('Course')),
+                                Expanded(flex: 2, child: Text('Total')),
+                                Expanded(flex: 2, child: Text('Present')),
+                                Expanded(flex: 2, child: Text('Abs %')),
+                              ],
+                            ),
+                          ),
+                          ...filteredRecords.map((record) {
+                            final percent =
+                                (record['percentage'] ?? '0.0%').toString();
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(
+                                    color: palette?.border ??
+                                        scheme.outline.withValues(alpha: 0.35),
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 4,
+                                    child: Text(
+                                      (record['course'] ?? '').toString(),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      (record['total'] ?? 0).toString(),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      (record['present'] ?? 0).toString(),
+                                    ),
+                                  ),
+                                  Expanded(flex: 2, child: _percentBadge(percent)),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Container(
@@ -453,7 +699,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       color: palette?.surfaceHigh,
-                      shadowColor: Colors.black.withOpacity(0.05),
+                      shadowColor: Theme.of(
+                        context,
+                      ).shadowColor.withValues(alpha: 0.08),
                       child: Padding(
                         padding: EdgeInsets.symmetric(
                           horizontal: isMobile ? 8 : 24,
@@ -470,13 +718,18 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                   radius: 28,
                                   backgroundColor: palette?.highlight ??
                                       (isDark
-                                          ? const Color(0xFF2A2F3A)
-                                          : const Color(0xFFE5EDFF)),
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .surfaceContainerHighest
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .primaryContainer
+                                              .withValues(alpha: 0.6)),
                                   child: Text(
                                     _initials,
                                     style: TextStyle(
                                       color: palette?.textPrimary ??
-                                          (isDark ? Colors.white : Colors.black),
+                                          Theme.of(context).colorScheme.onSurface,
                                       fontWeight: FontWeight.w700,
                                       fontSize: 18,
                                     ),
@@ -560,7 +813,9 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                 color: palette?.textPrimary,
                                 shadows: [
                                   Shadow(
-                                    color: Colors.black.withOpacity(0.02),
+                                    color: Theme.of(
+                                      context,
+                                    ).shadowColor.withValues(alpha: 0.06),
                                     blurRadius: 1,
                                   ),
                                 ],
@@ -572,16 +827,16 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: palette?.border ?? const Color(0xFFE5E7EB),
+                                  color: palette?.border ??
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.outline.withValues(alpha: 0.35),
                                 ),
                               ),
                               child: filteredRecords.isEmpty
                                   ? const SizedBox(height: 48)
                                   : SizedBox(
-                                      height: min(
-                                        520,
-                                        MediaQuery.of(context).size.height * 0.6,
-                                      ),
+                                      height: 420,
                                       child: SingleChildScrollView(
                                         padding: const EdgeInsets.all(8),
                                         child: SingleChildScrollView(
@@ -733,18 +988,19 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
   }
 
   Widget _percentBadge(String value) {
+    final scheme = Theme.of(context).colorScheme;
     final pct = _parsePercent(value);
     Color bg;
     Color fg;
     if (pct <= 10) {
-      bg = const Color(0xFFEFFAF3);
-      fg = const Color(0xFF16A34A);
+      bg = scheme.tertiaryContainer.withValues(alpha: 0.75);
+      fg = scheme.onTertiaryContainer;
     } else if (pct <= 25) {
-      bg = const Color(0xFFFEF7E8);
-      fg = const Color(0xFFF59E0B);
+      bg = scheme.secondaryContainer.withValues(alpha: 0.75);
+      fg = scheme.onSecondaryContainer;
     } else {
-      bg = const Color(0xFFFEECEC);
-      fg = const Color(0xFFDC2626);
+      bg = scheme.errorContainer.withValues(alpha: 0.72);
+      fg = scheme.onErrorContainer;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -762,5 +1018,78 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
   double _parsePercent(String value) {
     final cleaned = value.replaceAll('%', '').trim();
     return double.tryParse(cleaned) ?? 0.0;
+  }
+
+  Widget _metaChip({required String label}) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: palette?.border ?? scheme.outline.withValues(alpha: 0.35),
+        ),
+        color: palette?.surfaceHigh ?? scheme.surfaceContainerHighest,
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: palette?.textSecondary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _kpiCard(
+    String title,
+    String value, {
+    bool emphasize = false,
+    bool danger = false,
+  }) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final scheme = Theme.of(context).colorScheme;
+    final bg = danger
+        ? scheme.errorContainer.withValues(alpha: 0.72)
+        : (emphasize
+              ? scheme.primaryContainer.withValues(alpha: 0.6)
+              : (palette?.surfaceHigh ?? scheme.surfaceContainerHighest));
+    final fg = danger
+        ? scheme.onErrorContainer
+        : (palette?.textPrimary ?? scheme.onSurface);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: bg,
+        border: Border.all(
+          color: palette?.border ?? scheme.outline.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 11,
+              color: palette?.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: fg,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -1357,9 +1357,8 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     final showTable =
         selectedDepartment != null &&
         selectedClass != null &&
-        selectedCourse != null &&
-        selectedUsername == null;
-    final showStudentDetails = selectedUsername != null;
+        selectedCourse != null;
+    final showStudentDetails = showTable && selectedUsername != null;
 
     return Scaffold(
       body: SafeArea(
@@ -1375,7 +1374,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
               children: [
                 const SizedBox(height: 8),
                 Text(
-                  'Attendance',
+                  'Attendance Report',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -1397,7 +1396,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                   decoration: BoxDecoration(
                     color: surfaceColor,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: borderColor.withOpacity(0.25)),
+                    border: Border.all(
+                      color: borderColor.withValues(alpha: 0.25),
+                    ),
                   ),
                   child: _FiltersRow(
                     departments: departments,
@@ -1426,6 +1427,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                               selectedClass = null;
                               selectedCourse = null;
                               selectedTeacher = null;
+                              selectedUsername = null;
+                              selectedStudentName = null;
+                              selectedStudentClass = null;
                               classesForDept = [];
                               coursesForClass = [];
                               teachersForDept = [];
@@ -1438,6 +1442,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                                 className != selectedClass) {
                               selectedClass = className;
                               selectedCourse = null;
+                              selectedUsername = null;
+                              selectedStudentName = null;
+                              selectedStudentClass = null;
                               coursesForClass = [];
                               classSectionStudents = {};
                               percentageRows = [];
@@ -1445,6 +1452,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                             }
                             if (course != null && course != selectedCourse) {
                               selectedCourse = course;
+                              selectedUsername = null;
+                              selectedStudentName = null;
+                              selectedStudentClass = null;
                               classSectionStudents = {};
                               if (selectedDepartment != null &&
                                   selectedClass != null &&
@@ -1455,6 +1465,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                             if (lecturer != null &&
                                 lecturer != selectedTeacher) {
                               selectedTeacher = lecturer;
+                              selectedUsername = null;
+                              selectedStudentName = null;
+                              selectedStudentClass = null;
                               // Clear class/course selections when a teacher is chosen
                               selectedClass = null;
                               selectedCourse = null;
@@ -1473,6 +1486,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                               // but preserve selectedTeacher so department+teacher percentages work.
                               selectedClass = null;
                               selectedCourse = null;
+                              selectedUsername = null;
+                              selectedStudentName = null;
+                              selectedStudentClass = null;
                               // Clear dependent UI lists/state to reflect cleared selections
                               coursesForClass = [];
                               classSectionStudents = {};
@@ -1486,6 +1502,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                         selectedClass = null;
                         selectedCourse = null;
                         selectedTeacher = null;
+                        selectedUsername = null;
+                        selectedStudentName = null;
+                        selectedStudentClass = null;
                         classesForDept = [];
                         coursesForClass = [];
                         teachersForDept = [];
@@ -1504,129 +1523,279 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                     child: LinearProgressIndicator(),
                   ),
 
-                // ===== UPDATED: make percentage table span the available page width =====
                 if (!loadingPercentage && percentageRows.isNotEmpty)
-                  Card(
-                    elevation: 1,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          // Choose column spacing responsively for narrow screens
-                          final tableWidth = constraints.maxWidth;
-                          final int colSpacingNarrow = tableWidth < 480
-                              ? 10
-                              : 16;
-                          final int colSpacingWide = tableWidth < 480 ? 10 : 24;
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: selectedTeacher == null
-                                ? DataTable(
-                                    columnSpacing: colSpacingNarrow.toDouble(),
-                                    columns: const [
-                                      DataColumn(label: Text('No')),
-                                      DataColumn(label: Text('Class name')),
-                                      DataColumn(label: Text('Total QR Gen')),
-                                      DataColumn(label: Text('Total Attended')),
-                                      DataColumn(label: Text('Total Absence')),
-                                      DataColumn(label: Text('Percentage')),
-                                    ],
-                                    rows: percentageRows.map((r) {
-                                      final absencePct =
-                                          r['absencePct'] as int? ?? 0;
-                                      final pctText = '${r['pct'] ?? 0}%';
-                                      final pctColor = absencePct < 25
-                                          ? Colors.green
-                                          : Colors.red;
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(Text(r['no'].toString())),
-                                          DataCell(Text(r['class'].toString())),
-                                          DataCell(
-                                            Text(
-                                              r['totalGenerated']?.toString() ??
-                                                  '0',
-                                            ),
-                                          ),
-                                          DataCell(
-                                            Text(
-                                              r['attended']?.toString() ?? '0',
-                                            ),
-                                          ),
-                                          DataCell(
-                                            Text(
-                                              r['absence']?.toString() ?? '0',
-                                            ),
-                                          ),
-                                          DataCell(
-                                            Text(
-                                              pctText,
-                                              style: TextStyle(color: pctColor),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
-                                  )
-                                : DataTable(
-                                    columnSpacing: colSpacingWide.toDouble(),
-                                    columns: const [
-                                      DataColumn(label: Text('No')),
-                                      DataColumn(label: Text('Class name')),
-                                      DataColumn(label: Text('Total Needed')),
-                                      DataColumn(
-                                        label: Text('Total Generated'),
-                                      ),
-                                      DataColumn(
-                                        label: Text('Total Not Generated'),
-                                      ),
-                                      DataColumn(label: Text('Percentage')),
-                                    ],
-                                    rows: percentageRows.map((r) {
-                                      final absencePct =
-                                          r['absencePct'] as int? ?? 0;
-                                      final pctText = '${r['pct'] ?? 0}%';
-                                      final pctColor = absencePct < 25
-                                          ? Colors.green
-                                          : Colors.red;
-                                      return DataRow(
-                                        cells: [
-                                          DataCell(Text(r['no'].toString())),
-                                          DataCell(Text(r['class'].toString())),
-                                          DataCell(
-                                            Text(
-                                              r['totalNeeded']?.toString() ??
-                                                  '0',
-                                            ),
-                                          ),
-                                          DataCell(
-                                            Text(
-                                              r['totalGenerated']?.toString() ??
-                                                  '0',
-                                            ),
-                                          ),
-                                          DataCell(
-                                            Text(
-                                              r['totalNotGenerated']
-                                                      ?.toString() ??
-                                                  '0',
-                                            ),
-                                          ),
-                                          DataCell(
-                                            Text(
-                                              pctText,
-                                              style: TextStyle(color: pctColor),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList(),
+                  Builder(
+                    builder: (context) {
+                      final scheme = Theme.of(context).colorScheme;
+                      final avgPct = percentageRows.isEmpty
+                          ? 0
+                          : (percentageRows
+                                      .map(
+                                        (r) => (r['pct'] as num?)?.toDouble() ?? 0,
+                                      )
+                                      .fold<double>(0, (a, b) => a + b) /
+                                  percentageRows.length)
+                              .round();
+                      final worst = percentageRows.isEmpty
+                          ? null
+                          : (percentageRows.toList()
+                            ..sort(
+                              (a, b) => ((b['pct'] as num?)?.toInt() ?? 0)
+                                  .compareTo((a['pct'] as num?)?.toInt() ?? 0),
+                            )).first;
+                      final worstClass = (worst?['class'] ?? '-').toString();
+                      final worstPct = ((worst?['pct'] as num?)?.toInt() ?? 0);
+
+                      Widget kpiCard({
+                        required String title,
+                        required String value,
+                        String? hint,
+                      }) {
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: surfaceColor,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: borderColor.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: palette?.textSecondary ??
+                                      scheme.onSurface.withValues(alpha: 0.8),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                value,
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: palette?.textPrimary ?? scheme.onSurface,
+                                ),
+                              ),
+                              if (hint != null && hint.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  hint,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: palette?.textSecondary ??
+                                        scheme.onSurface.withValues(alpha: 0.75),
                                   ),
-                          );
-                        },
-                      ),
-                    ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      }
+
+                      Widget pctPill(int pct) {
+                        final bool danger = pct >= 25;
+                        final bg = danger
+                            ? scheme.errorContainer.withValues(alpha: 0.72)
+                            : scheme.tertiaryContainer.withValues(alpha: 0.72);
+                        final fg = danger
+                            ? scheme.onErrorContainer
+                            : scheme.onTertiaryContainer;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: bg,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '$pct%',
+                            style: TextStyle(
+                              color: fg,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        );
+                      }
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: surfaceColor,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: borderColor.withValues(alpha: 0.3),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Theme.of(
+                                context,
+                              ).shadowColor.withValues(alpha: 0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              selectedTeacher == null
+                                  ? 'Department Attendance Analytics'
+                                  : 'Teacher Attendance Analytics',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: palette?.textPrimary ?? scheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            LayoutBuilder(
+                              builder: (context, c) {
+                                final narrow = c.maxWidth < 900;
+                                final cards = [
+                                  Expanded(
+                                    child: kpiCard(
+                                      title: 'Classes Analyzed',
+                                      value: percentageRows.length.toString(),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: kpiCard(
+                                      title: 'Average Absence',
+                                      value: '$avgPct%',
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: kpiCard(
+                                      title: 'Highest Risk Class',
+                                      value: worstClass,
+                                      hint: '$worstPct% absence',
+                                    ),
+                                  ),
+                                ];
+                                if (narrow) {
+                                  return Column(
+                                    children: [
+                                      Row(
+                                        children: [
+                                          cards[0],
+                                          const SizedBox(width: 8),
+                                          cards[1],
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(children: [cards[2]]),
+                                    ],
+                                  );
+                                }
+                                return Row(
+                                  children: [
+                                    cards[0],
+                                    const SizedBox(width: 10),
+                                    cards[1],
+                                    const SizedBox(width: 10),
+                                    cards[2],
+                                  ],
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: borderColor.withValues(alpha: 0.35),
+                                ),
+                              ),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: DataTable(
+                                  showCheckboxColumn: false,
+                                  headingRowColor:
+                                      WidgetStateProperty.all<Color?>(
+                                    palette?.surfaceHigh ??
+                                        scheme.surfaceContainerHighest,
+                                  ),
+                                  headingTextStyle: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: palette?.textPrimary ?? scheme.onSurface,
+                                  ),
+                                  dataTextStyle: TextStyle(
+                                    color: palette?.textPrimary ?? scheme.onSurface,
+                                  ),
+                                  columns: selectedTeacher == null
+                                      ? const [
+                                          DataColumn(label: Text('No')),
+                                          DataColumn(label: Text('Class')),
+                                          DataColumn(label: Text('Total QR')),
+                                          DataColumn(label: Text('Attended')),
+                                          DataColumn(label: Text('Absence')),
+                                          DataColumn(label: Text('Abs %')),
+                                        ]
+                                      : const [
+                                          DataColumn(label: Text('No')),
+                                          DataColumn(label: Text('Class')),
+                                          DataColumn(label: Text('Needed')),
+                                          DataColumn(label: Text('Generated')),
+                                          DataColumn(label: Text('Not Generated')),
+                                          DataColumn(label: Text('Abs %')),
+                                        ],
+                                  rows: percentageRows.map((r) {
+                                    final pct = (r['pct'] as num?)?.toInt() ?? 0;
+                                    return DataRow(
+                                      cells: selectedTeacher == null
+                                          ? [
+                                              DataCell(Text('${r['no'] ?? 0}')),
+                                              DataCell(Text('${r['class'] ?? ''}')),
+                                              DataCell(
+                                                Text(
+                                                  '${r['totalGenerated'] ?? 0}',
+                                                ),
+                                              ),
+                                              DataCell(
+                                                Text('${r['attended'] ?? 0}'),
+                                              ),
+                                              DataCell(
+                                                Text('${r['absence'] ?? 0}'),
+                                              ),
+                                              DataCell(pctPill(pct)),
+                                            ]
+                                          : [
+                                              DataCell(Text('${r['no'] ?? 0}')),
+                                              DataCell(Text('${r['class'] ?? ''}')),
+                                              DataCell(
+                                                Text('${r['totalNeeded'] ?? 0}'),
+                                              ),
+                                              DataCell(
+                                                Text(
+                                                  '${r['totalGenerated'] ?? 0}',
+                                                ),
+                                              ),
+                                              DataCell(
+                                                Text(
+                                                  '${r['totalNotGenerated'] ?? 0}',
+                                                ),
+                                              ),
+                                              DataCell(pctPill(pct)),
+                                            ],
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
 
                 const SizedBox(height: 16),
@@ -1646,65 +1815,185 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                     return SizedBox(
                       height: contentHeight,
                       child: showTable
-                          ? _AttendanceTable(
-                              department: selectedDepartment ?? '',
-                              className: selectedClass ?? '',
-                              course: selectedCourse ?? '',
-                              date: selectedDate,
-                              searchText: searchText,
-                              classSectionStudents: classSectionStudents,
-                              onStudentSelected: (studentId) {
-                                final sectionsMap =
-                                    classSectionStudents[selectedClass] ?? {};
-                                String? foundSection;
-                                Map<String, dynamic>? student;
-                                for (final entry in sectionsMap.entries) {
-                                  final s = entry.value.firstWhere(
-                                    (it) => it['username'] == studentId,
-                                    orElse: () => <String, dynamic>{},
-                                  );
-                                  if (s.isNotEmpty) {
-                                    foundSection = entry.key;
-                                    student = s;
-                                    break;
-                                  }
+                          ? LayoutBuilder(
+                              builder: (context, inner) {
+                                final isWide = inner.maxWidth >= 1100;
+                                final table = _AttendanceTable(
+                                  department: selectedDepartment ?? '',
+                                  className: selectedClass ?? '',
+                                  course: selectedCourse ?? '',
+                                  date: selectedDate,
+                                  searchText: searchText,
+                                  selectedStudentId: selectedUsername,
+                                  classSectionStudents: classSectionStudents,
+                                  onStudentSelected: (studentId) {
+                                    final sectionsMap =
+                                        classSectionStudents[selectedClass] ?? {};
+                                    String? foundSection;
+                                    Map<String, dynamic>? student;
+                                    for (final entry in sectionsMap.entries) {
+                                      final s = entry.value.firstWhere(
+                                        (it) => it['username'] == studentId,
+                                        orElse: () => <String, dynamic>{},
+                                      );
+                                      if (s.isNotEmpty) {
+                                        foundSection = entry.key;
+                                        student = s;
+                                        break;
+                                      }
+                                    }
+                                    if (student == null || student.isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Student data not available.',
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    setState(() {
+                                      selectedUsername = studentId;
+                                      selectedStudentName = student!['name']
+                                          ?.toString();
+                                      selectedStudentClass =
+                                          '$selectedClass${(foundSection != null && foundSection != "None") ? foundSection : ""}';
+                                    });
+                                  },
+                                );
+
+                                if (!isWide) {
+                                  return showStudentDetails
+                                      ? StudentDetailsPanel(
+                                          key: ValueKey(
+                                            'student_${selectedUsername}_${selectedCourse ?? ''}',
+                                          ),
+                                          studentId: selectedUsername!,
+                                          studentName: selectedStudentName,
+                                          studentClass: selectedStudentClass,
+                                          selectedCourse: selectedCourse,
+                                          selectedDate: selectedDate,
+                                          attendanceRecords:
+                                              _getRecordsForSelectedStudent(),
+                                          searchText: searchText,
+                                          onBack: () {
+                                            setState(() {
+                                              selectedUsername = null;
+                                              selectedStudentName = null;
+                                              selectedStudentClass = null;
+                                            });
+                                          },
+                                          onEdit: _updateAttendanceForStudent,
+                                        )
+                                      : table;
                                 }
-                                if (student == null || student.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Student data not available.',
+
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: table),
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 220),
+                                      curve: Curves.easeOutCubic,
+                                      width: showStudentDetails ? 420 : 0,
+                                      margin: EdgeInsets.only(
+                                        left: showStudentDetails ? 16 : 0,
                                       ),
+                                      child: showStudentDetails
+                                          ? Container(
+                                              decoration: BoxDecoration(
+                                                color: surfaceColor,
+                                                borderRadius: BorderRadius.circular(
+                                                  14,
+                                                ),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Theme.of(context)
+                                                        .shadowColor
+                                                        .withValues(alpha: 0.12),
+                                                    blurRadius: 18,
+                                                    offset: const Offset(-2, 8),
+                                                  ),
+                                                ],
+                                                border: Border.all(
+                                                  color: borderColor.withValues(
+                                                    alpha: 0.35,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Column(
+                                                children: [
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.fromLTRB(
+                                                      16,
+                                                      14,
+                                                      10,
+                                                      10,
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        const Expanded(
+                                                          child: Text(
+                                                            'Student Details',
+                                                            style: TextStyle(
+                                                              fontSize: 20,
+                                                              fontWeight:
+                                                                  FontWeight.w700,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        IconButton(
+                                                          tooltip: 'Close',
+                                                          onPressed: () {
+                                                            setState(() {
+                                                              selectedUsername =
+                                                                  null;
+                                                              selectedStudentName =
+                                                                  null;
+                                                              selectedStudentClass =
+                                                                  null;
+                                                            });
+                                                          },
+                                                          icon: const Icon(
+                                                            Icons.close,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  const Divider(height: 1),
+                                                  Expanded(
+                                                    child: StudentDetailsPanel(
+                                                      key: ValueKey(
+                                                        'student_${selectedUsername}_${selectedCourse ?? ''}',
+                                                      ),
+                                                      studentId:
+                                                          selectedUsername!,
+                                                      studentName:
+                                                          selectedStudentName,
+                                                      studentClass:
+                                                          selectedStudentClass,
+                                                      selectedCourse:
+                                                          selectedCourse,
+                                                      compact: true,
+                                                      selectedDate: selectedDate,
+                                                      attendanceRecords:
+                                                          _getRecordsForSelectedStudent(),
+                                                      searchText: searchText,
+                                                      onBack: null,
+                                                      onEdit:
+                                                          _updateAttendanceForStudent,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
+                                          : const SizedBox.shrink(),
                                     ),
-                                  );
-                                  return;
-                                }
-                                setState(() {
-                                  selectedUsername = studentId;
-                                  selectedStudentName = student!['name']
-                                      ?.toString();
-                                  selectedStudentClass =
-                                      '$selectedClass${(foundSection != null && foundSection != "None") ? foundSection : ""}';
-                                });
+                                  ],
+                                );
                               },
-                            )
-                          : showStudentDetails
-                          ? StudentDetailsPanel(
-                              studentId: selectedUsername!,
-                              studentName: selectedStudentName,
-                              studentClass: selectedStudentClass,
-                              selectedDate: selectedDate,
-                              attendanceRecords:
-                                  _getRecordsForSelectedStudent(),
-                              searchText: searchText,
-                              onBack: () {
-                                setState(() {
-                                  selectedUsername = null;
-                                  selectedStudentName = null;
-                                  selectedStudentClass = null;
-                                });
-                              },
-                              onEdit: _updateAttendanceForStudent,
                             )
                           : Center(
                               child: percentageRows.isNotEmpty
@@ -1969,6 +2258,7 @@ class _AttendanceTable extends StatelessWidget {
   final String department, className, course;
   final DateTime? date;
   final String searchText;
+  final String? selectedStudentId;
   final Map<String, Map<String, List<Map<String, dynamic>>>>
   classSectionStudents;
   final Function(String studentId) onStudentSelected;
@@ -1977,6 +2267,7 @@ class _AttendanceTable extends StatelessWidget {
     required this.department,
     required this.className,
     required this.course,
+    this.selectedStudentId,
     required this.classSectionStudents,
     this.date,
     required this.searchText,
@@ -1985,6 +2276,8 @@ class _AttendanceTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final sectionsMap = classSectionStudents[className] ?? {};
     final students = sectionsMap.values.expand((e) => e).toList();
 
@@ -1997,100 +2290,168 @@ class _AttendanceTable extends StatelessWidget {
       return matchesSearch;
     }).toList();
 
+    String initialsOf(String value) {
+      final parts = value.trim().split(' ').where((p) => p.isNotEmpty).toList();
+      if (parts.isEmpty) return '?';
+      if (parts.length == 1) return parts.first[0].toUpperCase();
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final int tableColSpacing = constraints.maxWidth < 480 ? 8 : 24;
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            child: DataTable(
-              columnSpacing: tableColSpacing.toDouble(),
-              headingRowHeight: 44,
-              dataRowHeight: 40,
-              columns: const [
-                DataColumn(
-                  label: Text(
-                    "No",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+        final int tableColSpacing = constraints.maxWidth < 1200 ? 16 : 22;
+        final scheme = Theme.of(context).colorScheme;
+        final headerTextStyle = TextStyle(
+          fontWeight: FontWeight.w700,
+          color: palette?.textPrimary ?? scheme.onSurface,
+        );
+        final rowTextStyle = TextStyle(
+          color: palette?.textPrimary ?? scheme.onSurface,
+        );
+
+        return Container(
+          decoration: BoxDecoration(
+            color: palette?.surface ?? scheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: palette?.border ?? scheme.outline.withValues(alpha: 0.35),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(
+                  context,
+                ).shadowColor.withValues(alpha: isDark ? 0.24 : 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                showCheckboxColumn: false,
+                columnSpacing: tableColSpacing.toDouble(),
+                horizontalMargin: 16,
+                dividerThickness: 0.8,
+                headingRowHeight: 48,
+                dataRowMinHeight: 56,
+                dataRowMaxHeight: 56,
+                headingRowColor: WidgetStateProperty.all<Color?>(
+                  palette?.surfaceHigh ?? scheme.surfaceContainerHighest,
                 ),
-                DataColumn(
-                  label: Text(
-                    "Username",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                columns: [
+                  DataColumn(
+                    label: Text("No", style: headerTextStyle),
                   ),
-                ),
-                DataColumn(
-                  label: Text(
-                    "full Name",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  DataColumn(
+                    label: Text("Student", style: headerTextStyle),
                   ),
-                ),
-                DataColumn(
-                  label: Text(
-                    "Department",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  DataColumn(
+                    label: Text("Department", style: headerTextStyle),
                   ),
-                ),
-                DataColumn(
-                  label: Text(
-                    "Class",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  DataColumn(
+                    label: Text("Class", style: headerTextStyle),
                   ),
-                ),
-                DataColumn(
-                  label: Text(
-                    "Course",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                  DataColumn(
+                    label: Text("Course", style: headerTextStyle),
                   ),
-                ),
-              ],
-              rows: List.generate(filtered.length, (index) {
-                final row = filtered[index];
-                return DataRow(
-                  cells: [
-                    DataCell(Text('${index + 1}')),
-                    DataCell(Text(row['username']?.toString() ?? '')),
-                    DataCell(
-                      InkWell(
-                        onTap: () {
-                          try {
-                            final idVal = row['username']?.toString() ?? '';
-                            if (idVal.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Student id is missing.'),
-                                ),
-                              );
-                              return;
-                            }
-                            onStudentSelected(idVal);
-                          } catch (e, st) {
-                            debugPrint('Error selecting student: $e\n$st');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Error selecting student: $e'),
-                              ),
-                            );
-                          }
-                        },
-                        child: Text(
-                          row['name']?.toString() ?? '',
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            decoration: TextDecoration.underline,
+                ],
+                rows: List.generate(filtered.length, (index) {
+                  final row = filtered[index];
+                  final username = row['username']?.toString() ?? '';
+                  final fullName = row['name']?.toString() ?? '';
+                  final selected = selectedStudentId == username;
+
+                  void openStudentDetails() {
+                    try {
+                      final idVal = username;
+                      if (idVal.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Student id is missing.'),
                           ),
+                        );
+                        return;
+                      }
+                      onStudentSelected(idVal);
+                    } catch (e, st) {
+                      debugPrint('Error selecting student: $e\n$st');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error selecting student: $e'),
+                        ),
+                      );
+                    }
+                  }
+
+                  return DataRow(
+                    selected: selected,
+                    onSelectChanged: (_) => openStudentDetails(),
+                    color: WidgetStateProperty.resolveWith<Color?>((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return scheme.primaryContainer.withValues(alpha: 0.55);
+                      }
+                      if (states.contains(WidgetState.hovered)) {
+                        return scheme.surfaceContainerHighest.withValues(
+                          alpha: 0.45,
+                        );
+                      }
+                      return null;
+                    }),
+                    cells: [
+                      DataCell(Text('${index + 1}', style: rowTextStyle)),
+                      DataCell(
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundColor:
+                                  palette?.highlight ??
+                                  scheme.primaryContainer.withValues(alpha: 0.7),
+                              child: Text(
+                                initialsOf(fullName.isEmpty ? username : fullName),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: palette?.textPrimary ??
+                                      scheme.onPrimaryContainer,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  fullName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: rowTextStyle.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    DataCell(Text(department)),
-                    DataCell(Text(className)),
-                    DataCell(Text(course)),
-                    // status column removed
-                  ],
-                );
-              }),
+                      DataCell(Text(department, style: rowTextStyle)),
+                      DataCell(Text(className, style: rowTextStyle)),
+                      DataCell(
+                        Text(
+                          course,
+                          style: rowTextStyle.copyWith(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
             ),
           ),
         );

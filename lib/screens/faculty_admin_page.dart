@@ -19,8 +19,8 @@ class FacultyAdminPage extends StatelessWidget {
       customPages: [
         // 0: Dashboard (custom)
         Padding(
-          // remove top padding so content starts near top; keep horizontal + bottom spacing
-          padding: const EdgeInsets.fromLTRB(32.0, 0.0, 32.0, 32.0),
+          // Dashboard needs extra top space to align with floating header controls.
+          padding: const EdgeInsets.fromLTRB(32.0, 44.0, 32.0, 32.0),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

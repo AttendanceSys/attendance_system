@@ -257,10 +257,8 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
                 ),
               if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(
-                    top: 16,
-                  ), // Ensures no top padding
+                child: Align(
+                  alignment: Alignment.topLeft,
                   child: pages[selectedIndex],
                 ),
               ),

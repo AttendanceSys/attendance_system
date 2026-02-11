@@ -154,11 +154,11 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
 
   final List<Widget> _pages = [
     Padding(
-      padding: const EdgeInsets.all(32.0),
+      // Keep dashboard clear of the floating top-right controls.
+      padding: const EdgeInsets.fromLTRB(32.0, 44.0, 32.0, 32.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
           Text(
             "Dashboard",
             style: TextStyle(

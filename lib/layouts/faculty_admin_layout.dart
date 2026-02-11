@@ -222,10 +222,7 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
               Expanded(
                 child: Align(
                   alignment: Alignment.topLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 44.0),
-                    child: pages[safeIndex],
-                  ),
+                  child: pages[safeIndex],
                 ),
               ),
             ],

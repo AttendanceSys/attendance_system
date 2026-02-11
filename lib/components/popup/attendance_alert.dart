@@ -63,6 +63,20 @@ class AttendanceAlert {
     onClose: onClose,
   );
 
+  static Future<void> showInvalidQr(
+    BuildContext context, {
+    String? details,
+    VoidCallback? onClose,
+  }) => _show(
+    context,
+    type: AttendanceAlertType.info,
+    title: 'Invalid QR Code',
+    message:
+        details ??
+        'This QR code is not a valid attendance session from this system.',
+    onClose: onClose,
+  );
+
   static Future<void> showSuccess(
     BuildContext context, {
     String? subject,
