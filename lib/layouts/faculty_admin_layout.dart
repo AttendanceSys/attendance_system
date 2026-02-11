@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../components/sidebars/faculty_admin_sidebar.dart';
 import '../components/popup/logout_confirmation_popup.dart';
 import '../components/pages/admin_anomalies_page.dart';
+import '../components/pages/admin_profile_page.dart';
 import '../screens/login_screen.dart';
 import '../components/faculty_dashboard_stats_grid.dart';
 import '../theme/super_admin_theme.dart';
@@ -50,6 +51,8 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
       const Center(child: Text('User Handling')),
       // Faculty "Anomalies" page at index 8
       const AdminAnomaliesPage(),
+      // Profile page at index 9
+      const AdminProfilePage(roleFilter: 'admin', roleLabel: 'Faculty Admin'),
     ];
   }
 
@@ -107,35 +110,42 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
       final initial = displayName.isNotEmpty
           ? displayName[0].toUpperCase()
           : 'A';
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: avatarBg,
-            child: Text(
-              initial,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
+      return InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => setState(() => _selectedIndex = 9),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: avatarBg,
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.playfairDisplay(
-                color: textColor,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.playfairDisplay(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       );
     }
 

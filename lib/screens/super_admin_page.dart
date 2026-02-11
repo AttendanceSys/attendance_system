@@ -8,6 +8,7 @@ import 'login_screen.dart';
 import 'package:attendance_system/components/pages/faculties_page.dart';
 import 'package:attendance_system/components/pages/lecturer_page.dart';
 import 'package:attendance_system/components/pages/Admin_user_handling_page.dart';
+import 'package:attendance_system/components/pages/admin_profile_page.dart';
 import 'package:attendance_system/components/popup/logout_confirmation_popup.dart';
 import '../services/theme_controller.dart';
 import '../services/session.dart';
@@ -176,6 +177,10 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
     TeachersPage(),
     AdminsPage(),
     UserHandlingPage(),
+    const AdminProfilePage(
+      roleFilter: 'Super admin',
+      roleLabel: 'Super Admin',
+    ),
   ];
 
   // --- This method now shows the confirmation popup before logging out ---
@@ -247,35 +252,42 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
       final initial = displayName.isNotEmpty
           ? displayName[0].toUpperCase()
           : 'A';
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: avatarBg,
-            child: Text(
-              initial,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
+      return InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => setState(() => _selectedIndex = 5),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: avatarBg,
+                child: Text(
+                  initial,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.playfairDisplay(
-                color: textColor,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.playfairDisplay(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       );
     }
 

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../components/sidebars/teacher_sidebar.dart';
 import '../components/pages/teacher_qr_generation_page.dart';
 import '../components/pages/teacher_attendance_page.dart';
+import '../components/pages/teacher_profile_page.dart';
 import '../components/popup/logout_confirmation_popup.dart'; // <-- reusable popup
 import 'login_screen.dart';
 import '../services/theme_controller.dart';
@@ -25,6 +26,7 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
   final List<Widget> pages = const [
     TeacherQRGenerationPage(),
     TeacherAttendancePage(),
+    TeacherProfilePage(),
   ];
 
   @override
@@ -138,35 +140,42 @@ class _TeacherMainPageState extends State<TeacherMainPage> {
           ? displayName[0].toUpperCase()
           : 'T';
 
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: avatarBg,
-            child: Text(
-              initial,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
+      return InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => setState(() => selectedIndex = 2),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: avatarBg,
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.playfairDisplay(
-                color: textColor,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.playfairDisplay(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       );
     }
 
