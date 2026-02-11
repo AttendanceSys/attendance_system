@@ -49,9 +49,7 @@ class MyApp extends StatelessWidget {
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
             useMaterial3: true,
             scrollbarTheme: ScrollbarThemeData(
-              thumbVisibility: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.hovered),
-              ),
+              thumbVisibility: const WidgetStatePropertyAll(false),
               trackVisibility: const WidgetStatePropertyAll(false),
               radius: const Radius.circular(999),
               thickness: const WidgetStatePropertyAll(8),
@@ -238,9 +236,7 @@ class MyApp extends StatelessWidget {
         headingRowHeight: 48,
       ),
       scrollbarTheme: ScrollbarThemeData(
-        thumbVisibility: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.hovered),
-        ),
+        thumbVisibility: const WidgetStatePropertyAll(false),
         trackVisibility: const WidgetStatePropertyAll(false),
         radius: const Radius.circular(999),
         thickness: const WidgetStatePropertyAll(8),

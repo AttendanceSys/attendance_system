@@ -157,8 +157,8 @@ class _FacultyAdminLayoutState extends State<FacultyAdminLayout> {
       backgroundColor: scaffoldBg,
       appBar: isMobile
           ? AppBar(
-              title: const Text('Faculty Admin Panel'),
               backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+              titleSpacing: 0,
               leading: Builder(
                 builder: (context) => IconButton(
                   icon: const Icon(Icons.chevron_right),

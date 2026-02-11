@@ -490,6 +490,20 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.onBack != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: IconButton(
+                    onPressed: widget.onBack,
+                    icon: Icon(
+                      Icons.arrow_back_ios_new,
+                      size: 18,
+                      color: palette?.accent,
+                    ),
+                    tooltip: 'Back',
+                    splashRadius: 22,
+                  ),
+                ),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -517,14 +531,6 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                             fontSize: 19,
                             fontWeight: FontWeight.w700,
                             color: palette?.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '@${widget.studentId}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: palette?.textSecondary,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -748,15 +754,6 @@ class _StudentDetailsPanelState extends State<StudentDetailsPanel> {
                                           fontSize: 22,
                                           fontWeight: FontWeight.w800,
                                           color: palette?.textPrimary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '@${widget.studentId}',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: palette?.textSecondary,
-                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                       const SizedBox(height: 10),

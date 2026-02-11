@@ -294,8 +294,8 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
     final scaffold = Scaffold(
       appBar: isMobile
           ? AppBar(
-              title: const Text('Admin Panel'),
               backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+              titleSpacing: 0,
               leading: Builder(
                 builder: (context) => IconButton(
                   icon: const Icon(Icons.chevron_right),

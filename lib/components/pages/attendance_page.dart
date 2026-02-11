@@ -1353,6 +1353,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     final surfaceColor =
         palette?.surface ?? Theme.of(context).colorScheme.surface;
     final borderColor = palette?.border ?? Theme.of(context).dividerColor;
+    final isMobile = MediaQuery.of(context).size.width < 800;
 
     final showTable =
         selectedDepartment != null &&
@@ -1365,25 +1366,29 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         // Wrap the whole page in a Scrollbar + SingleChildScrollView so the user can scroll the entire page
         child: Scrollbar(
           controller: _pageScrollController,
-          thumbVisibility: true,
+          thumbVisibility: false,
           child: SingleChildScrollView(
             controller: _pageScrollController,
-            padding: const EdgeInsets.all(32.0),
+            padding: EdgeInsets.fromLTRB(
+              isMobile ? 16.0 : 32.0,
+              isMobile ? 20.0 : 32.0,
+              isMobile ? 16.0 : 32.0,
+              32.0,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 8),
                 Text(
                   'Attendance Report',
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: isMobile ? 22 : 28,
                     fontWeight: FontWeight.bold,
                     color: Theme.of(
                       context,
                     ).extension<SuperAdminColors>()?.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: isMobile ? 12 : 16),
                 SearchAddBar(
                   hintText: 'Search Attendance...',
                   buttonText: '',
@@ -1392,6 +1397,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                 ),
                 const SizedBox(height: 10),
                 Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     color: surfaceColor,
@@ -1709,88 +1715,139 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                               },
                             ),
                             const SizedBox(height: 12),
-                            Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: borderColor.withValues(alpha: 0.35),
-                                ),
-                              ),
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: DataTable(
-                                  showCheckboxColumn: false,
-                                  headingRowColor:
-                                      WidgetStateProperty.all<Color?>(
-                                    palette?.surfaceHigh ??
-                                        scheme.surfaceContainerHighest,
-                                  ),
-                                  headingTextStyle: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: palette?.textPrimary ?? scheme.onSurface,
-                                  ),
-                                  dataTextStyle: TextStyle(
-                                    color: palette?.textPrimary ?? scheme.onSurface,
-                                  ),
-                                  columns: selectedTeacher == null
-                                      ? const [
-                                          DataColumn(label: Text('No')),
-                                          DataColumn(label: Text('Class')),
-                                          DataColumn(label: Text('Total QR')),
-                                          DataColumn(label: Text('Attended')),
-                                          DataColumn(label: Text('Absence')),
-                                          DataColumn(label: Text('Abs %')),
-                                        ]
-                                      : const [
-                                          DataColumn(label: Text('No')),
-                                          DataColumn(label: Text('Class')),
-                                          DataColumn(label: Text('Needed')),
-                                          DataColumn(label: Text('Generated')),
-                                          DataColumn(label: Text('Not Generated')),
-                                          DataColumn(label: Text('Abs %')),
-                                        ],
-                                  rows: percentageRows.map((r) {
-                                    final pct = (r['pct'] as num?)?.toInt() ?? 0;
-                                    return DataRow(
-                                      cells: selectedTeacher == null
-                                          ? [
-                                              DataCell(Text('${r['no'] ?? 0}')),
-                                              DataCell(Text('${r['class'] ?? ''}')),
-                                              DataCell(
-                                                Text(
-                                                  '${r['totalGenerated'] ?? 0}',
-                                                ),
+                            LayoutBuilder(
+                              builder: (context, tableBox) {
+                                final compactTable = tableBox.maxWidth < 700;
+                                if (compactTable) {
+                                  return Column(
+                                    children: percentageRows.map((r) {
+                                      final pct = (r['pct'] as num?)?.toInt() ?? 0;
+                                      return Container(
+                                        width: double.infinity,
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(
+                                            color: borderColor.withValues(alpha: 0.35),
+                                          ),
+                                          color: surfaceColor,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${r['class'] ?? '-'}',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                color: palette?.textPrimary ?? scheme.onSurface,
                                               ),
-                                              DataCell(
-                                                Text('${r['attended'] ?? 0}'),
-                                              ),
-                                              DataCell(
-                                                Text('${r['absence'] ?? 0}'),
-                                              ),
-                                              DataCell(pctPill(pct)),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Wrap(
+                                              spacing: 12,
+                                              runSpacing: 8,
+                                              children: selectedTeacher == null
+                                                  ? [
+                                                      Text('No: ${r['no'] ?? 0}'),
+                                                      Text('QR: ${r['totalGenerated'] ?? 0}'),
+                                                      Text('Attended: ${r['attended'] ?? 0}'),
+                                                      Text('Absence: ${r['absence'] ?? 0}'),
+                                                    ]
+                                                  : [
+                                                      Text('No: ${r['no'] ?? 0}'),
+                                                      Text('Needed: ${r['totalNeeded'] ?? 0}'),
+                                                      Text('Generated: ${r['totalGenerated'] ?? 0}'),
+                                                      Text('Not Generated: ${r['totalNotGenerated'] ?? 0}'),
+                                                    ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            pctPill(pct),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  );
+                                }
+
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: borderColor.withValues(alpha: 0.35),
+                                    ),
+                                  ),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      showCheckboxColumn: false,
+                                      headingRowColor:
+                                          WidgetStateProperty.all<Color?>(
+                                        palette?.surfaceHigh ??
+                                            scheme.surfaceContainerHighest,
+                                      ),
+                                      headingTextStyle: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: palette?.textPrimary ?? scheme.onSurface,
+                                      ),
+                                      dataTextStyle: TextStyle(
+                                        color: palette?.textPrimary ?? scheme.onSurface,
+                                      ),
+                                      columns: selectedTeacher == null
+                                          ? const [
+                                              DataColumn(label: Text('No')),
+                                              DataColumn(label: Text('Class')),
+                                              DataColumn(label: Text('Total QR')),
+                                              DataColumn(label: Text('Attended')),
+                                              DataColumn(label: Text('Absence')),
+                                              DataColumn(label: Text('Abs %')),
                                             ]
-                                          : [
-                                              DataCell(Text('${r['no'] ?? 0}')),
-                                              DataCell(Text('${r['class'] ?? ''}')),
-                                              DataCell(
-                                                Text('${r['totalNeeded'] ?? 0}'),
-                                              ),
-                                              DataCell(
-                                                Text(
-                                                  '${r['totalGenerated'] ?? 0}',
-                                                ),
-                                              ),
-                                              DataCell(
-                                                Text(
-                                                  '${r['totalNotGenerated'] ?? 0}',
-                                                ),
-                                              ),
-                                              DataCell(pctPill(pct)),
+                                          : const [
+                                              DataColumn(label: Text('No')),
+                                              DataColumn(label: Text('Class')),
+                                              DataColumn(label: Text('Needed')),
+                                              DataColumn(label: Text('Generated')),
+                                              DataColumn(label: Text('Not Generated')),
+                                              DataColumn(label: Text('Abs %')),
                                             ],
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
+                                      rows: percentageRows.map((r) {
+                                        final pct = (r['pct'] as num?)?.toInt() ?? 0;
+                                        return DataRow(
+                                          cells: selectedTeacher == null
+                                              ? [
+                                                  DataCell(Text('${r['no'] ?? 0}')),
+                                                  DataCell(Text('${r['class'] ?? ''}')),
+                                                  DataCell(
+                                                    Text('${r['totalGenerated'] ?? 0}'),
+                                                  ),
+                                                  DataCell(
+                                                    Text('${r['attended'] ?? 0}'),
+                                                  ),
+                                                  DataCell(
+                                                    Text('${r['absence'] ?? 0}'),
+                                                  ),
+                                                  DataCell(pctPill(pct)),
+                                                ]
+                                              : [
+                                                  DataCell(Text('${r['no'] ?? 0}')),
+                                                  DataCell(Text('${r['class'] ?? ''}')),
+                                                  DataCell(
+                                                    Text('${r['totalNeeded'] ?? 0}'),
+                                                  ),
+                                                  DataCell(
+                                                    Text('${r['totalGenerated'] ?? 0}'),
+                                                  ),
+                                                  DataCell(
+                                                    Text('${r['totalNotGenerated'] ?? 0}'),
+                                                  ),
+                                                  DataCell(pctPill(pct)),
+                                                ],
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -1807,17 +1864,25 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                   builder: (context, constraints) {
                     // Calculate a height for the content area roughly equal to 55% of the remaining viewport height.
                     final viewportHeight = MediaQuery.of(context).size.height;
-                    final contentHeight = (viewportHeight * 0.55).clamp(
-                      300.0,
-                      900.0,
-                    );
+                    final showEmptyHint = !showTable && percentageRows.isEmpty;
+                    final contentHeight = showEmptyHint
+                        ? 170.0
+                        : ((constraints.maxWidth < 980 && showStudentDetails)
+                              ? (viewportHeight * 0.72).clamp(420.0, 1100.0)
+                              : (viewportHeight * 0.55).clamp(300.0, 900.0));
 
                     return SizedBox(
                       height: contentHeight,
                       child: showTable
                           ? LayoutBuilder(
                               builder: (context, inner) {
-                                final isWide = inner.maxWidth >= 1100;
+                                final isWide = inner.maxWidth >= 980;
+                                final panelWidth = (inner.maxWidth * 0.34)
+                                    .clamp(320.0, 460.0)
+                                    .toDouble();
+                                final panelGap = inner.maxWidth >= 1280
+                                    ? 16.0
+                                    : 12.0;
                                 final table = _AttendanceTable(
                                   department: selectedDepartment ?? '',
                                   className: selectedClass ?? '',
@@ -1872,6 +1937,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                                           studentName: selectedStudentName,
                                           studentClass: selectedStudentClass,
                                           selectedCourse: selectedCourse,
+                                          compact: true,
                                           selectedDate: selectedDate,
                                           attendanceRecords:
                                               _getRecordsForSelectedStudent(),
@@ -1895,9 +1961,9 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                                     AnimatedContainer(
                                       duration: const Duration(milliseconds: 220),
                                       curve: Curves.easeOutCubic,
-                                      width: showStudentDetails ? 420 : 0,
+                                      width: showStudentDetails ? panelWidth : 0,
                                       margin: EdgeInsets.only(
-                                        left: showStudentDetails ? 16 : 0,
+                                        left: showStudentDetails ? panelGap : 0,
                                       ),
                                       child: showStudentDetails
                                           ? Container(
@@ -2070,10 +2136,13 @@ class _FiltersRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
         _DropdownFilter(
           hint: "Department",
           value: selectedDepartment,
@@ -2111,44 +2180,86 @@ class _FiltersRow extends StatelessWidget {
         ),
         // Percentage button + Refresh
         Padding(
-          padding: const EdgeInsets.only(left: 4.0),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          padding: EdgeInsets.only(left: compact ? 0 : 4.0),
+          child: SizedBox(
+            width: compact ? constraints.maxWidth : null,
+            child: Row(
+            mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
             children: [
-              ElevatedButton(
-                onPressed:
-                    (selectedDepartment == null || onPercentagePressed == null)
-                    ? null
-                    : onPercentagePressed,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+              if (compact)
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed:
+                        (selectedDepartment == null || onPercentagePressed == null)
+                        ? null
+                        : onPercentagePressed,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('Percentage'),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                )
+              else
+                ElevatedButton(
+                  onPressed:
+                      (selectedDepartment == null || onPercentagePressed == null)
+                      ? null
+                      : onPercentagePressed,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
+                  child: const Text('Percentage'),
                 ),
-                child: const Text('Percentage'),
-              ),
               const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: onRefreshPressed,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
+              if (compact)
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: onRefreshPressed,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text('Refresh'),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                )
+              else
+                ElevatedButton(
+                  onPressed: onRefreshPressed,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
+                  child: const Text('Refresh'),
                 ),
-                child: const Text('Refresh'),
-              ),
             ],
           ),
         ),
+        ),
       ],
+        );
+      },
     );
   }
 }
@@ -2174,6 +2285,7 @@ class _DropdownFilter extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<SuperAdminColors>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isNarrow = MediaQuery.of(context).size.width < 760;
     final hintStyle = TextStyle(
       fontSize: 16,
       color:
@@ -2193,8 +2305,12 @@ class _DropdownFilter extends StatelessWidget {
       borderRadius: const BorderRadius.all(Radius.circular(10)),
       borderSide: BorderSide(color: borderColor, width: 1.1),
     );
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 150, maxWidth: 240),
+    return SizedBox(
+      width: isNarrow ? double.infinity : null,
+      child: ConstrainedBox(
+      constraints: isNarrow
+          ? const BoxConstraints(minWidth: 0, maxWidth: double.infinity)
+          : const BoxConstraints(minWidth: 150, maxWidth: 240),
       child: InputDecorator(
         decoration: InputDecoration(
           contentPadding: const EdgeInsets.symmetric(
@@ -2249,6 +2365,7 @@ class _DropdownFilter extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }
