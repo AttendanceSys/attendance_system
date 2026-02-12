@@ -37,6 +37,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   String _storedPassword = '';
   String? _userDocId;
   String? _adminDocId;
+  String _gender = 'Male';
 
   bool _loading = true;
   bool _savingProfile = false;
@@ -114,10 +115,12 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                   userData['display_name'] ??
                   currentUsername)
               .toString();
-      final mergedUsername = (userData['username'] ?? currentUsername).toString();
+      final mergedUsername = (userData['username'] ?? currentUsername)
+          .toString();
 
       final password =
-          (userData['password'] ?? adminDoc?.data()['password'] ?? '').toString();
+          (userData['password'] ?? adminDoc?.data()['password'] ?? '')
+              .toString();
 
       String facultyName = '';
       final facultyCandidate =
@@ -131,6 +134,10 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
       _fullNameController.text = mergedName;
       _usernameController.text = mergedUsername;
+      final genderVal =
+          (adminDoc?.data()['gender'] ?? userData['gender'] ?? 'Male')
+              .toString();
+      _gender = genderVal.isEmpty ? 'Male' : genderVal;
       _originalUsername = mergedUsername;
       _storedPassword = password;
       _facultyName = facultyName;
@@ -302,7 +309,9 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 
     final fullName = _fullNameController.text.trim();
     final username = _usernameController.text.trim();
-    final displayName = fullName.isEmpty ? (username.isEmpty ? 'Admin' : username) : fullName;
+    final displayName = fullName.isEmpty
+        ? (username.isEmpty ? 'Admin' : username)
+        : fullName;
     final displayUsername = username.isEmpty ? 'username' : username;
     final initials = displayName
         .split(' ')
@@ -338,30 +347,8 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                     child: LayoutBuilder(
                       builder: (context, constraints) {
                         final isWide = constraints.maxWidth >= 760;
-                        final saveButton = FilledButton(
-                          onPressed: _savingProfile ? null : _saveProfile,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: accent,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 13,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: _savingProfile
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text('Save Changes'),
-                        );
+                        // Save button intentionally removed for read-only profile.
+                        final saveButton = const SizedBox.shrink();
 
                         final info = Row(
                           children: [
@@ -529,28 +516,20 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
             const SizedBox(height: 6),
             TextFormField(
               controller: _fullNameController,
-              onChanged: (_) => setState(() {}),
-              decoration: _inputDecoration(inputFill, border, hint: 'Full Name'),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Full name is required';
-                }
-                return null;
-              },
+              readOnly: true,
+              decoration: _inputDecoration(
+                inputFill,
+                border,
+                hint: 'Full Name',
+              ),
             ),
             const SizedBox(height: 12),
             _label('Username', titleColor, subColor, required: true),
             const SizedBox(height: 6),
             TextFormField(
               controller: _usernameController,
-              onChanged: (_) => setState(() {}),
+              readOnly: true,
               decoration: _inputDecoration(inputFill, border, hint: 'Username'),
-              validator: (value) {
-                final v = (value ?? '').trim();
-                if (v.isEmpty) return 'Username is required';
-                if (v.contains(' ')) return 'Username cannot contain spaces';
-                return null;
-              },
             ),
             const SizedBox(height: 12),
             _label('Role', titleColor, subColor),
@@ -560,6 +539,14 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
               readOnly: true,
               decoration: _inputDecoration(inputFill, border, hint: 'Role'),
             ),
+            const SizedBox(height: 12),
+            _label('Gender', titleColor, subColor),
+            const SizedBox(height: 6),
+            TextFormField(
+              initialValue: _gender,
+              readOnly: true,
+              decoration: _inputDecoration(inputFill, border, hint: 'Gender'),
+            ),
             if (_facultyName.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
               _label('Faculty', titleColor, subColor),
@@ -567,7 +554,11 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
               TextFormField(
                 initialValue: _facultyName,
                 readOnly: true,
-                decoration: _inputDecoration(inputFill, border, hint: 'Faculty'),
+                decoration: _inputDecoration(
+                  inputFill,
+                  border,
+                  hint: 'Faculty',
+                ),
               ),
             ],
           ],
@@ -609,20 +600,25 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
             TextFormField(
               controller: _currentPasswordController,
               obscureText: !_showCurrentPassword,
-              decoration: _inputDecoration(
-                inputFill,
-                border,
-                hint: 'Current Password',
-              ).copyWith(
-                suffixIcon: IconButton(
-                  onPressed: () {
-                    setState(() => _showCurrentPassword = !_showCurrentPassword);
-                  },
-                  icon: Icon(
-                    _showCurrentPassword ? Icons.visibility : Icons.visibility_off,
+              decoration:
+                  _inputDecoration(
+                    inputFill,
+                    border,
+                    hint: 'Current Password',
+                  ).copyWith(
+                    suffixIcon: IconButton(
+                      onPressed: () {
+                        setState(
+                          () => _showCurrentPassword = !_showCurrentPassword,
+                        );
+                      },
+                      icon: Icon(
+                        _showCurrentPassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                      ),
+                    ),
                   ),
-                ),
-              ),
               validator: (value) {
                 if ((value ?? '').trim().isEmpty) {
                   return 'Current password is required';
@@ -636,24 +632,28 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
             TextFormField(
               controller: _newPasswordController,
               obscureText: !_showNewPassword,
-              decoration: _inputDecoration(
-                inputFill,
-                border,
-                hint: 'New Password',
-              ).copyWith(
-                suffixIcon: IconButton(
-                  onPressed: () {
-                    setState(() => _showNewPassword = !_showNewPassword);
-                  },
-                  icon: Icon(
-                    _showNewPassword ? Icons.visibility : Icons.visibility_off,
+              decoration:
+                  _inputDecoration(
+                    inputFill,
+                    border,
+                    hint: 'New Password',
+                  ).copyWith(
+                    suffixIcon: IconButton(
+                      onPressed: () {
+                        setState(() => _showNewPassword = !_showNewPassword);
+                      },
+                      icon: Icon(
+                        _showNewPassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                      ),
+                    ),
                   ),
-                ),
-              ),
               validator: (value) {
                 final v = (value ?? '').trim();
                 if (v.isEmpty) return 'New password is required';
-                if (v.length < 6) return 'New password must be at least 6 characters';
+                if (v.length < 6)
+                  return 'New password must be at least 6 characters';
                 return null;
               },
             ),
@@ -663,25 +663,31 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
             TextFormField(
               controller: _confirmPasswordController,
               obscureText: !_showConfirmPassword,
-              decoration: _inputDecoration(
-                inputFill,
-                border,
-                hint: 'Confirm New Password',
-              ).copyWith(
-                suffixIcon: IconButton(
-                  onPressed: () {
-                    setState(() => _showConfirmPassword = !_showConfirmPassword);
-                  },
-                  icon: Icon(
-                    _showConfirmPassword ? Icons.visibility : Icons.visibility_off,
+              decoration:
+                  _inputDecoration(
+                    inputFill,
+                    border,
+                    hint: 'Confirm New Password',
+                  ).copyWith(
+                    suffixIcon: IconButton(
+                      onPressed: () {
+                        setState(
+                          () => _showConfirmPassword = !_showConfirmPassword,
+                        );
+                      },
+                      icon: Icon(
+                        _showConfirmPassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                      ),
+                    ),
                   ),
-                ),
-              ),
               validator: (value) {
                 if ((value ?? '').trim().isEmpty) {
                   return 'Confirm password is required';
                 }
-                if ((value ?? '').trim() != _newPasswordController.text.trim()) {
+                if ((value ?? '').trim() !=
+                    _newPasswordController.text.trim()) {
                   return 'Passwords do not match';
                 }
                 return null;
@@ -721,7 +727,12 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  Widget _label(String text, Color titleColor, Color subColor, {bool required = false}) {
+  Widget _label(
+    String text,
+    Color titleColor,
+    Color subColor, {
+    bool required = false,
+  }) {
     return Row(
       children: [
         Text(
@@ -747,7 +758,11 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
     );
   }
 
-  InputDecoration _inputDecoration(Color fill, Color border, {required String hint}) {
+  InputDecoration _inputDecoration(
+    Color fill,
+    Color border, {
+    required String hint,
+  }) {
     return InputDecoration(
       hintText: hint,
       filled: true,

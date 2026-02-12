@@ -185,7 +185,7 @@ class DashboardStatsGrid extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             _ChartCard(
-                              title: 'Top Attended Classes',
+                              title: 'Top Attended Classes (this week)',
                               height: 200,
                               child: TopAttendedClassesChart(days: 7, topN: 6),
                             ),
@@ -223,7 +223,7 @@ class DashboardStatsGrid extends StatelessWidget {
                                 Expanded(
                                   flex: 2,
                                   child: _ChartCard(
-                                    title: 'Top Attended Classes',
+                                    title: 'Top Attended Classes (this week)',
                                     height: 260,
                                     child: TopAttendedClassesChart(
                                       days: 7,

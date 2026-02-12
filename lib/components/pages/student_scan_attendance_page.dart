@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../services/location_service.dart';
+import '../../services/device_service.dart';
 import '../../services/anomaly_service.dart';
 import '../../services/session.dart';
 // replaced old success popup with reusable attendance alert widget
@@ -406,6 +407,33 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       } catch (_) {}
     }
 
+    // Enforce one-device-per-session: check existing records with same device id
+    final deviceId = await DeviceService.getDeviceId();
+    final existingForDevice = await firestore
+        .collection('attendance_records')
+        .where('session_id', isEqualTo: sessionDoc.id)
+        .where('device_id', isEqualTo: deviceId)
+        .limit(1)
+        .get();
+
+    if (existingForDevice.docs.isNotEmpty) {
+      final existing = existingForDevice.docs.first.data();
+      final existingUser = (existing['username'] ?? '').toString();
+      if (existingUser.isNotEmpty && existingUser != username) {
+        debugPrint(
+          'Blocked attendance: device $deviceId already used by $existingUser for session ${sessionDoc.id}',
+        );
+        if (mounted) {
+          await AttendanceAlert.showLocationBlocked(
+            context,
+            details:
+                'This device has already been used to record attendance for another student ($existingUser) in this session.',
+          );
+        }
+        return;
+      }
+    }
+
     final attendanceData = {
       'username': username,
       'subject': subject,
@@ -415,6 +443,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       'scannedAt': FieldValue.serverTimestamp(),
       'code': code,
       'session_id': sessionDoc.id,
+      'device_id': deviceId,
       'location': position == null
           ? null
           : {
@@ -483,7 +512,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Student profile not found. Cannot verify class.'),
+                content: Text(
+                  'Student profile not found. Cannot verify class.',
+                ),
               ),
             );
           }
@@ -655,7 +686,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final cutOutSize = constraints.maxWidth < 360 ? 250.0 : 285.0;
+                      final cutOutSize = constraints.maxWidth < 360
+                          ? 250.0
+                          : 285.0;
                       final cutOutRect = Rect.fromCenter(
                         center: Offset(
                           constraints.maxWidth / 2,
@@ -671,7 +704,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                           _baseZoomScale = _zoomScale;
                         },
                         onScaleUpdate: (details) {
-                          _setZoomScale(_baseZoomScale + (details.scale - 1) * 0.5);
+                          _setZoomScale(
+                            _baseZoomScale + (details.scale - 1) * 0.5,
+                          );
                         },
                         child: Stack(
                           fit: StackFit.expand,
@@ -697,7 +732,8 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                 builder: (context, _) {
                                   final lineY =
                                       cutOutRect.top +
-                                      (cutOutRect.height * _pulseController.value);
+                                      (cutOutRect.height *
+                                          _pulseController.value);
                                   return CustomPaint(
                                     painter: _ScanLinePainter(
                                       cutOutRect: cutOutRect,
@@ -745,12 +781,15 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                         ),
                                         Expanded(
                                           child: SliderTheme(
-                                            data: SliderTheme.of(context).copyWith(
-                                              activeTrackColor: Colors.white,
-                                              inactiveTrackColor: Colors.white24,
-                                              thumbColor: Colors.white,
-                                              overlayColor: Colors.white24,
-                                            ),
+                                            data: SliderTheme.of(context)
+                                                .copyWith(
+                                                  activeTrackColor:
+                                                      Colors.white,
+                                                  inactiveTrackColor:
+                                                      Colors.white24,
+                                                  thumbColor: Colors.white,
+                                                  overlayColor: Colors.white24,
+                                                ),
                                             child: Slider(
                                               min: 0,
                                               max: 1,
@@ -828,7 +867,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                           },
                                           child: const Text(
                                             'Scan again',
-                                            style: TextStyle(color: Colors.white),
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                            ),
                                           ),
                                         ),
                                     ],
@@ -893,7 +934,10 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
 }
 
 class _ScanWindowOverlayPainter extends CustomPainter {
-  _ScanWindowOverlayPainter({required this.cutOutRect, required this.borderRadius});
+  _ScanWindowOverlayPainter({
+    required this.cutOutRect,
+    required this.borderRadius,
+  });
 
   final Rect cutOutRect;
   final double borderRadius;
@@ -949,15 +993,16 @@ class _ScanLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final linePaint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          Colors.cyanAccent.withOpacity(0.0),
-          Colors.cyanAccent.withOpacity(0.95),
-          Colors.cyanAccent.withOpacity(0.0),
-        ],
-      ).createShader(
-        Rect.fromLTWH(cutOutRect.left, lineY - 1, cutOutRect.width, 2),
-      );
+      ..shader =
+          LinearGradient(
+            colors: [
+              Colors.cyanAccent.withOpacity(0.0),
+              Colors.cyanAccent.withOpacity(0.95),
+              Colors.cyanAccent.withOpacity(0.0),
+            ],
+          ).createShader(
+            Rect.fromLTWH(cutOutRect.left, lineY - 1, cutOutRect.width, 2),
+          );
     canvas.drawRect(
       Rect.fromLTWH(cutOutRect.left + 6, lineY - 1, cutOutRect.width - 12, 2),
       linePaint,
