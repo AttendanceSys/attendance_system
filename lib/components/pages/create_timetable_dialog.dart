@@ -780,10 +780,12 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
             QuerySnapshot q = await col
                 .where('department_name', isEqualTo: match)
                 .get();
-            if (q.docs.isEmpty)
+            if (q.docs.isEmpty) {
               q = await col.where('name', isEqualTo: match).get();
-            if (q.docs.isEmpty)
+            }
+            if (q.docs.isEmpty) {
               q = await col.where('displayName', isEqualTo: match).get();
+            }
             if (q.docs.isNotEmpty) {
               // Use the document id (department_id) as the canonical saved value
               returnedDeptName = q.docs.first.id;
@@ -814,14 +816,16 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
               QuerySnapshot q = await col
                   .where('name', isEqualTo: _department)
                   .get();
-              if (q.docs.isEmpty)
+              if (q.docs.isEmpty) {
                 q = await col
                     .where('department_name', isEqualTo: _department)
                     .get();
-              if (q.docs.isEmpty)
+              }
+              if (q.docs.isEmpty) {
                 q = await col
                     .where('displayName', isEqualTo: _department)
                     .get();
+              }
               if (q.docs.isNotEmpty) {
                 // Use document id (department_id) when available
                 returnedDeptName = q.docs.first.id;
@@ -1027,7 +1031,7 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
           ? (palette?.surfaceHigh ?? const Color(0xFF1F2430))
           : null,
       insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: SafeArea(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 820),
@@ -1507,7 +1511,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                               ? 'Reconfigure periods'
                               : 'Configure periods',
                           style: TextStyle(
-                            color: isDark ? Colors.white : palette?.textPrimary,
+                            color: isDark
+                                ? (palette?.textPrimary ?? Colors.white)
+                                : palette?.textPrimary,
                           ),
                         ),
                       ),
@@ -1517,7 +1523,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                           child: Text(
                             'Append period / break',
                             style: TextStyle(
-                              color: isDark ? palette?.textPrimary : null,
+                              color: isDark
+                                  ? (palette?.textPrimary ?? Colors.white)
+                                  : palette?.textPrimary,
                             ),
                           ),
                         ),
@@ -1527,7 +1535,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                           child: Text(
                             'Clear structure',
                             style: TextStyle(
-                              color: isDark ? palette?.textPrimary : null,
+                              color: isDark
+                                  ? (palette?.textPrimary ?? Colors.white)
+                                  : palette?.textPrimary,
                             ),
                           ),
                         ),

@@ -1,4 +1,3 @@
-import '../../services/theme_controller.dart';
 // TeacherQRGenerationPage — save generated QR session to Firestore (qr_generation collection)
 //
 // Updates in this version:
@@ -17,7 +16,6 @@ import '../../services/theme_controller.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../theme/super_admin_theme.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../services/session.dart';
@@ -35,28 +33,6 @@ class TeacherQRGenerationPage extends StatefulWidget {
 
 class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   bool get isDarkMode => Theme.of(context).brightness == Brightness.dark;
-  Widget _themeToggleButton() {
-    final palette = Theme.of(context).extension<TeacherThemeColors>();
-    final iconColor = palette?.iconColor ?? Colors.black87;
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: ThemeController.themeMode,
-      builder: (context, mode, _) {
-        final isDark = mode == ThemeMode.dark;
-        return IconButton(
-          icon: Icon(
-            isDark ? Icons.light_mode : Icons.dark_mode,
-            color: iconColor,
-          ),
-          tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
-          onPressed: () {
-            ThemeController.setThemeMode(
-              isDark ? ThemeMode.light : ThemeMode.dark,
-            );
-          },
-        );
-      },
-    );
-  }
 
   String? department;
   String? className;
@@ -621,44 +597,6 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     return null;
   }
 
-  bool _isNowWithinPeriodForMatch(Map<String, dynamic> match) {
-    final spanStart = match['spanStart'] as int?;
-    final spanEnd = match['spanEnd'] as int?;
-    if (spanStart != null && spanEnd != null) {
-      final now = DateTime.now();
-      final minutesNow = now.hour * 60 + now.minute;
-      return minutesNow >= spanStart && minutesNow < spanEnd;
-    }
-    // fallback to previous logic (less strict)
-    final spans = match['spans'];
-    final periods = match['periods'];
-    final periodIndex = match['periodIndex'] as int;
-    final now = DateTime.now();
-    final minutesSinceMidnight = now.hour * 60 + now.minute;
-
-    if (spans is List && periodIndex >= 0 && periodIndex < spans.length) {
-      final span = spans[periodIndex];
-      if (span is Map && span['start'] is num && span['end'] is num) {
-        final start = (span['start'] as num).toInt();
-        final end = (span['end'] as num).toInt();
-        return minutesSinceMidnight >= start && minutesSinceMidnight < end;
-      }
-    }
-
-    if (periods is List && periodIndex >= 0 && periodIndex < periods.length) {
-      final periodStr = periods[periodIndex];
-      if (periodStr is String) {
-        final parsed = _parsePeriodString(periodStr);
-        if (parsed != null) {
-          return minutesSinceMidnight >= parsed[0] &&
-              minutesSinceMidnight < parsed[1];
-        }
-      }
-    }
-
-    return false;
-  }
-
   DateTime? _getPeriodStartDateTime(Map<String, dynamic> match) {
     try {
       final spanStart = match['spanStart'] as int?;
@@ -761,7 +699,6 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   ) async {
     try {
       final now = DateTime.now().toUtc();
-      final nowTs = Timestamp.fromDate(now);
       final collection = FirebaseFirestore.instance.collection('qr_generation');
 
       // Query active sessions for same teacher/subject/class
@@ -792,6 +729,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         } else if (periodEndsAtTs != null) {
           // If only end exists, treat as ongoing if end > now and (expiresAt absent or expiresAt > now)
           final end = periodEndsAtTs.toDate();
+          
           if (end.isAfter(now)) {
             if (expiresAtTs == null) return true;
             if (expiresAtTs.toDate().isAfter(now)) return true;
@@ -897,6 +835,493 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<TeacherThemeColors>();
+
+    final surfaceColor =
+        palette?.surface ?? Theme.of(context).colorScheme.surface;
+    final borderColor = palette?.border ?? Theme.of(context).dividerColor;
+    final titleColor =
+        palette?.textPrimary ?? Theme.of(context).colorScheme.onSurface;
+    final subtitleColor =
+        palette?.textSecondary ?? Theme.of(context).colorScheme.onSurface;
+
+    Widget sectionCard({required String title, required Widget child}) {
+      return Container(
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: borderColor.withOpacity(0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: titleColor,
+              ),
+            ),
+            const SizedBox(height: 16),
+            child,
+          ],
+        ),
+      );
+    }
+
+    Widget qrPreviewContent() {
+      if (qrCodeData == null) {
+        final emptyBg =
+            isDarkMode ? const Color(0xFF1F2430) : Colors.white;
+        final emptyBorder =
+            isDarkMode ? const Color(0xFF2D3446) : Colors.grey[300]!;
+        final emptyText = isDarkMode ? const Color(0xFFE2E8F0) : Colors.grey;
+        return Container(
+          height: 260,
+          width: double.infinity,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: emptyBg,
+            border: Border.all(color: emptyBorder, width: 2),
+          ),
+          child: Text(
+            "No QR Code generated yet.",
+            style: TextStyle(
+              color: emptyText,
+              fontSize: 18,
+            ),
+          ),
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          QrImageView(
+            data: qrCodeData!,
+            size: 350.0,
+            backgroundColor: Colors.white,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: 320,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              "For:\nSubject: $subject\nDepartment: $department\nClass: $className",
+              style: const TextStyle(fontSize: 16, color: Colors.black87),
+            ),
+          ),
+          if (_lastSavedSessionId != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Saved session id: $_lastSavedSessionId',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ],
+        ],
+      );
+    }
+
+    Widget sessionSettingsContent() {
+      final inputFill = palette?.inputFill ?? surfaceColor;
+      final thinBorder = borderColor.withOpacity(0.25);
+      final buttonRadius = BorderRadius.circular(10);
+
+      Future<void> captureLocation() async {
+        if (!requireLocationVerification) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Capturing location...')));
+        final pos = await LocationService.getCurrentPosition();
+        if (pos == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Failed to get GPS position')),
+            );
+          }
+          return;
+        }
+        setState(() {
+          _allowedLat = pos.latitude;
+          _allowedLng = pos.longitude;
+          _allowedAccuracyMeters = pos.accuracy;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Captured location: ${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)} (±${pos.accuracy.toStringAsFixed(0)} m)',
+              ),
+            ),
+          );
+        }
+      }
+
+      Future<void> generateQr() async {
+        if (department == null ||
+            className == null ||
+            subject == null ||
+            department!.trim().isEmpty ||
+            className!.trim().isEmpty ||
+            subject!.trim().isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please select department, class and subject.'),
+              ),
+            );
+          }
+          return;
+        }
+
+        final teacherUsername = await _fetchTeacherUsername();
+
+        final isLecturer = await _isTeacherLecturerOfSubject(
+          className!.trim(),
+          subject!.trim(),
+          teacherUsername.trim(),
+        );
+        if (!isLecturer) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Validation failed: You are not assigned as the lecturer for the selected subject/class.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        final match = await _findTimetableMatchForNow(
+          className!.trim(),
+          subject!.trim(),
+          teacherUsername.trim(),
+        );
+        if (match == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'You do not have a scheduled period for this subject/class at the current time.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        final periodStart = _getPeriodStartDateTime(match);
+        final periodEnd = _getPeriodEndDateTime(match);
+        if (periodStart == null || periodEnd == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Could not compute period start/end time; cannot set period_ends_at.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        final hasActive = await _hasActiveSession(
+          teacherUsername.trim(),
+          subject!.trim(),
+          className!.trim(),
+        );
+        if (hasActive) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'There is already an active QR session for this class/subject that overlaps the current period. Please end it before creating a new one.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        final nowIso = DateTime.now().toUtc().toIso8601String();
+        final code =
+            "${subject!.trim()}|${department!.trim()}|${className!.trim()}|$teacherUsername|$nowIso";
+
+        if (mounted) {
+          setState(() {
+            qrCodeData = code;
+          });
+        }
+
+        await _saveSessionToFirestore(
+          code,
+          teacherUsername,
+          periodStart,
+          periodEnd,
+        );
+      }
+
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final scheme = Theme.of(context).colorScheme;
+          final wide = constraints.maxWidth >= 760;
+          final gap = wide ? 12.0 : 10.0;
+
+          final dropdowns = wide
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: _dropdown(
+                        value: department,
+                        items: departments,
+                        hint: "Select Department",
+                        maxWidth: double.infinity,
+                        onChanged: (value) {
+                          setState(() => department = value);
+                          if (value != null) _fetchClasses(value);
+                        },
+                      ),
+                    ),
+                    SizedBox(width: gap),
+                    Expanded(
+                      child: _dropdown(
+                        value: className,
+                        items: classes,
+                        hint: "Select Class",
+                        maxWidth: double.infinity,
+                        onChanged: (value) {
+                          setState(() => className = value);
+                          if (value != null) _fetchSubjects(value);
+                        },
+                      ),
+                    ),
+                    SizedBox(width: gap),
+                    Expanded(
+                      child: _dropdown(
+                        value: subject,
+                        items: subjects,
+                        hint: "Select Subject",
+                        maxWidth: double.infinity,
+                        onChanged: (value) => setState(() => subject = value),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  children: [
+                    _dropdown(
+                      value: department,
+                      items: departments,
+                      hint: "Select Department",
+                      maxWidth: double.infinity,
+                      onChanged: (value) {
+                        setState(() => department = value);
+                        if (value != null) _fetchClasses(value);
+                      },
+                    ),
+                    SizedBox(height: gap),
+                    _dropdown(
+                      value: className,
+                      items: classes,
+                      hint: "Select Class",
+                      maxWidth: double.infinity,
+                      onChanged: (value) {
+                        setState(() => className = value);
+                        if (value != null) _fetchSubjects(value);
+                      },
+                    ),
+                    SizedBox(height: gap),
+                    _dropdown(
+                      value: subject,
+                      items: subjects,
+                      hint: "Select Subject",
+                      maxWidth: double.infinity,
+                      onChanged: (value) => setState(() => subject = value),
+                    ),
+                  ],
+                );
+
+          final togglePill = Container(
+            decoration: BoxDecoration(
+              color: inputFill,
+              borderRadius: buttonRadius,
+              border: Border.all(color: thinBorder),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: InkWell(
+              borderRadius: buttonRadius,
+              onTap: () {
+                setState(() {
+                  requireLocationVerification = !requireLocationVerification;
+                  if (!requireLocationVerification) {
+                    _allowedLat = null;
+                    _allowedLng = null;
+                    _allowedAccuracyMeters = null;
+                  }
+                });
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Transform.scale(
+                    scale: 1.06,
+                    child: Switch.adaptive(
+                      value: requireLocationVerification,
+                      activeColor: scheme.primary,
+                      activeTrackColor: scheme.primary.withOpacity(0.35),
+                      inactiveThumbColor: palette?.surface ?? scheme.surface,
+                      inactiveTrackColor:
+                          (palette?.border ?? Theme.of(context).dividerColor)
+                              .withOpacity(0.35),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) {
+                        setState(() {
+                          requireLocationVerification = v;
+                          if (!v) {
+                            _allowedLat = null;
+                            _allowedLng = null;
+                            _allowedAccuracyMeters = null;
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Require location verification',
+                    style: TextStyle(
+                      color: titleColor.withOpacity(0.9),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          final captureBtn = OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: buttonRadius),
+              side: BorderSide(color: thinBorder),
+              foregroundColor: scheme.onSurface,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+            onPressed: requireLocationVerification ? captureLocation : null,
+            child: Text(_allowedLat == null ? 'Capture' : 'Captured'),
+          );
+
+          final radiusField = SizedBox(
+            width: 140,
+            child: TextFormField(
+              controller: _radiusController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Radius (m)',
+                isDense: true,
+                filled: true,
+                fillColor: inputFill,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: thinBorder),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: thinBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: scheme.primary, width: 1.2),
+                ),
+              ),
+              onChanged: (v) {
+                final parsed = double.tryParse(v);
+                if (parsed != null) {
+                  setState(() => _allowedRadiusMeters = parsed);
+                }
+              },
+            ),
+          );
+
+          final generateBtn = ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  isDarkMode ? const Color(0xFF4234A4) : const Color(0xFF8372FE),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: buttonRadius),
+            ),
+            onPressed: generateQr,
+            child: const Text(
+              "Generate QR Code",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          );
+
+          final actionRow = wide
+              ? Row(
+                  children: [
+                    togglePill,
+                    const Spacer(),
+                    if (requireLocationVerification) ...[
+                      captureBtn,
+                      SizedBox(width: gap),
+                      radiusField,
+                      SizedBox(width: gap),
+                    ],
+                    generateBtn,
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    togglePill,
+                    if (requireLocationVerification) ...[
+                      SizedBox(height: gap),
+                      Wrap(
+                        spacing: gap,
+                        runSpacing: gap,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [captureBtn, radiusField],
+                      ),
+                    ],
+                    SizedBox(height: gap),
+                    Align(alignment: Alignment.centerRight, child: generateBtn),
+                  ],
+                );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Session details',
+                style: TextStyle(
+                  color: subtitleColor.withOpacity(0.75),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: gap),
+              dropdowns,
+              SizedBox(height: wide ? 16 : 14),
+              actionRow,
+            ],
+          );
+        },
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.all(32),
       child: SingleChildScrollView(
@@ -915,337 +1340,57 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(
-                      context,
-                    ).extension<SuperAdminColors>()?.textPrimary,
+                    color:
+                        palette?.textPrimary ??
+                        Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 18),
-            Wrap(
-              spacing: 14,
-              runSpacing: 12,
-              alignment: WrapAlignment.start,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _dropdown(
-                  value: department,
-                  items: departments,
-                  hint: "Select Department",
-                  onChanged: (value) {
-                    setState(() => department = value);
-                    if (value != null) _fetchClasses(value);
-                  },
-                ),
-                _dropdown(
-                  value: className,
-                  items: classes,
-                  hint: "Select Class",
-                  onChanged: (value) {
-                    setState(() => className = value);
-                    if (value != null) _fetchSubjects(value);
-                  },
-                ),
-                _dropdown(
-                  value: subject,
-                  items: subjects,
 
-                  // call this color please color: isDarkMode ? Colors.white : Colors.grey[100],
-                  hint: "Select Subject",
-                  onChanged: (value) => setState(() => subject = value),
-                ),
-                // Location verification toggle + capture
-                Container(
-                  constraints: const BoxConstraints(
-                    minWidth: 220,
-                    maxWidth: 420,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 980;
+
+                final sessionCard = sectionCard(
+                  title: 'Session Settings',
+                  child: sessionSettingsContent(),
+                );
+                final qrCard = ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: sectionCard(
+                    title: 'QR Code Preview',
+                    child: Center(child: qrPreviewContent()),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                );
+
+                if (isWide) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Switch(
-                        value: requireLocationVerification,
-                        onChanged: (v) {
-                          setState(() {
-                            requireLocationVerification = v;
-                            if (!v) {
-                              _allowedLat = null;
-                              _allowedLng = null;
-                              _allowedAccuracyMeters = null;
-                            }
-                          });
-                        },
+                      sessionCard,
+                      const SizedBox(height: 18),
+                      Align(
+                        alignment: Alignment.center,
+                        child: qrCard,
                       ),
-                      const SizedBox(width: 6),
-                      const Flexible(
-                        child: Text(
-                          'Require location verification',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (requireLocationVerification) ...[
-                        ElevatedButton(
-                          onPressed: () async {
-                            if (!requireLocationVerification) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Capturing location...'),
-                              ),
-                            );
-                            final pos =
-                                await LocationService.getCurrentPosition();
-                            if (pos == null) {
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Failed to get GPS position'),
-                                  ),
-                                );
-                              }
-                              return;
-                            }
-                            setState(() {
-                              _allowedLat = pos.latitude;
-                              _allowedLng = pos.longitude;
-                              _allowedAccuracyMeters = pos.accuracy;
-                            });
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Captured location: ${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)} (±${pos.accuracy.toStringAsFixed(0)} m)',
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                          child: Text(
-                            _allowedLat == null ? 'Capture' : 'Captured',
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 110,
-                          child: TextFormField(
-                            controller: _radiusController,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Radius (m)',
-                              isDense: true,
-                            ),
-                            onChanged: (v) {
-                              final parsed = double.tryParse(v);
-                              if (parsed != null) {
-                                setState(() => _allowedRadiusMeters = parsed);
-                              }
-                            },
-                          ),
-                        ),
-                      ],
                     ],
-                  ),
-                ),
-                const SizedBox(width: 18),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDarkMode
-                        ? Theme.of(context).colorScheme.primary
-                        : const Color(0xFF2196F3),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                  ),
-                  onPressed: () async {
-                    // Basic non-null validation
-                    if (department == null ||
-                        className == null ||
-                        subject == null ||
-                        department!.trim().isEmpty ||
-                        className!.trim().isEmpty ||
-                        subject!.trim().isEmpty) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Please select department, class and subject.',
-                            ),
-                          ),
-                        );
-                      }
-                      return;
-                    }
+                  );
+                }
 
-                    final teacherUsername = await _fetchTeacherUsername();
-
-                    // Validation 1: teacher must be lecturer for this subject/class
-                    final isLecturer = await _isTeacherLecturerOfSubject(
-                      className!.trim(),
-                      subject!.trim(),
-                      teacherUsername.trim(),
-                    );
-
-                    if (!isLecturer) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Validation failed: You are not assigned as the lecturer for the selected subject/class.',
-                            ),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-
-                    // Find timetable match for NOW (today + containing now)
-                    final match = await _findTimetableMatchForNow(
-                      className!.trim(),
-                      subject!.trim(),
-                      teacherUsername.trim(),
-                    );
-
-                    if (match == null) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'You do not have a scheduled period for this subject/class at the current time.',
-                            ),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-
-                    // Compute period start/end DateTimes (local)
-                    final periodStart = _getPeriodStartDateTime(match);
-                    final periodEnd = _getPeriodEndDateTime(match);
-                    if (periodStart == null || periodEnd == null) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Could not compute period start/end time; cannot set period_ends_at.',
-                            ),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-
-                    // Prevent duplicate active sessions that overlap now
-                    final hasActive = await _hasActiveSession(
-                      teacherUsername.trim(),
-                      subject!.trim(),
-                      className!.trim(),
-                    );
-
-                    if (hasActive) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'There is already an active QR session for this class/subject that overlaps the current period. Please end it before creating a new one.',
-                            ),
-                          ),
-                        );
-                      }
-                      return;
-                    }
-
-                    // All validations passed -> generate QR
-                    final nowIso = DateTime.now().toUtc().toIso8601String();
-                    final code =
-                        "${subject!.trim()}|${department!.trim()}|${className!.trim()}|$teacherUsername|$nowIso";
-
-                    if (mounted) {
-                      setState(() {
-                        qrCodeData = code;
-                      });
-                    }
-
-                    // Save to qr_generation with both short expiry and period_starts/period_ends
-                    await _saveSessionToFirestore(
-                      code,
-                      teacherUsername,
-                      periodStart,
-                      periodEnd,
-                    );
-                  },
-                  child: const Text(
-                    "Generate QR Code",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            Center(
-              child: qrCodeData == null
-                  ? Container(
-                      height: 260,
-                      width: 260,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    sessionCard,
+                    const SizedBox(height: 18),
+                    Align(
                       alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        color: isDarkMode
-                            ? const Color.fromARGB(255, 143, 139, 139)
-                            : Colors.white,
-                        border: Border.all(color: Colors.grey[300]!, width: 2),
-                      ),
-                      child: Text(
-                        "No QR Code generated yet.",
-                        style: TextStyle(
-                          color: isDarkMode ? Colors.white : Colors.grey,
-                          fontSize: 18,
-                        ),
-                      ),
-                    )
-                  : Column(
-                      children: [
-                        QrImageView(
-                          data: qrCodeData!,
-                          size: 260.0,
-                          backgroundColor: Colors.white,
-                        ),
-                        const SizedBox(height: 16),
-                        Container(
-                          width: 320,
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            "For:\nSubject: $subject\nDepartment: $department\nClass: $className",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                        if (_lastSavedSessionId != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            'Saved session id: $_lastSavedSessionId',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ],
-                      ],
+                      child: qrCard,
                     ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -1259,13 +1404,14 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     required ValueChanged<String?> onChanged,
     required String hint,
     bool isLoading = false,
+    double maxWidth = 240,
   }) {
-    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
     final hintStyle = TextStyle(color: palette?.textSecondary);
     final itemStyle = TextStyle(color: palette?.textPrimary);
     final borderColor = palette?.border ?? const Color(0xFFC7BECF);
     return Container(
-      constraints: const BoxConstraints(minWidth: 130, maxWidth: 240),
+      constraints: BoxConstraints(minWidth: 130, maxWidth: maxWidth),
       child: InputDecorator(
         decoration: InputDecoration(
           contentPadding: const EdgeInsets.symmetric(

@@ -60,18 +60,38 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
     final saveBg =
         palette?.accent ??
         (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final saveButtonBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
+
+    final fieldRadius = BorderRadius.circular(10);
+    const double fieldFontSize = 16;
 
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
-      border: OutlineInputBorder(borderSide: BorderSide(color: borderColor)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      hintStyle: TextStyle(
+        color: titleColor.withOpacity(0.65),
+        fontSize: fieldFontSize,
+      ),
+      labelStyle: TextStyle(
+        color: titleColor.withOpacity(0.85),
+        fontSize: fieldFontSize,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: fieldRadius,
+        borderSide: BorderSide(color: borderColor),
+      ),
       enabledBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
         borderSide: BorderSide(color: borderColor),
       ),
       focusedBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
         borderSide: BorderSide(color: saveBg, width: 1.4),
       ),
     );
@@ -162,11 +182,24 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _facultyId,
-                  decoration: input("Faculty"),
+                  decoration: input('').copyWith(labelText: 'Faculty'),
+                  dropdownColor: containerBg,
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: fieldFontSize,
+                  ),
                   items: widget.facultyNames
                       .map(
-                        (name) =>
-                            DropdownMenuItem(value: name, child: Text(name)),
+                        (name) => DropdownMenuItem(
+                          value: name,
+                          child: Text(
+                            name,
+                            style: TextStyle(
+                              color: titleColor,
+                              fontSize: fieldFontSize,
+                            ),
+                          ),
+                        ),
                       )
                       .toList(),
                   onChanged: (val) => setState(() => _facultyId = val),
@@ -206,7 +239,7 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: cancelBorderColor),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
@@ -258,9 +291,9 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: saveBg,
+                          backgroundColor: saveButtonBg,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),

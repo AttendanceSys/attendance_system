@@ -259,6 +259,10 @@ class _TeachersPageState extends State<TeachersPage> {
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isDesktop = screenWidth > 800;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final disabledActionBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
 
     return Padding(
       padding: const EdgeInsets.all(32.0),
@@ -305,8 +309,10 @@ class _TeachersPageState extends State<TeachersPage> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.green,
+                              disabledBackgroundColor: disabledActionBg,
+                              disabledForegroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               padding: const EdgeInsets.symmetric(
                                 vertical: 0,
@@ -332,8 +338,10 @@ class _TeachersPageState extends State<TeachersPage> {
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,
+                              disabledBackgroundColor: disabledActionBg,
+                              disabledForegroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               padding: const EdgeInsets.symmetric(
                                 vertical: 0,

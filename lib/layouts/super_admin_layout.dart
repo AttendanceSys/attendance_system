@@ -23,7 +23,13 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final sidebarColor = const Color(0xFF3B4B9B);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sidebarColor = isDark
+        ? const Color(0xFF0F172A)
+        : const Color(0xFFF7F5FF);
+    final menuIconColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF727179);
 
     return Scaffold(
       appBar: isMobile
@@ -48,7 +54,8 @@ class _MainLayoutState extends State<MainLayout> {
                   });
                   Navigator.pop(context);
                 },
-                collapsed: false,
+                enableHoverExpand: false,
+                forceExpanded: true,
               ),
             )
           : null,
@@ -59,42 +66,19 @@ class _MainLayoutState extends State<MainLayout> {
               color: sidebarColor,
               child: Column(
                 children: [
-                  // Only show menu icon when collapsed
-                  if (_collapsed)
-                    Container(
-                      color: sidebarColor,
-                      width: 60,
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Align(
-                          alignment: Alignment.center,
-                          child: IconButton(
-                            icon: const Icon(Icons.menu, color: Colors.white),
-                            onPressed: () {
-                              setState(() {
-                                _collapsed = false;
-                              });
-                            },
-                            tooltip: 'Expand menu',
-                            padding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ),
+                  Expanded(
+                    child: AdminSidebar(
+                      selectedIndex: _selectedIndex,
+                      onItemSelected: (index) {
+                        setState(() {
+                          _selectedIndex = index;
+                          _collapsed = true; // Auto-collapse after selection
+                        });
+                      },
+                      enableHoverExpand: false,
+                      forceExpanded: !_collapsed,
                     ),
-                  // Sidebar
-                  if (!_collapsed || _collapsed)
-                    Expanded(
-                      child: AdminSidebar(
-                        selectedIndex: _selectedIndex,
-                        onItemSelected: (index) {
-                          setState(() {
-                            _selectedIndex = index;
-                            _collapsed = true; // Auto-collapse after selection
-                          });
-                        },
-                        collapsed: _collapsed,
-                      ),
-                    ),
+                  ),
                 ],
               ),
             ),

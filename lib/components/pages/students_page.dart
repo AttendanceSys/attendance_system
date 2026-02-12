@@ -439,6 +439,10 @@ class _StudentsPageState extends State<StudentsPage> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final disabledActionBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     return Padding(
       padding: const EdgeInsets.all(32.0),
       child: Column(
@@ -456,112 +460,133 @@ class _StudentsPageState extends State<StudentsPage> {
             ),
           ),
           const SizedBox(height: 24),
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              if (isDesktop)
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SearchAddBar(
-                            hintText: 'Search student...',
-                            buttonText: 'Add Student',
-                            onAddPressed: _showAddStudentPopup,
-                            onChanged: (v) {
-                              setState(() {
-                                _searchText = v;
-                                _selectedIndex = null;
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          height: 48,
-                          child: ElevatedButton.icon(
-                            onPressed: _handleUploadStudents,
-                            icon: const Icon(Icons.upload_file),
-                            label: const Text('Upload Students'),
-                            style: ElevatedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              backgroundColor: const Color.fromARGB(
-                                255,
-                                0,
-                                150,
-                                80,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    Expanded(
+                      child: SearchAddBar(
+                        hintText: 'Search student...',
+                        buttonText: 'Add Student',
+                        onAddPressed: _showAddStudentPopup,
+                        onChanged: (v) {
+                          setState(() {
+                            _searchText = v;
+                            _selectedIndex = null;
+                          });
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _showEditSelected,
-                            child: const Text(
-                              'Edit',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleUploadStudents,
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Upload Students'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _confirmDeleteSelected,
-                            child: const Text(
-                              'Delete',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
+                )
+              else ...[
+                SearchAddBar(
+                  hintText: 'Search student...',
+                  buttonText: 'Add Student',
+                  onAddPressed: _showAddStudentPopup,
+                  onChanged: (v) {
+                    setState(() {
+                      _searchText = v;
+                      _selectedIndex = null;
+                    });
+                  },
                 ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleUploadStudents,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Upload Students'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 80,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 0,
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null ? null : _showEditSelected,
+                      child: const Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 80,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 0,
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null
+                          ? null
+                          : _confirmDeleteSelected,
+                      child: const Text(
+                        'Delete',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -750,8 +775,9 @@ class _StudentsPageState extends State<StudentsPage> {
       final List<Map<String, dynamic>> parsed = [];
       for (var i = 1; i < rows.length; i++) {
         final row = rows[i];
-        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty))
+        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty)) {
           continue;
+        }
         final map = <String, dynamic>{};
         for (var c = 0; c < headers.length && c < row.length; c++) {
           map[headers[c]] = row[c]?.toString() ?? '';
@@ -830,10 +856,11 @@ class _StudentsPageState extends State<StudentsPage> {
         );
 
         final ok = await _addStudentFromUpload(stud);
-        if (ok)
+        if (ok) {
           added.add(username);
-        else
+        } else {
           skipped.add(username);
+        }
       }
 
       if (mounted) {

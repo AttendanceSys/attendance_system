@@ -215,7 +215,44 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
     return _classes.where((c) => c['department'] == _departmentId).toList();
   }
 
+  List<String> _missingRequiredFields() {
+    final missing = <String>[];
+    if ((_username ?? '').trim().isEmpty) missing.add('Username');
+    if ((_fullname ?? '').trim().isEmpty) missing.add('Full name');
+    if ((_password ?? '').trim().isEmpty) missing.add('Password');
+    if ((_gender ?? '').trim().isEmpty) missing.add('Gender');
+    if ((_departmentId ?? '').trim().isEmpty) missing.add('Department');
+    if ((_classId ?? '').trim().isEmpty) missing.add('Class');
+    return missing;
+  }
+
+  Future<void> _showMissingFieldsDialog(List<String> missingFields) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Missing required fields'),
+        content: Text(
+          'Please fill the following: ${missingFields.join(', ')}.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _save() async {
+    final missing = _missingRequiredFields();
+    if (missing.isNotEmpty) {
+      _formKey.currentState?.validate();
+      await _showMissingFieldsDialog(missing);
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     String facultyId = widget.student?.facultyRef ?? '';
@@ -276,16 +313,39 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
     final accent =
         palette?.accent ??
         (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final saveButtonBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
+
+    final fieldRadius = BorderRadius.circular(10);
+
+    const double fieldFontSize = 16;
 
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
-      border: OutlineInputBorder(borderSide: BorderSide(color: border)),
-      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: border)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      hintStyle: TextStyle(
+        color: textPrimary.withOpacity(0.65),
+        fontSize: fieldFontSize,
+      ),
+      labelStyle: TextStyle(
+        color: textPrimary.withOpacity(0.85),
+        fontSize: fieldFontSize,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: fieldRadius,
+        borderSide: BorderSide(color: border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
+        borderSide: BorderSide(color: border),
+      ),
       focusedBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
         borderSide: BorderSide(color: accent, width: 1.4),
       ),
     );
@@ -376,11 +436,25 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _gender,
-                          decoration: input('Gender'),
+                          decoration: input('').copyWith(labelText: 'Gender'),
+                          dropdownColor: surface,
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: fieldFontSize,
+                          ),
                           items: ['Male', 'Female']
                               .map(
                                 (g) =>
-                                    DropdownMenuItem(value: g, child: Text(g)),
+                                    DropdownMenuItem(
+                                      value: g,
+                                      child: Text(
+                                        g,
+                                        style: TextStyle(
+                                          color: textPrimary,
+                                          fontSize: fieldFontSize,
+                                        ),
+                                      ),
+                                    ),
                               )
                               .toList(),
                           onChanged: (v) => setState(() => _gender = v),
@@ -392,13 +466,25 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _departmentId,
-                          decoration: input('Department'),
+                          decoration:
+                              input('').copyWith(labelText: 'Department'),
                           isExpanded: true,
+                          dropdownColor: surface,
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: fieldFontSize,
+                          ),
                           items: _departments
                               .map(
                                 (d) => DropdownMenuItem(
                                   value: d['id'],
-                                  child: Text(d['name'] ?? ''),
+                                  child: Text(
+                                    d['name'] ?? '',
+                                    style: TextStyle(
+                                      color: textPrimary,
+                                      fontSize: fieldFontSize,
+                                    ),
+                                  ),
                                 ),
                               )
                               .toList(),
@@ -417,17 +503,29 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
 
                   DropdownButtonFormField<String>(
                     value: _classId,
-                    decoration: input('Class'),
+                    decoration: input('').copyWith(labelText: 'Class'),
+                    dropdownColor: surface,
+                    style: TextStyle(
+                      color: textPrimary,
+                      fontSize: fieldFontSize,
+                    ),
                     items: _filteredClassesByDepartment
                         .map(
                           (c) => DropdownMenuItem(
                             value: c['id'],
-                            child: Text(c['name'] ?? ''),
+                            child: Text(
+                              c['name'] ?? '',
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: fieldFontSize,
+                              ),
+                            ),
                           ),
                         )
                         .toList(),
                     onChanged: (v) => setState(() => _classId = v),
-                    validator: (v) => null,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Select class' : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -466,7 +564,7 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(color: border),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             minimumSize: const Size(90, 40),
                           ),
@@ -484,15 +582,11 @@ class _AddStudentPopupState extends State<AddStudentPopup> {
                       SizedBox(
                         height: 40,
                         child: ElevatedButton(
-                          onPressed: () async {
-                            if (_formKey.currentState!.validate()) {
-                              await _save();
-                            }
-                          },
+                          onPressed: _save,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: accent,
+                            backgroundColor: saveButtonBg,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             minimumSize: const Size(90, 40),
                           ),

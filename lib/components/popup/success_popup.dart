@@ -19,7 +19,7 @@ class SuccessPopup extends StatelessWidget {
     final double screenWidth = MediaQuery.of(context).size.width;
     final double dialogWidth = screenWidth < 400 ? screenWidth * 0.95 : 340;
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
       backgroundColor: theme.card,
       child: ConstrainedBox(
@@ -60,7 +60,7 @@ class SuccessPopup extends StatelessWidget {
                   style: TextButton.styleFrom(
                     backgroundColor: theme.button,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 22,

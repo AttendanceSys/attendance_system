@@ -8,14 +8,16 @@ class AnimatedBottomBar extends StatefulWidget {
   final OnBarTap onTap;
   final double lift; // pixels
   final Duration duration;
+  final double activeSize;
 
   const AnimatedBottomBar({
-    Key? key,
+    super.key,
     required this.currentIndex,
     required this.onTap,
     this.lift = 30.0,
     this.duration = const Duration(milliseconds: 180),
-  }) : super(key: key);
+    this.activeSize = 70.0,
+  });
 
   @override
   State<AnimatedBottomBar> createState() => _AnimatedBottomBarState();
@@ -34,15 +36,19 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
     return SafeArea(
       child: Container(
         color: Colors.transparent,
-        padding: const EdgeInsets.only(bottom: 6, top: 6),
+        padding: const EdgeInsets.only(bottom: 6, top: 2),
         child: Stack(
+          clipBehavior: Clip.none,
           alignment: Alignment.topCenter,
           children: [
             Container(
-              margin: EdgeInsets.only(top: widget.lift),
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+              margin: EdgeInsets.only(top: widget.lift * 0.45),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 color: theme.card,
+                border: Border(
+                  top: BorderSide(color: theme.border),
+                ),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
@@ -50,8 +56,8 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
                 boxShadow: [
                   BoxShadow(
                     color: theme.shadow,
-                    blurRadius: 10,
-                    offset: const Offset(0, -4),
+                    blurRadius: 14,
+                    offset: const Offset(0, -6),
                   ),
                 ],
               ),
@@ -67,6 +73,7 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
                     active: active,
                     lift: widget.lift,
                     duration: widget.duration,
+                    activeSize: widget.activeSize,
                     onTap: () => widget.onTap(i),
                     theme: theme,
                   );
@@ -86,23 +93,25 @@ class _BarItem extends StatelessWidget {
   final bool active;
   final double lift;
   final Duration duration;
+  final double activeSize;
   final VoidCallback onTap;
   final dynamic theme;
 
   const _BarItem({
-    Key? key,
     required this.icon,
     required this.label,
     required this.active,
     required this.lift,
     required this.duration,
+    required this.activeSize,
     required this.onTap,
     required this.theme,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
     final color = active ? theme.button : theme.hint;
+    final activeIconColor = Colors.white;
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -114,12 +123,41 @@ class _BarItem extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: active ? 28 : 22),
+              AnimatedContainer(
+                duration: duration,
+                width: active ? activeSize : 26,
+                height: active ? activeSize : 26,
+                decoration: BoxDecoration(
+                  color: active ? theme.button : Colors.transparent,
+                  shape: active ? BoxShape.circle : BoxShape.rectangle,
+                  borderRadius: active ? null : BorderRadius.circular(8),
+                  boxShadow: active
+                      ? [
+                          BoxShadow(
+                            color: theme.button.withOpacity(0.35),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ]
+                      : const [],
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  color: active ? activeIconColor : color,
+                  size: active ? 30 : 24,
+                ),
+              ),
               const SizedBox(height: 6),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: theme.hint, fontSize: 12),
+              AnimatedOpacity(
+                opacity: active ? 0.0 : 1.0,
+                duration: duration,
+                curve: Curves.easeOut,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: theme.hint, fontSize: 12),
+                ),
               ),
             ],
           ),

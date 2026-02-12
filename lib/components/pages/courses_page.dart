@@ -433,6 +433,10 @@ class _CoursesPageState extends State<CoursesPage> {
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isDesktop = screenWidth > 800;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final disabledActionBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
 
     return Padding(
       padding: const EdgeInsets.all(32.0),
@@ -451,108 +455,126 @@ class _CoursesPageState extends State<CoursesPage> {
             ),
           ),
           const SizedBox(height: 24),
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              if (isDesktop)
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SearchAddBar(
-                            hintText: 'Search Course...',
-                            buttonText: 'Add Course',
-                            onAddPressed: _showAddCoursePopup,
-                            onChanged: (val) {
-                              setState(() {
-                                _searchText = val;
-                                _selectedIndex = null;
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          height: 48,
-                          child: ElevatedButton.icon(
-                            onPressed: _handleUploadCourses,
-                            icon: const Icon(Icons.upload_file),
-                            label: const Text('Upload Courses'),
-                            style: ElevatedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              backgroundColor: const Color.fromARGB(
-                                255,
-                                0,
-                                150,
-                                80,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    Expanded(
+                      child: SearchAddBar(
+                        hintText: 'Search Course...',
+                        buttonText: 'Add Course',
+                        onAddPressed: _showAddCoursePopup,
+                        onChanged: (val) {
+                          setState(() {
+                            _searchText = val;
+                            _selectedIndex = null;
+                          });
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 90,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _showEditCoursePopup,
-                            child: const Text(
-                              'Edit',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleUploadCourses,
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Upload Courses'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            0,
+                            150,
+                            80,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 90,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _confirmDeleteCourse,
-                            child: const Text(
-                              'Delete',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.white,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
+                )
+              else ...[
+                SearchAddBar(
+                  hintText: 'Search Course...',
+                  buttonText: 'Add Course',
+                  onAddPressed: _showAddCoursePopup,
+                  onChanged: (val) {
+                    setState(() {
+                      _searchText = val;
+                      _selectedIndex = null;
+                    });
+                  },
                 ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleUploadCourses,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Upload Courses'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 90,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null ? null : _showEditCoursePopup,
+                      child: const Text(
+                        'Edit',
+                        style: TextStyle(fontSize: 15, color: Colors.white),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 90,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null ? null : _confirmDeleteCourse,
+                      child: const Text(
+                        'Delete',
+                        style: TextStyle(fontSize: 14, color: Colors.white),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -591,8 +613,9 @@ class _CoursesPageState extends State<CoursesPage> {
     final path = 'teachers/$teacherRef';
     final pathWithSlash = '/$path';
     if (_teacherNames.containsKey(path)) return _teacherNames[path]!;
-    if (_teacherNames.containsKey(pathWithSlash))
+    if (_teacherNames.containsKey(pathWithSlash)) {
       return _teacherNames[pathWithSlash]!;
+    }
     // maybe teacherRef already contains a path; try last segment
     if (teacherRef.contains('/')) {
       final parts = teacherRef.split('/').where((p) => p.isNotEmpty).toList();
@@ -885,8 +908,9 @@ class _CoursesPageState extends State<CoursesPage> {
       final List<Map<String, dynamic>> parsed = [];
       for (var i = 1; i < rows.length; i++) {
         final row = rows[i];
-        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty))
+        if (row.every((cell) => (cell ?? '').toString().trim().isEmpty)) {
           continue;
+        }
         final map = <String, dynamic>{};
         for (var c = 0; c < headers.length && c < row.length; c++) {
           map[headers[c]] = row[c]?.toString() ?? '';
@@ -980,10 +1004,11 @@ class _CoursesPageState extends State<CoursesPage> {
         );
 
         final ok = await _addCourseFromUpload(course);
-        if (ok)
+        if (ok) {
           added.add(courseCode);
-        else
+        } else {
           skipped.add(courseCode);
+        }
       }
 
       if (mounted) {

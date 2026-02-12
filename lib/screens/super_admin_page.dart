@@ -8,10 +8,12 @@ import 'login_screen.dart';
 import 'package:attendance_system/components/pages/faculties_page.dart';
 import 'package:attendance_system/components/pages/lecturer_page.dart';
 import 'package:attendance_system/components/pages/Admin_user_handling_page.dart';
-import 'package:attendance_system/components/pages/admin_anomalies_page.dart';
+import 'package:attendance_system/components/pages/admin_profile_page.dart';
 import 'package:attendance_system/components/popup/logout_confirmation_popup.dart';
 import '../services/theme_controller.dart';
+import '../services/session.dart';
 import '../theme/super_admin_theme.dart';
+import 'package:google_fonts/google_fonts.dart';
 // Removed global theme controller usage to keep dark mode local to Super Admin
 
 // ---- Logout confirmation popup matching your design ----
@@ -26,7 +28,6 @@ class SuperAdminPage extends StatefulWidget {
 
 class _SuperAdminPageState extends State<SuperAdminPage> {
   int _selectedIndex = 0;
-  bool _collapsed = true;
   // Removed local dark mode state and logic. Use global ThemeController only.
 
   ThemeData _superAdminDarkTheme(ThemeData base) {
@@ -74,7 +75,22 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
       dialogTheme: const DialogThemeData(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: textPrimary,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+          ),
         ),
       ),
       inputDecorationTheme: const InputDecorationTheme(
@@ -110,6 +126,14 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
           ),
         ),
       ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
       dataTableTheme: DataTableThemeData(
         headingRowColor: WidgetStateProperty.all(surfaceHigh),
         dataRowColor: WidgetStateProperty.all(scaffold),
@@ -131,11 +155,11 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
 
   final List<Widget> _pages = [
     Padding(
-      padding: const EdgeInsets.all(32.0),
+      // Keep dashboard clear of the floating top-right controls.
+      padding: const EdgeInsets.fromLTRB(32.0, 44.0, 32.0, 32.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
           Text(
             "Dashboard",
             style: TextStyle(
@@ -153,7 +177,10 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
     TeachersPage(),
     AdminsPage(),
     UserHandlingPage(),
-   
+    const AdminProfilePage(
+      roleFilter: 'Super admin',
+      roleLabel: 'Super Admin',
+    ),
   ];
 
   // --- This method now shows the confirmation popup before logging out ---
@@ -178,9 +205,12 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
         ThemeController.themeMode.value ==
         ThemeMode.dark; // use global theme controller
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final sidebarColor = isDark
-        ? const Color(0xFF0E1A60)
-        : const Color(0xFF3B4B9B);
+    final displayName =
+        (Session.name != null && Session.name!.trim().isNotEmpty)
+        ? Session.name!.trim()
+        : (Session.username != null && Session.username!.trim().isNotEmpty)
+        ? Session.username!.trim()
+        : 'Admin';
 
     Widget themeToggle({Color? color}) {
       final iconColor = color ?? (isDark ? Colors.white : Colors.black87);
@@ -212,20 +242,71 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
       );
     }
 
+    Widget profileName() {
+      final textColor = isDark
+          ? const Color(0xFF3BAA7A)
+          : const Color(0xFF7A4CE0);
+      final avatarBg = isDark
+          ? const Color(0xFF4234A4)
+          : const Color(0xFF8372FE);
+      final initial = displayName.isNotEmpty
+          ? displayName[0].toUpperCase()
+          : 'A';
+      return InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => setState(() => _selectedIndex = 5),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: avatarBg,
+                child: Text(
+                  initial,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.playfairDisplay(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final scaffold = Scaffold(
       appBar: isMobile
           ? AppBar(
-              title: const Text('Admin Panel'),
               backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+              titleSpacing: 0,
               leading: Builder(
                 builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu),
+                  icon: const Icon(Icons.chevron_right),
                   onPressed: () => Scaffold.of(context).openDrawer(),
                 ),
               ),
               actions: [
                 // Let icon color be determined by local dark flag or theme after wrapping
                 themeToggle(),
+                const SizedBox(width: 8),
+                profileName(),
                 IconButton(
                   icon: const Icon(Icons.logout),
                   tooltip: 'Logout',
@@ -244,7 +325,8 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
                   });
                   Navigator.pop(context);
                 },
-                collapsed: false,
+                enableHoverExpand: false,
+                forceExpanded: true,
               ),
             )
           : null,
@@ -253,64 +335,22 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
           Row(
             children: [
               if (!isMobile)
-                Container(
-                  color: sidebarColor,
-                  child: Column(
-                    children: [
-                      if (_collapsed)
-                        Container(
-                          color: sidebarColor,
-                          width: 60,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 16),
-                            child: Align(
-                              alignment: Alignment.center,
-                              child: IconButton(
-                                icon: const Icon(
-                                  Icons.menu,
-                                  color: Colors.white,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _collapsed = false;
-                                  });
-                                },
-                                tooltip: 'Expand menu',
-                                padding: EdgeInsets.zero,
-                              ),
-                            ),
-                          ),
-                        ),
-                      if (!_collapsed || _collapsed)
-                        Expanded(
-                          child: AdminSidebar(
-                            selectedIndex: _selectedIndex,
-                            onItemSelected: (index) {
-                              setState(() {
-                                _selectedIndex = index;
-                                _collapsed = true;
-                              });
-                            },
-                            collapsed: _collapsed,
-                          ),
-                        ),
-                    ],
-                  ),
+                Column(
+                  children: [
+                    Expanded(
+                      child: AdminSidebar(
+                        selectedIndex: _selectedIndex,
+                        onItemSelected: (index) {
+                          setState(() {
+                            _selectedIndex = index;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               if (!isMobile) const VerticalDivider(thickness: 1, width: 1),
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () {
-                    if (!_collapsed) {
-                      setState(() {
-                        _collapsed = true;
-                      });
-                    }
-                  },
-                  child: _pages[_selectedIndex],
-                ),
-              ),
+              Expanded(child: _pages[_selectedIndex]),
             ],
           ),
           // --- Logout Button in Top Right for desktop/tablet ---
@@ -322,6 +362,12 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   themeToggle(),
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 160),
+                    child: profileName(),
+                  ),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.logout),
                     tooltip: 'Logout',

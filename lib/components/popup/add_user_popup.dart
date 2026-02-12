@@ -35,16 +35,38 @@ class _AddUserPopupState extends State<AddUserPopup> {
     final accent =
         palette?.accent ??
         (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final saveButtonBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
+
+    final fieldRadius = BorderRadius.circular(10);
+    const double fieldFontSize = 16;
 
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
-      border: OutlineInputBorder(borderSide: BorderSide(color: border)),
-      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: border)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      hintStyle: TextStyle(
+        color: textPrimary.withOpacity(0.65),
+        fontSize: fieldFontSize,
+      ),
+      labelStyle: TextStyle(
+        color: textPrimary.withOpacity(0.85),
+        fontSize: fieldFontSize,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: fieldRadius,
+        borderSide: BorderSide(color: border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
+        borderSide: BorderSide(color: border),
+      ),
       focusedBorder: OutlineInputBorder(
+        borderRadius: fieldRadius,
         borderSide: BorderSide(color: accent, width: 1.4),
       ),
     );
@@ -99,11 +121,24 @@ class _AddUserPopupState extends State<AddUserPopup> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  decoration: input("Role"),
+                  decoration: input('').copyWith(labelText: 'Role'),
+                  dropdownColor: surface,
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: fieldFontSize,
+                  ),
                   items: ['teacher', 'admin', 'student', 'super_admin']
                       .map(
-                        (role) =>
-                            DropdownMenuItem(value: role, child: Text(role)),
+                        (role) => DropdownMenuItem(
+                          value: role,
+                          child: Text(
+                            role,
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: fieldFontSize,
+                            ),
+                          ),
+                        ),
                       )
                       .toList(),
                   onChanged: (val) => setState(() => _role = val),
@@ -112,12 +147,23 @@ class _AddUserPopupState extends State<AddUserPopup> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  decoration: input("Status"),
+                  decoration: input('').copyWith(labelText: 'Status'),
+                  dropdownColor: surface,
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: fieldFontSize,
+                  ),
                   items: ['active', 'inactive', 'disabled']
                       .map(
                         (status) => DropdownMenuItem(
                           value: status,
-                          child: Text(status),
+                          child: Text(
+                            status,
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: fieldFontSize,
+                            ),
+                          ),
                         ),
                       )
                       .toList(),
@@ -141,7 +187,7 @@ class _AddUserPopupState extends State<AddUserPopup> {
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: border),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
@@ -176,9 +222,9 @@ class _AddUserPopupState extends State<AddUserPopup> {
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: accent,
+                          backgroundColor: saveButtonBg,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),

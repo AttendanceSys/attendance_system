@@ -36,6 +36,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   lucide_icons: ^0.257.0
+  google_fonts: ^6.2.1
   qr_flutter: ^4.1.0
   mobile_scanner: ^3.5.1
   intl: ^0.20.2
@@ -54,6 +55,7 @@ dependencies:
   path_provider: ^2.1.5
   csv: ^5.0.0
   geolocator: ^9.0.2
+  shimmer: ^3.0.0
   # shared_preferences: ^2.5.4
 
 
@@ -83,6 +85,14 @@ flutter:
   # Uncomment and correct the path or add the file at assets/ummadda.jpeg to use it:
   assets:
     - assets/ummadda.jpeg
+    - assets/scanMan.png
+    - assets/scanHand.png
+    - assets/darkLogo.png
+    - assets/lightLogo.png
+    - assets/first.png
+    - assets/jus1.jpeg
+    - assets/man.png
+    - assets/onboarding3.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

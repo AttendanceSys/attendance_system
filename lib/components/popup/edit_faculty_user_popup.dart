@@ -26,6 +26,10 @@ class _EditUserPopupState extends State<EditUserPopup> {
     final double dialogWidth = MediaQuery.of(context).size.width > 600
         ? 400
         : double.infinity;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final saveButtonBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
 
     return Dialog(
       elevation: 8,
@@ -99,7 +103,7 @@ class _EditUserPopupState extends State<EditUserPopup> {
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: Colors.black54),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
@@ -129,9 +133,9 @@ class _EditUserPopupState extends State<EditUserPopup> {
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[900],
+                          backgroundColor: saveButtonBg,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),

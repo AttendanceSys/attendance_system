@@ -28,7 +28,7 @@ class AnomalyService {
   ) async {
     try {
       final firestore = FirebaseFirestore.instance;
-      final sessionId = sessionData['id'] ?? sessionData['session_id'] ?? null;
+      final sessionId = sessionData['id'] ?? sessionData['session_id'];
 
       // 1) double scan: attendance_records where username & session_id
       if (sessionId != null) {

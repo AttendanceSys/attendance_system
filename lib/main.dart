@@ -1,10 +1,13 @@
 //main.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 // import 'package:flutter/services.dart';
 import 'screens/login_screen.dart'; // Correct import for LoginScreen
+import 'screens/onboarding_screen_1.dart';
 import 'services/theme_controller.dart';
 
 // Add a method to initialize Firebase
@@ -30,24 +33,92 @@ Future<void> initializeFirebase() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  static const double _kButtonRadius = 10;
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeController.themeMode,
       builder: (context, mode, _) {
         return MaterialApp(
-          title: 'Attendance System',
+          title: 'QScan Smart',
           debugShowCheckedModeBanner: false,
+          scrollBehavior: const _SaasScrollBehavior(),
           themeMode: mode,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
             useMaterial3: true,
+            scrollbarTheme: ScrollbarThemeData(
+              thumbVisibility: const WidgetStatePropertyAll(false),
+              trackVisibility: const WidgetStatePropertyAll(false),
+              radius: const Radius.circular(999),
+              thickness: const WidgetStatePropertyAll(8),
+              thumbColor: WidgetStateProperty.resolveWith(
+                (states) => Colors.black.withValues(
+                  alpha: states.contains(WidgetState.dragged) ? 0.45 : 0.30,
+                ),
+              ),
+            ),
+            dialogTheme: const DialogThemeData(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+              ),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(_kButtonRadius),
+                  ),
+                ),
+              ),
+            ),
+            outlinedButtonTheme: OutlinedButtonThemeData(
+              style: OutlinedButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(_kButtonRadius),
+                  ),
+                ),
+              ),
+            ),
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(_kButtonRadius),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
+            filledButtonTheme: FilledButtonThemeData(
+              style: FilledButton.styleFrom(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(_kButtonRadius),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
           ),
           darkTheme: _darkTheme(),
-          home: const LoginScreen(),
+          home: kIsWeb ? const LoginScreen() : const _StartGate(),
         );
       },
     );
+  }
+
+  static Future<bool> _hasSeenOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('has_seen_onboarding') ?? false;
   }
 
   ThemeData _darkTheme() {
@@ -94,7 +165,22 @@ class MyApp extends StatelessWidget {
       dialogTheme: const DialogThemeData(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: textPrimary,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(_kButtonRadius)),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(_kButtonRadius)),
+          ),
         ),
       ),
       inputDecorationTheme: const InputDecorationTheme(
@@ -130,6 +216,14 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(_kButtonRadius)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      ),
       dataTableTheme: DataTableThemeData(
         headingRowColor: WidgetStateProperty.all(surfaceHigh),
         dataRowColor: WidgetStateProperty.all(scaffold),
@@ -141,6 +235,17 @@ class MyApp extends StatelessWidget {
         dividerThickness: 0.8,
         headingRowHeight: 48,
       ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbVisibility: const WidgetStatePropertyAll(false),
+        trackVisibility: const WidgetStatePropertyAll(false),
+        radius: const Radius.circular(999),
+        thickness: const WidgetStatePropertyAll(8),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => textSecondary.withValues(
+            alpha: states.contains(WidgetState.dragged) ? 0.9 : 0.65,
+          ),
+        ),
+      ),
       snackBarTheme: const SnackBarThemeData(
         backgroundColor: surfaceHigh,
         contentTextStyle: TextStyle(color: textPrimary),
@@ -150,8 +255,40 @@ class MyApp extends StatelessWidget {
   }
 }
 
+class _SaasScrollBehavior extends MaterialScrollBehavior {
+  const _SaasScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.trackpad,
+  };
+}
+
+class _StartGate extends StatelessWidget {
+  const _StartGate();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: MyApp._hasSeenOnboarding(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final seen = snapshot.data ?? false;
+        return seen ? const LoginScreen() : const OnboardingScreen1();
+      },
+    );
+  }
+}
+
 // Update the main entry point to initialize Firebase
 void main() async {
   await initializeFirebase(); // Ensure Firebase is initialized
   runApp(const MyApp());
-} 
+}

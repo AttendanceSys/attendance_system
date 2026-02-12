@@ -2,8 +2,66 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../services/session.dart';
-import '../services/attendance_service.dart';
 import 'dart:math' as math;
+
+String? _extractRefId(dynamic raw, {String? expectedCollection}) {
+  if (raw == null) return null;
+  if (raw is DocumentReference) return raw.id;
+  if (raw is! String) return null;
+
+  var s = raw.trim();
+  if (s.isEmpty) return null;
+  if (s.startsWith('/')) s = s.substring(1);
+  final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return null;
+
+  if (expectedCollection != null) {
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (parts[i] == expectedCollection) return parts[i + 1];
+    }
+  }
+
+  return parts.length > 1 ? parts.last : s;
+}
+
+bool _belongsToSessionFaculty(Map<String, dynamic>? data) {
+  final facultyRef = Session.facultyRef;
+  if (facultyRef == null) return true;
+  if (data == null) return false;
+
+  final sessionId = facultyRef.id;
+  final sessionPath = facultyRef.path;
+  final sessionSlashPath = '/$sessionPath';
+
+  final candidates = [
+    data['faculty_ref'],
+    data['facultyRef'],
+    data['faculty_id'],
+    data['facultyId'],
+    data['faculty'],
+  ];
+
+  for (final raw in candidates) {
+    if (raw == null) continue;
+    if (raw is DocumentReference) {
+      if (raw.id == sessionId || raw.path == sessionPath) return true;
+      continue;
+    }
+
+    if (raw is String) {
+      final text = raw.trim();
+      if (text.isEmpty) continue;
+      if (text == sessionId || text == sessionPath || text == sessionSlashPath) {
+        return true;
+      }
+    }
+
+    final extracted = _extractRefId(raw, expectedCollection: 'faculties');
+    if (extracted == sessionId) return true;
+  }
+
+  return false;
+}
 
 /// Dashboard grid with four focused charts:
 /// - Attendance (this week)
@@ -15,12 +73,19 @@ class DashboardStatsGrid extends StatelessWidget {
 
   Future<int> _fetchCount(String collectionName) async {
     try {
-      Query q = FirebaseFirestore.instance.collection(collectionName);
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
+      final snap = await FirebaseFirestore.instance
+          .collection(collectionName)
+          .get();
+      if (Session.facultyRef == null) {
+        return snap.size;
       }
-      final snapshot = await q.get();
-      return snapshot.size;
+
+      var count = 0;
+      for (final doc in snap.docs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (_belongsToSessionFaculty(data)) count++;
+      }
+      return count;
     } catch (e) {
       debugPrint('Error fetching $collectionName count: $e');
       return 0;
@@ -76,11 +141,13 @@ class DashboardStatsGrid extends StatelessWidget {
                       "Classes",
                       "Students",
                     ];
+                    // Keep dashboard icons aligned with the Faculty Admin sidebar.
+                    // Sidebar uses: Departments=account_tree_rounded, Classes=class_rounded, Students=groups_rounded, Courses=menu_book_rounded.
                     final icons = [
-                      Icons.account_tree_outlined,
-                      Icons.menu_book_outlined,
-                      Icons.groups_2_outlined,
-                      Icons.people_alt_outlined,
+                      Icons.account_tree_rounded,
+                      Icons.menu_book_rounded,
+                      Icons.class_rounded,
+                      Icons.groups_rounded,
                     ];
                     final colors = [
                       Colors.blue,
@@ -118,7 +185,7 @@ class DashboardStatsGrid extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             _ChartCard(
-                              title: 'Top Attended Classes',
+                              title: 'Top Attended Classes (this week)',
                               height: 200,
                               child: TopAttendedClassesChart(days: 7, topN: 6),
                             ),
@@ -156,7 +223,7 @@ class DashboardStatsGrid extends StatelessWidget {
                                 Expanded(
                                   flex: 2,
                                   child: _ChartCard(
-                                    title: 'Top Attended Classes',
+                                    title: 'Top Attended Classes (this week)',
                                     height: 260,
                                     child: TopAttendedClassesChart(
                                       days: 7,
@@ -224,13 +291,13 @@ class _ChartCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(isDark ? 0.30 : 0.12),
+            color: theme.shadowColor.withValues(alpha: isDark ? 0.30 : 0.12),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
         border: Border.all(
-          color: theme.dividerColor.withOpacity(isDark ? 0.30 : 0.15),
+          color: theme.dividerColor.withValues(alpha: isDark ? 0.30 : 0.15),
         ),
       ),
       child: Column(
@@ -297,14 +364,14 @@ class _StatsCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(20 * scale),
               boxShadow: [
                 BoxShadow(
-                  color: theme.shadowColor.withOpacity(isDark ? 0.30 : 0.08),
+                  color: theme.shadowColor.withValues(alpha: isDark ? 0.30 : 0.08),
                   blurRadius: 14,
                   offset: const Offset(0, 4),
                 ),
               ],
               border: Border.all(
-                color: theme.colorScheme.outline.withOpacity(
-                  isDark ? 0.28 : 0.16,
+                color: theme.colorScheme.outline.withValues(
+                  alpha: isDark ? 0.28 : 0.16,
                 ),
               ),
             ),
@@ -360,17 +427,19 @@ class _StatsCard extends StatelessWidget {
                     padding: EdgeInsets.symmetric(horizontal: 6 * scale),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: color.withOpacity(isDark ? 0.25 : 0.12),
+                        color: color.withValues(alpha: isDark ? 0.25 : 0.12),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: color.withOpacity(isDark ? 0.35 : 0.18),
+                          color: color.withValues(alpha: isDark ? 0.35 : 0.18),
                         ),
                       ),
                       padding: EdgeInsets.all(8 * scale),
                       child: Icon(
                         icon,
                         size: 22 * scale,
-                        color: isDark ? color.withOpacity(0.95) : color,
+                        color: isDark
+                            ? theme.colorScheme.onSurface.withValues(alpha: 0.95)
+                            : color,
                       ),
                     ),
                   ),
@@ -429,9 +498,6 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
       final col = FirebaseFirestore.instance.collection(colName);
 
       Query q = col.where('scannedAt', isGreaterThanOrEqualTo: startTs);
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
-      }
 
       QuerySnapshot? snap;
       try {
@@ -454,9 +520,10 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
       final counts = List<int>.filled(7, 0);
       final seen = <String>{};
 
-      for (final doc in snap!.docs) {
+      for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
+        if (!_belongsToSessionFaculty(data)) continue;
 
         DateTime? dt;
         final scanned = data['scannedAt'];
@@ -524,6 +591,10 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
                   onPressed: (i) => setState(
                     () => _type = i == 0 ? _ChartType.line : _ChartType.bar,
                   ),
+                  color: theme.textTheme.bodySmall?.color,
+                  selectedColor: theme.brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black,
                   borderRadius: BorderRadius.circular(8),
                   children: const [
                     Padding(
@@ -551,6 +622,9 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
   }
 
   Widget _buildLine(ThemeData theme, List<int> counts) {
+    final isLight = theme.brightness == Brightness.light;
+    final tooltipBg = isLight ? theme.colorScheme.primary : Colors.white;
+    final tooltipText = isLight ? Colors.white : Colors.black;
     final spots = counts
         .asMap()
         .entries
@@ -562,6 +636,25 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
       LineChartData(
         minY: 0,
         maxY: maxY <= 0 ? 10 : maxY,
+        lineTouchData: LineTouchData(
+          enabled: true,
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (touchedSpot) => tooltipBg,
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots
+                  .map(
+                    (spot) => LineTooltipItem(
+                      spot.y.toInt().toString(),
+                      TextStyle(
+                        color: tooltipText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                  .toList();
+            },
+          ),
+        ),
         gridData: FlGridData(show: true),
         titlesData: FlTitlesData(
           bottomTitles: AxisTitles(
@@ -579,8 +672,9 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
                   return weekDays[d.weekday % 7];
                 });
                 final idx = value.toInt();
-                if (idx < 0 || idx >= labels.length)
+                if (idx < 0 || idx >= labels.length) {
                   return const SizedBox.shrink();
+                }
                 return Text(labels[idx], style: theme.textTheme.bodySmall);
               },
             ),
@@ -597,7 +691,7 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
             dotData: FlDotData(show: true),
             belowBarData: BarAreaData(
               show: true,
-              color: theme.colorScheme.primary.withOpacity(0.12),
+              color: theme.colorScheme.primary.withValues(alpha: 0.12),
             ),
           ),
         ],
@@ -643,8 +737,9 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
                   return weekDays[d.weekday % 7];
                 });
                 final idx = value.toInt();
-                if (idx < 0 || idx >= labels.length)
+                if (idx < 0 || idx >= labels.length) {
                   return const SizedBox.shrink();
+                }
                 return Text(labels[idx], style: theme.textTheme.bodySmall);
               },
             ),
@@ -682,9 +777,6 @@ class _DepartmentsByStudentsChartState
     try {
       final studentsRef = FirebaseFirestore.instance.collection('students');
       Query q = studentsRef;
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
-      }
       final snap = await q.get();
 
       // Build raw counts from students
@@ -692,6 +784,7 @@ class _DepartmentsByStudentsChartState
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
+        if (!_belongsToSessionFaculty(data)) continue;
         final raw =
             data['department_ref'] ??
             data['departmentRef'] ??
@@ -716,10 +809,9 @@ class _DepartmentsByStudentsChartState
       final deptRef = FirebaseFirestore.instance.collection('departments');
       final deptSnap = await deptRef.get();
       final Map<String, String> names = {};
-      final List<Map<String, dynamic>> deptDocs = [];
       for (final d in deptSnap.docs) {
         final m = d.data() as Map<String, dynamic>?;
-        deptDocs.add({'id': d.id, 'data': m ?? {}});
+        if (!_belongsToSessionFaculty(m)) continue;
         final disp =
             (m?['department_name'] ??
                     m?['departmentName'] ??
@@ -790,6 +882,9 @@ class _DepartmentsByStudentsChartState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final tooltipBg = isLight ? theme.colorScheme.primary : Colors.white;
+    final tooltipText = isLight ? Colors.white : Colors.black;
     return FutureBuilder<Map<String, int>>(
       future: _futureCounts,
       builder: (c, s) {
@@ -832,6 +927,7 @@ class _DepartmentsByStudentsChartState
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
+                      getTooltipColor: (group) => tooltipBg,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         final idx = group.x.toInt();
                         final label = (idx >= 0 && idx < labels.length)
@@ -841,7 +937,7 @@ class _DepartmentsByStudentsChartState
                         return BarTooltipItem(
                           '$label\n$value',
                           TextStyle(
-                            color: theme.colorScheme.onSurface,
+                            color: tooltipText,
                             fontWeight: FontWeight.w600,
                           ),
                         );
@@ -854,18 +950,19 @@ class _DepartmentsByStudentsChartState
                         showTitles: true,
                         getTitlesWidget: (value, meta) {
                           final idx = value.toInt();
-                          if (idx < 0 || idx >= values.length)
+                          if (idx < 0 || idx >= values.length) {
                             return const SizedBox.shrink();
+                          }
                           final txt = values[idx].toString();
                           return SideTitleWidget(
                             axisSide: meta.axisSide,
+                            space: 6,
                             child: Text(
                               txt,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            space: 6,
                           );
                         },
                       ),
@@ -875,8 +972,9 @@ class _DepartmentsByStudentsChartState
                         showTitles: true,
                         getTitlesWidget: (value, meta) {
                           final idx = value.toInt();
-                          if (idx < 0 || idx >= labels.length)
+                          if (idx < 0 || idx >= labels.length) {
                             return const SizedBox.shrink();
+                          }
                           final txt = labels[idx];
                           return SideTitleWidget(
                             axisSide: meta.axisSide,
@@ -970,14 +1068,12 @@ class _StudentsByGenderChartState extends State<StudentsByGenderChart> {
   Future<Map<String, int>> _fetchGenderCounts() async {
     try {
       Query q = FirebaseFirestore.instance.collection('students');
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
-      }
       final snap = await q.get();
       final Map<String, int> map = {};
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
+        if (!_belongsToSessionFaculty(data)) continue;
         final raw = (data['gender'] ?? '').toString().trim();
         final key = raw.isEmpty ? 'Unknown' : raw;
         map[key] = (map[key] ?? 0) + 1;
@@ -1117,9 +1213,6 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
       final col = FirebaseFirestore.instance.collection(colName);
 
       Query q = col.where('scannedAt', isGreaterThanOrEqualTo: startTs);
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
-      }
 
       QuerySnapshot snap;
       try {
@@ -1141,6 +1234,7 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
+        if (!_belongsToSessionFaculty(data)) continue;
 
         DateTime? dt;
         final scanned = data['scannedAt'];
@@ -1150,8 +1244,9 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
           final tsString =
               (data['scannedAt'] ?? data['timestamp'] ?? data['created_at'])
                   ?.toString();
-          if (tsString != null && tsString.isNotEmpty)
+          if (tsString != null && tsString.isNotEmpty) {
             dt = DateTime.tryParse(tsString);
+          }
         }
         if (dt == null) continue;
         final dateOnly = DateTime(dt.year, dt.month, dt.day);
@@ -1192,8 +1287,9 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
         if (s.hasError) return Center(child: Text('Error loading data'));
         if (!s.hasData) return const _ChartLoading();
         final data = s.data!;
-        if (data.isEmpty)
+        if (data.isEmpty) {
           return const Center(child: Text('No attendance data'));
+        }
         final maxCount = data
             .map((e) => e.count)
             .fold<int>(0, (a, b) => math.max(a, b));
@@ -1225,7 +1321,7 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
                             Container(
                               height: 18,
                               decoration: BoxDecoration(
-                                color: theme.dividerColor.withOpacity(0.08),
+                                color: theme.dividerColor.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                             ),
@@ -1256,14 +1352,14 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
                     ],
                   ),
                 );
-              }).toList(),
+              }),
               const SizedBox(height: 6),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'Top ${data.length} classes — last ${widget.days} days',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                    color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
                   ),
                 ),
               ),

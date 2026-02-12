@@ -8,6 +8,7 @@ import '../layouts/faculty_admin_layout.dart';
 import '../components/faculty_dashboard_stats_grid.dart';
 import '../components/pages/faculty_user_handling_page.dart';
 import '../components/pages/attendance_page.dart';
+import '../components/pages/admin_profile_page.dart';
 import 'package:attendance_system/components/pages/timetable_page.dart';
 
 class FacultyAdminPage extends StatelessWidget {
@@ -19,8 +20,8 @@ class FacultyAdminPage extends StatelessWidget {
       customPages: [
         // 0: Dashboard (custom)
         Padding(
-          // remove top padding so content starts near top; keep horizontal + bottom spacing
-          padding: const EdgeInsets.fromLTRB(32.0, 0.0, 32.0, 32.0),
+          // Dashboard needs extra top space to align with floating header controls.
+          padding: const EdgeInsets.fromLTRB(32.0, 44.0, 32.0, 32.0),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,6 +60,11 @@ class FacultyAdminPage extends StatelessWidget {
         FacultyUserHandlingPage(),
         // 8: Anomalies
         const AdminAnomaliesPage(),
+        // 9: Profile
+        const AdminProfilePage(
+          roleFilter: 'admin',
+          roleLabel: 'Faculty Admin',
+        ),
       ],
     );
   }

@@ -41,7 +41,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
     // If editing, split class name into base and section if possible
     if (widget.schoolClass != null) {
       // Prefer explicit section field if present
-      final existingSection = widget.schoolClass!.section?.trim() ?? '';
+      final existingSection = widget.schoolClass!.section.trim();
       if (existingSection.isNotEmpty) {
         if (_sections.contains(existingSection)) {
           _section = existingSection;
@@ -156,19 +156,42 @@ class _AddClassPopupState extends State<AddClassPopup> {
     final accent =
         palette?.accent ??
         (isDark ? const Color(0xFF0A1E90) : Colors.blue[900]!);
+    final saveButtonBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
     final inputFill =
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
+
+    final fieldRadius = BorderRadius.circular(10);
+    const double fieldFontSize = 16;
 
     InputDecoration input(String hint) {
       return InputDecoration(
         hintText: hint,
         filled: true,
         fillColor: inputFill,
-        border: OutlineInputBorder(borderSide: BorderSide(color: border)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
+        hintStyle: TextStyle(
+          color: textPrimary.withOpacity(0.65),
+          fontSize: fieldFontSize,
+        ),
+        labelStyle: TextStyle(
+          color: textPrimary.withOpacity(0.85),
+          fontSize: fieldFontSize,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: fieldRadius,
+          borderSide: BorderSide(color: border),
+        ),
         enabledBorder: OutlineInputBorder(
+          borderRadius: fieldRadius,
           borderSide: BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
+          borderRadius: fieldRadius,
           borderSide: BorderSide(color: accent, width: 1.4),
         ),
       );
@@ -212,14 +235,14 @@ class _AddClassPopupState extends State<AddClassPopup> {
                   initialValue: _baseName,
                   decoration: input(
                     '',
-                  ).copyWith(labelText: 'Base Class Name (e.g. B3SC)'),
+                  ).copyWith(labelText: 'Class Name (e.g. B3SC)'),
                   onChanged: (val) {
                     final upper = val.toUpperCase();
                     setState(() => _baseName = upper);
                   },
                   validator: (val) {
                     final value = (val ?? '').trim();
-                    if (value.isEmpty) return "Enter base class name";
+                    if (value.isEmpty) return "Enter class name";
                     String sectionSuffix = '';
                     if (_section != null &&
                         _section!.isNotEmpty &&
@@ -249,11 +272,22 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _department,
-                  decoration: input("Department"),
+                  decoration: input('').copyWith(labelText: 'Department'),
+                  dropdownColor: surface,
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: fieldFontSize,
+                  ),
                   items: _departments.map((d) {
                     return DropdownMenuItem(
                       value: d['id'],
-                      child: Text(d['name'] ?? ''),
+                      child: Text(
+                        d['name'] ?? '',
+                        style: TextStyle(
+                          color: textPrimary,
+                          fontSize: fieldFontSize,
+                        ),
+                      ),
                     );
                   }).toList(),
                   onChanged: (val) => setState(() => _department = val),
@@ -263,12 +297,23 @@ class _AddClassPopupState extends State<AddClassPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _section,
-                  decoration: input("Section"),
+                  decoration: input('').copyWith(labelText: 'Section'),
+                  dropdownColor: surface,
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: fieldFontSize,
+                  ),
                   items: _sections
                       .map(
                         (sec) => DropdownMenuItem(
                           value: sec,
-                          child: Text(sec == 'NONE' ? '(none)' : sec),
+                          child: Text(
+                            sec == 'NONE' ? '(none)' : sec,
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: fieldFontSize,
+                            ),
+                          ),
                         ),
                       )
                       .toList(),
@@ -284,14 +329,15 @@ class _AddClassPopupState extends State<AddClassPopup> {
                         initialValue: _customSection,
                         decoration: input('Custom section (e.g. X)'),
                         onChanged: (v) =>
-                            setState(() => _customSection = v?.toUpperCase()),
+                            setState(() => _customSection = v.toUpperCase()),
                         validator: (v) {
                           if (_section != 'Custom') return null;
                           final s = (v ?? '').trim();
                           if (s.isEmpty) return 'Enter custom section';
                           final creg = RegExp(r'^[A-Z0-9]{1,5}$');
-                          if (!creg.hasMatch(s.toUpperCase()))
+                          if (!creg.hasMatch(s.toUpperCase())) {
                             return 'Invalid section format';
+                          }
                           return null;
                         },
                       ),
@@ -319,7 +365,7 @@ class _AddClassPopupState extends State<AddClassPopup> {
                         style: OutlinedButton.styleFrom(
                           side: BorderSide(color: border),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),
@@ -339,9 +385,9 @@ class _AddClassPopupState extends State<AddClassPopup> {
                       child: ElevatedButton(
                         onPressed: _save,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: accent,
+                          backgroundColor: saveButtonBg,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           minimumSize: const Size(90, 40),
                         ),

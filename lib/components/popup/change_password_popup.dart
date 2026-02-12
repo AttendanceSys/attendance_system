@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../student_theme_controller.dart';
 
 /// Result returned from the dialog when the user successfully submits.
 class ChangePasswordResult {
@@ -52,24 +53,33 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
     super.dispose();
   }
 
-  InputDecoration _inputDecoration(String hint, ThemeData theme) {
-    final borderColor = theme.dividerColor;
-    final fillColor = theme.inputDecorationTheme.fillColor ?? theme.cardColor;
-    final primary = theme.colorScheme.primary;
+  InputDecoration _inputDecoration(
+    String hint,
+    ThemeData theme,
+    StudentThemeProxy studentTheme,
+  ) {
+    final borderColor = studentTheme.border;
+    final fillColor = studentTheme.inputBackground;
+    final primary = studentTheme.button;
     return InputDecoration(
+      labelText: hint,
       hintText: hint,
       filled: true,
       fillColor: fillColor,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      labelStyle: theme.textTheme.bodyMedium?.copyWith(
+        color: studentTheme.hint,
+      ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: borderColor),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: borderColor),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: primary, width: 1.4),
       ),
     );
@@ -121,26 +131,36 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final studentTheme = StudentThemeController.instance.theme;
+    final isDark = StudentThemeController.instance.isDarkMode;
     final dialogWidth = MediaQuery.of(context).size.width > 600
         ? 480.0
         : double.infinity;
 
+    final scheme = theme.colorScheme;
+    final saveButtonBg = studentTheme.button;
+    final surface = studentTheme.card;
+    final borderColor = studentTheme.border;
+    final textPrimary = studentTheme.foreground;
+    final textSecondary = studentTheme.hint;
+    final shadowOpacity = isDark ? 0.35 : 0.14;
+
     return Dialog(
-      elevation: 8,
+      elevation: 10,
       backgroundColor: Colors.transparent,
       child: Center(
         child: Container(
           width: dialogWidth,
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
           decoration: BoxDecoration(
-            color: theme.dialogBackgroundColor,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: theme.dividerColor),
+            color: surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderColor.withOpacity(0.7)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: Colors.black.withOpacity(shadowOpacity),
+                blurRadius: 30,
+                offset: const Offset(0, 16),
               ),
             ],
           ),
@@ -150,20 +170,68 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Change Password',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
+                Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: saveButtonBg,
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: saveButtonBg.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.lock_reset,
+                        color: saveButtonBg,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Change Password',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Use at least 6 characters for your new password.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
                 TextFormField(
                   controller: _oldController,
-                  decoration: _inputDecoration('Current password', theme)
+                  style: TextStyle(color: textPrimary),
+                  cursorColor: saveButtonBg,
+                  decoration: _inputDecoration(
+                    'Current password',
+                    theme,
+                    studentTheme,
+                  )
                       .copyWith(
                         suffixIcon: IconButton(
                           icon: Icon(
                             _showOld ? Icons.visibility : Icons.visibility_off,
+                            color: textSecondary,
                           ),
                           onPressed: () => setState(() => _showOld = !_showOld),
                         ),
@@ -171,8 +239,9 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
                   obscureText: !_showOld,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Enter current password';
-                    if (v.length < 6)
+                    if (v.length < 6) {
                       return 'Password must be at least 6 characters';
+                    }
                     return null;
                   },
                 ),
@@ -188,10 +257,17 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _newController,
-                  decoration: _inputDecoration('New password', theme).copyWith(
+                  style: TextStyle(color: textPrimary),
+                  cursorColor: saveButtonBg,
+                  decoration: _inputDecoration(
+                    'New password',
+                    theme,
+                    studentTheme,
+                  ).copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(
                         _showNew ? Icons.visibility : Icons.visibility_off,
+                        color: textSecondary,
                       ),
                       onPressed: () => setState(() => _showNew = !_showNew),
                     ),
@@ -199,23 +275,31 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
                   obscureText: !_showNew,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Enter new password';
-                    if (v.length < 6)
+                    if (v.length < 6) {
                       return 'New password must be at least 6 characters';
-                    if (v == _oldController.text)
+                    }
+                    if (v == _oldController.text) {
                       return 'New password must be different';
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _confirmController,
-                  decoration: _inputDecoration('Confirm new password', theme)
-                      .copyWith(
+                  style: TextStyle(color: textPrimary),
+                  cursorColor: saveButtonBg,
+                  decoration: _inputDecoration(
+                    'Confirm new password',
+                    theme,
+                    studentTheme,
+                  ).copyWith(
                         suffixIcon: IconButton(
                           icon: Icon(
                             _showConfirm
                                 ? Icons.visibility
                                 : Icons.visibility_off,
+                            color: textSecondary,
                           ),
                           onPressed: () =>
                               setState(() => _showConfirm = !_showConfirm),
@@ -224,8 +308,9 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
                   obscureText: !_showConfirm,
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Confirm new password';
-                    if (v != _newController.text)
+                    if (v != _newController.text) {
                       return 'Passwords do not match';
+                    }
                     return null;
                   },
                 ),
@@ -235,16 +320,20 @@ class _ChangePasswordPopupState extends State<ChangePasswordPopup> {
                   children: [
                     OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(100, 40),
+                        foregroundColor: textPrimary,
+                        side: BorderSide(color: borderColor),
                       ),
+                      child: const Text('Cancel'),
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton(
                       onPressed: _loading ? null : _onSave,
                       style: ElevatedButton.styleFrom(
                         minimumSize: const Size(100, 40),
+                        backgroundColor: saveButtonBg,
+                        foregroundColor: Colors.white,
                       ),
                       child: _loading
                           ? const SizedBox(
