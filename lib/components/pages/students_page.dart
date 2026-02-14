@@ -9,6 +9,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import '../../utils/download_bytes.dart';
 
 class StudentsPage extends StatefulWidget {
   const StudentsPage({super.key});
@@ -31,7 +33,10 @@ class _StudentsPageState extends State<StudentsPage> {
 
   List<Student> _students = [];
   Map<String, String> _departmentNames = {};
+  Map<String, String> _departmentFacultyIds = {};
   Map<String, String> _classNames = {};
+  Map<String, String> _facultyNames = {};
+  String _sessionFacultyName = '';
   bool _loading = true;
 
   String _searchText = '';
@@ -113,19 +118,83 @@ class _StudentsPageState extends State<StudentsPage> {
     try {
       Query dq = departmentsCollection;
       Query cq = classesCollection;
+      Query fq = facultiesCollection;
       if (Session.facultyRef != null) {
         // prefer server side filtering when possible
         dq = dq.where('faculty_ref', isEqualTo: Session.facultyRef);
         cq = cq.where('faculty_ref', isEqualTo: Session.facultyRef);
+        fq = fq.where(FieldPath.documentId, isEqualTo: Session.facultyRef!.id);
       }
       final deps = await dq.get();
       final classes = await cq.get();
+      final faculties = await fq.get();
+      String sessionFacultyName = '';
+      if (Session.facultyRef != null) {
+        final sid = Session.facultyRef!.id;
+        final byId = faculties.docs.where((d) => d.id == sid).toList();
+        if (byId.isNotEmpty) {
+          final data = byId.first.data() as Map<String, dynamic>;
+          sessionFacultyName =
+              (data['faculty_name'] ??
+                      data['name'] ??
+                      data['facultyName'] ??
+                      data['displayName'] ??
+                      data['title'] ??
+                      '')
+                  .toString()
+                  .trim();
+        }
+        if (sessionFacultyName.isEmpty) {
+          try {
+            final snap = await Session.facultyRef!.get();
+            if (snap.exists && snap.data() != null) {
+              final data = snap.data() as Map<String, dynamic>;
+              sessionFacultyName =
+                  (data['faculty_name'] ??
+                          data['name'] ??
+                          data['facultyName'] ??
+                          data['displayName'] ??
+                          data['title'] ??
+                          '')
+                      .toString()
+                      .trim();
+            }
+          } catch (_) {}
+        }
+        if (sessionFacultyName.isEmpty) {
+          try {
+            final byFacultyName = await facultiesCollection
+                .where('faculty_name', isEqualTo: sid)
+                .limit(1)
+                .get();
+            if (byFacultyName.docs.isNotEmpty) {
+              final data =
+                  byFacultyName.docs.first.data() as Map<String, dynamic>;
+              sessionFacultyName =
+                  (data['faculty_name'] ?? data['name'] ?? sid)
+                      .toString()
+                      .trim();
+            }
+          } catch (_) {}
+        }
+      }
       setState(() {
         _departmentNames = Map.fromEntries(
           deps.docs.map((d) {
             final data = d.data() as Map<String, dynamic>;
             final name = data['department_name'] ?? data['name'] ?? '';
             return MapEntry(d.id, name as String);
+          }),
+        );
+        _departmentFacultyIds = Map.fromEntries(
+          deps.docs.map((d) {
+            final data = d.data() as Map<String, dynamic>;
+            final facultyCand =
+                data['faculty_ref'] ??
+                data['faculty_id'] ??
+                data['facultyId'] ??
+                data['faculty'];
+            return MapEntry(d.id, _extractId(facultyCand));
           }),
         );
         _classNames = Map.fromEntries(
@@ -135,6 +204,20 @@ class _StudentsPageState extends State<StudentsPage> {
             return MapEntry(d.id, name as String);
           }),
         );
+        _facultyNames = Map.fromEntries(
+          faculties.docs.map((d) {
+            final data = d.data() as Map<String, dynamic>;
+            final name =
+                data['faculty_name'] ??
+                data['name'] ??
+                data['facultyName'] ??
+                data['displayName'] ??
+                data['title'] ??
+                '';
+            return MapEntry(d.id, name as String);
+          }),
+        );
+        _sessionFacultyName = sessionFacultyName;
       });
     } catch (e) {
       print('Error fetching lookups: $e');
@@ -424,7 +507,10 @@ class _StudentsPageState extends State<StudentsPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -450,6 +536,66 @@ class _StudentsPageState extends State<StudentsPage> {
   Future<void> _confirmDeleteSelected() async {
     if (_selectedIndex == null) return;
     await _confirmDeleteStudent(_filteredStudents[_selectedIndex!]);
+  }
+
+  String _facultyNameForStudent(Student s) {
+    final direct = _facultyNames[s.facultyRef ?? ''];
+    if (direct != null && direct.isNotEmpty) return direct;
+    final deptFacultyId = _departmentFacultyIds[s.departmentRef ?? ''] ?? '';
+    final byDept = _facultyNames[deptFacultyId] ?? '';
+    if (byDept.isNotEmpty) return byDept;
+    if (_sessionFacultyName.isNotEmpty) return _sessionFacultyName;
+    return Session.facultyRef?.id ?? '';
+  }
+
+  Future<void> _handleExportStudentsCsv() async {
+    try {
+      final rows = <List<dynamic>>[
+        ['No', 'Username', 'Full name', 'Gender', 'Department', 'Class', 'Faculty'],
+      ];
+
+      for (int i = 0; i < _students.length; i++) {
+        final s = _students[i];
+        rows.add([
+          i + 1,
+          s.username,
+          s.fullname,
+          s.gender,
+          _departmentNames[s.departmentRef ?? ''] ?? '',
+          _classNames[s.classRef ?? ''] ?? '',
+          _facultyNameForStudent(s),
+        ]);
+      }
+
+      final csv = const ListToCsvConverter().convert(rows);
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+      final now = DateTime.now();
+      final fileName =
+          'students_${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}.csv';
+
+      final downloaded = await downloadBytes(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'text/csv;charset=utf-8',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            downloaded
+                ? 'CSV exported: $fileName'
+                : 'CSV export is currently supported on web only',
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Error exporting students CSV: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to export CSV')),
+      );
+    }
   }
 
   @override
@@ -512,6 +658,22 @@ class _StudentsPageState extends State<StudentsPage> {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleExportStudentsCsv,
+                        icon: const Icon(Icons.download),
+                        label: const Text('Export CSV'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF1F6FEB),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 )
               else ...[
@@ -537,6 +699,23 @@ class _StudentsPageState extends State<StudentsPage> {
                     style: ElevatedButton.styleFrom(
                       foregroundColor: Colors.white,
                       backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleExportStudentsCsv,
+                    icon: const Icon(Icons.download),
+                    label: const Text('Export CSV'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF1F6FEB),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),

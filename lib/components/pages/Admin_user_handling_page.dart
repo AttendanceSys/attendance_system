@@ -30,9 +30,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
 
   // Track password visibility by user id
   final Map<String, bool> _showPasswordById = {};
-
-  // Scroll controller for the users list only
-  final ScrollController _listScrollController = ScrollController();
+  final ScrollController _tableBodyScrollController = ScrollController();
 
   List<AppUser> get _filteredUsers => _users
       .where(
@@ -52,7 +50,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
 
   @override
   void dispose() {
-    _listScrollController.dispose();
+    _tableBodyScrollController.dispose();
     super.dispose();
   }
 
@@ -96,8 +94,13 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
 
   void _handleRowTap(int index) {
     setState(() {
-      _selectedIndex = index;
+      _selectedIndex = _selectedIndex == index ? null : index;
     });
+  }
+
+  void _clearSelection() {
+    if (_selectedIndex == null) return;
+    setState(() => _selectedIndex = null);
   }
 
   Future<void> _confirmToggleStatus(AppUser user) async {
@@ -245,148 +248,213 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
     }
   }
 
-  Widget _buildScrollableTable({required bool isDesktop}) {
-    final rows = _filteredUsers;
+  Widget _buildDesktopTable() {
+    return _buildSaasTable(
+      columnWidths: const {
+        0: FixedColumnWidth(72),
+        1: FlexColumnWidth(1.15),
+        2: FlexColumnWidth(1.0),
+        3: FlexColumnWidth(1.0),
+        4: FlexColumnWidth(1.35),
+      },
+    );
+  }
 
+  Widget _buildMobileTable() {
+    return _buildSaasTable(
+      columnWidths: const {
+        0: FixedColumnWidth(72),
+        1: FixedColumnWidth(220),
+        2: FixedColumnWidth(150),
+        3: FixedColumnWidth(150),
+        4: FixedColumnWidth(260),
+      },
+    );
+  }
+
+  Widget _buildSaasTable({required Map<int, TableColumnWidth> columnWidths}) {
+    final rows = _filteredUsers;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final palette = Theme.of(context).extension<SuperAdminColors>();
+    final scheme = Theme.of(context).colorScheme;
+    final surface = palette?.surface ?? scheme.surface;
+    final border =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : const Color(0xFFD7DCEA));
+    final headerBg = palette?.surfaceHigh ?? scheme.surfaceContainerHighest;
+    final textPrimary = palette?.textPrimary ?? scheme.onSurface;
+    final selectedBg =
+        palette?.selectedBg ??
+        Color.alphaBlend(
+          (palette?.accent ?? const Color(0xFF6A46FF)).withValues(alpha: 0.12),
+          surface,
+        );
+    final divider = border.withValues(alpha: isDark ? 0.7 : 0.85);
 
-    final headerBg = isDark ? const Color(0xFF323746) : Colors.grey[100];
-    final headerTextColor = isDark ? const Color(0xFFE6EAF1) : Colors.black87;
-
-    return Column(
-      children: [
-        // Header
-        Container(
-          color: headerBg,
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 1,
-                child: Text(
-                  'No',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: headerTextColor,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 3,
-                child: Text(
-                  'Username',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: headerTextColor,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'Role',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: headerTextColor,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(
-                  'Status',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: headerTextColor,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 3,
-                child: Text(
-                  'Password',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: headerTextColor,
-                  ),
-                ),
-              ),
-            ],
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: divider),
+        boxShadow: [
+          BoxShadow(
+            color: (palette?.accent ?? const Color(0xFF6A46FF)).withValues(
+              alpha: isDark ? 0.06 : 0.08,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
-        ),
-
-        // ✅ List takes remaining height, no hidden bottom part
-        Expanded(
-          child: Scrollbar(
-            controller: _listScrollController,
-            thumbVisibility: isDesktop,
-            child: ListView.separated(
-              controller: _listScrollController,
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.only(bottom: 16),
-              itemCount: rows.length,
-              separatorBuilder: (_, __) =>
-                  Divider(height: 1, color: Colors.grey.shade300),
-              itemBuilder: (context, index) {
-                final user = rows[index];
-                final selected = _selectedIndex == index;
-                final visible = _showPasswordById[user.id] ?? false;
-
-                final highlight =
-                    palette?.highlight ??
-                    (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-
-                return InkWell(
-                  onTap: () => _handleRowTap(index),
-                  child: Container(
-                    color: selected ? highlight : Colors.transparent,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 8,
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            Table(
+              columnWidths: columnWidths,
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: headerBg),
+                  children: [
+                    _tableHeaderCell('No', textPrimary),
+                    _tableHeaderCell('Username', textPrimary),
+                    _tableHeaderCell('Role', textPrimary),
+                    _tableHeaderCell('Status', textPrimary),
+                    _tableHeaderCell('Password', textPrimary),
+                  ],
+                ),
+              ],
+            ),
+            Container(height: 1, color: divider),
+            Expanded(
+              child: Scrollbar(
+                controller: _tableBodyScrollController,
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _tableBodyScrollController,
+                  primary: false,
+                  child: Table(
+                    columnWidths: columnWidths,
+                    border: TableBorder(
+                      horizontalInside: BorderSide(color: divider),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(flex: 1, child: Text('${index + 1}')),
-                        Expanded(flex: 3, child: Text(user.username)),
-                        Expanded(flex: 2, child: Text(user.role)),
-                        Expanded(flex: 2, child: Text(user.status)),
-                        Expanded(
-                          flex: 3,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  visible ? user.password : '••••••••',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  visible
-                                      ? Icons.visibility
-                                      : Icons.visibility_off,
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _showPasswordById[user.id] =
-                                        !(_showPasswordById[user.id] ?? false);
-                                  });
-                                },
-                              ),
-                            ],
+                    children: [
+                      for (int i = 0; i < rows.length; i++)
+                        TableRow(
+                          decoration: BoxDecoration(
+                            color: _selectedIndex == i ? selectedBg : surface,
                           ),
+                          children: [
+                            _tableBodyCell(
+                              '${i + 1}',
+                              textPrimary,
+                              onTap: () => _handleRowTap(i),
+                            ),
+                            _tableBodyCell(
+                              rows[i].username,
+                              textPrimary,
+                              onTap: () => _handleRowTap(i),
+                            ),
+                            _tableBodyCell(
+                              rows[i].role,
+                              textPrimary,
+                              onTap: () => _handleRowTap(i),
+                            ),
+                            _tableBodyCell(
+                              rows[i].status,
+                              textPrimary,
+                              onTap: () => _handleRowTap(i),
+                            ),
+                            _passwordCell(
+                              rows[i],
+                              textPrimary,
+                              onTap: () => _handleRowTap(i),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                    ],
                   ),
-                );
-              },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tableHeaderCell(String text, Color textColor) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 24),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: 14,
+        color: textColor,
+        letterSpacing: 0.1,
+      ),
+      overflow: TextOverflow.ellipsis,
+    ),
+  );
+
+  Widget _tableBodyCell(String text, Color textColor, {VoidCallback? onTap}) =>
+      InkWell(
+        onTap: onTap,
+        hoverColor: Colors.transparent,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+          child: Text(
+            text,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 14.5,
+              color: textColor,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
-      ],
+      );
+
+  Widget _passwordCell(AppUser user, Color textColor, {VoidCallback? onTap}) {
+    final visible = _showPasswordById[user.id] ?? false;
+    return InkWell(
+      onTap: onTap,
+      hoverColor: Colors.transparent,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                visible ? user.password : '••••••••',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  color: textColor,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: Icon(
+                visible ? Icons.visibility : Icons.visibility_off,
+                size: 20,
+                color: textColor.withValues(alpha: 0.8),
+              ),
+              onPressed: () {
+                setState(() {
+                  _showPasswordById[user.id] = !(_showPasswordById[user.id] ?? false);
+                });
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -489,8 +557,18 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
 
           const SizedBox(height: 12),
 
-          // ✅ This makes the table use remaining space, no clipping
-          Expanded(child: _buildScrollableTable(isDesktop: isDesktop)),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              color: Colors.transparent,
+              child: isDesktop
+                  ? _buildDesktopTable()
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: _buildMobileTable(),
+                    ),
+            ),
+          ),
 
           const SizedBox(height: 8),
         ],

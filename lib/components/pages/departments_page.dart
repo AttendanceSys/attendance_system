@@ -5,6 +5,11 @@ import '../../services/session.dart';
 import '../popup/add_department_popup.dart';
 import '../cards/searchBar.dart';
 import '../../theme/super_admin_theme.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+import '../../utils/download_bytes.dart';
 
 class DepartmentsPage extends StatefulWidget {
   const DepartmentsPage({super.key});
@@ -19,9 +24,13 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
 
   final CollectionReference teachersCollection = FirebaseFirestore.instance
       .collection('teachers');
+  final CollectionReference facultiesCollection = FirebaseFirestore.instance
+      .collection('faculties');
 
   List<Department> _departments = [];
   Map<String, String> _teacherNames = {}; // id -> display name
+  Map<String, String> _facultyNames = {}; // id -> display name
+  Map<String, String> _departmentFacultyIds = {}; // department id -> faculty id
 
   final List<String> _statusOptions = ['Active', 'in active'];
   String _searchText = '';
@@ -64,17 +73,23 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
   Future<void> _fetchDepartments() async {
     try {
       Query q = departmentsCollection;
+      Query fq = facultiesCollection;
       if (Session.facultyRef != null) {
         q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
+        fq = fq.where(FieldPath.documentId, isEqualTo: Session.facultyRef!.id);
       }
       final snapshot = await q.get();
+      final fSnap = await fq.get();
       setState(() {
+        _departmentFacultyIds = {};
         _departments = snapshot.docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
           // support multiple possible field names
           final code = data['department_code'] ?? data['code'] ?? '';
           final name = data['department_name'] ?? data['name'] ?? '';
           final head = data['head_of_department'] ?? data['head'] ?? '';
+          final fac = data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'];
+          _departmentFacultyIds[doc.id] = _extractId(fac);
           final statusVal = data['status'] is bool
               ? ((data['status'] as bool) ? 'Active' : 'in active')
               : (data['status']?.toString() ?? '');
@@ -88,6 +103,15 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
             createdAt: createdAt,
           );
         }).toList();
+        _facultyNames = Map.fromEntries(
+          fSnap.docs.map((doc) {
+            final d = doc.data() as Map<String, dynamic>;
+            final name =
+                (d['faculty_name'] ?? d['name'] ?? d['facultyName'] ?? '')
+                    .toString();
+            return MapEntry(doc.id, name);
+          }),
+        );
       });
     } catch (e) {
       print('Error fetching departments: $e');
@@ -103,6 +127,55 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
   void _clearSelection() {
     if (_selectedIndex == null) return;
     setState(() => _selectedIndex = null);
+  }
+
+  String _extractId(dynamic cand) {
+    if (cand == null) return '';
+    if (cand is DocumentReference) return cand.id;
+    if (cand is String) {
+      final s = cand.trim();
+      if (s.contains('/')) {
+        final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+        return parts.isNotEmpty ? parts.last : s;
+      }
+      return s;
+    }
+    return cand.toString();
+  }
+
+  String? _findIdByName(Map<String, String> map, String name) {
+    final key = map.entries
+        .firstWhere(
+          (e) => e.value.toLowerCase().trim() == name.toLowerCase().trim(),
+          orElse: () => const MapEntry('', ''),
+        )
+        .key;
+    return key.isEmpty ? null : key;
+  }
+
+  String? _resolveRef(Map<String, String> map, String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    if (map.containsKey(value)) return value;
+    final byName = _findIdByName(map, value);
+    if (byName != null) return byName;
+    return value;
+  }
+
+  String _teacherDisplay(String? head) {
+    final raw = (head ?? '').trim();
+    if (raw.isEmpty) return '';
+    return _teacherNames[raw] ?? raw;
+  }
+
+  String _facultyDisplayByDepartmentId(String? departmentId) {
+    final did = (departmentId ?? '').trim();
+    if (did.isEmpty) return Session.facultyRef?.id ?? '';
+    final fid = _departmentFacultyIds[did] ?? '';
+    if (fid.isEmpty) {
+      if (Session.facultyRef == null) return '';
+      return _facultyNames[Session.facultyRef!.id] ?? Session.facultyRef!.id;
+    }
+    return _facultyNames[fid] ?? fid;
   }
 
   Future<void> _showAddDepartmentPopup() async {
@@ -236,6 +309,213 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
     }
   }
 
+  Future<void> _handleExportDepartmentsCsv() async {
+    try {
+      final rows = <List<dynamic>>[
+        ['No', 'Department code', 'Department name', 'Head of department', 'Faculty', 'Status'],
+      ];
+      for (int i = 0; i < _departments.length; i++) {
+        final d = _departments[i];
+        rows.add([
+          i + 1,
+          d.code,
+          d.name,
+          _teacherDisplay(d.head),
+          _facultyDisplayByDepartmentId(d.id),
+          d.status,
+        ]);
+      }
+
+      final csv = const ListToCsvConverter().convert(rows);
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+      final now = DateTime.now();
+      final fileName =
+          'departments_${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}.csv';
+
+      final downloaded = await downloadBytes(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'text/csv;charset=utf-8',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            downloaded
+                ? 'CSV exported: $fileName'
+                : 'CSV export is currently supported on web only',
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Error exporting departments CSV: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to export CSV')),
+      );
+    }
+  }
+
+  Future<void> _handleUploadDepartments() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+      if (result == null) return;
+      final file = result.files.first;
+      if (file.bytes == null) return;
+      final content = utf8.decode(file.bytes!);
+      final rows = const CsvToListConverter(eol: '\n').convert(content);
+      if (rows.isEmpty) return;
+
+      final headers = rows.first
+          .map((h) => h.toString().toLowerCase().trim())
+          .toList();
+      final parsed = <Map<String, String>>[];
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.every((c) => (c ?? '').toString().trim().isEmpty)) continue;
+        final map = <String, String>{};
+        for (int c = 0; c < headers.length && c < row.length; c++) {
+          map[headers[c]] = row[c]?.toString().trim() ?? '';
+        }
+        parsed.add(map);
+      }
+      if (parsed.isEmpty) return;
+
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirm upload'),
+          content: Text('Import ${parsed.length} departments?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+
+      int added = 0;
+      int skipped = 0;
+      for (final row in parsed) {
+        final code =
+            (row['department_code'] ??
+                    row['department code'] ??
+                    row['code'] ??
+                    '')
+                .toString()
+                .trim();
+        final name =
+            (row['department_name'] ??
+                    row['department name'] ??
+                    row['name'] ??
+                    '')
+                .toString()
+                .trim();
+        final headRaw =
+            (row['head_of_department'] ??
+                    row['head of department'] ??
+                    row['head'] ??
+                    row['head_name'] ??
+                    '')
+                .toString()
+                .trim();
+        final statusRaw = (row['status'] ?? 'Active').toString().trim();
+
+        if (code.isEmpty || name.isEmpty) {
+          skipped++;
+          continue;
+        }
+
+        final exists = await departmentsCollection
+            .where('department_code', isEqualTo: code)
+            .get();
+        if (exists.docs.isNotEmpty) {
+          skipped++;
+          continue;
+        }
+
+        final headResolved = _resolveRef(_teacherNames, headRaw) ?? headRaw;
+        final dept = Department(
+          code: code,
+          name: name,
+          head: headResolved,
+          status: statusRaw.toLowerCase() == 'active' ||
+                  statusRaw.toLowerCase() == 'true' ||
+                  statusRaw == '1' ||
+                  statusRaw.toLowerCase() == 'yes'
+              ? 'Active'
+              : 'in active',
+        );
+        final ok = await _addDepartmentFromUpload(dept, row);
+        if (ok) {
+          added++;
+        } else {
+          skipped++;
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported $added, skipped $skipped')),
+        );
+      }
+      await _fetchDepartments();
+    } catch (e) {
+      print('Error importing departments: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to import departments')),
+      );
+    }
+  }
+
+  Future<bool> _addDepartmentFromUpload(
+    Department dept,
+    Map<String, String> row,
+  ) async {
+    try {
+      final facultyRaw =
+          (row['faculty_ref'] ??
+                  row['faculty_id'] ??
+                  row['faculty'] ??
+                  row['faculty name'] ??
+                  row['faculty_name'] ??
+                  '')
+              .toString()
+              .trim();
+      final facultyId = _extractId(
+        _resolveRef(_facultyNames, facultyRaw) ?? Session.facultyRef?.id ?? '',
+      );
+      final Map<String, dynamic> toWrite = {
+        'department_code': dept.code,
+        'department_name': dept.name,
+        'head_of_department': dept.head,
+        'status': dept.status == 'Active',
+        'created_at': FieldValue.serverTimestamp(),
+      };
+      if (Session.facultyRef != null) {
+        toWrite['faculty_ref'] = Session.facultyRef;
+      } else if (facultyId.isNotEmpty) {
+        toWrite['faculty_ref'] = facultiesCollection.doc(facultyId);
+      }
+      await departmentsCollection.add(toWrite);
+      return true;
+    } catch (e) {
+      print('Error adding department from upload: $e');
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -262,89 +542,162 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
             ),
           ),
           const SizedBox(height: 24),
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              if (isDesktop)
+                Row(
                   children: [
-                    SearchAddBar(
-                      hintText: "Search departments...",
-                      buttonText: "Add Departments",
-                      onAddPressed: _showAddDepartmentPopup,
-                      onChanged: (value) {
-                        setState(() {
-                          _searchText = value;
-                          _selectedIndex = null;
-                        });
-                      },
+                    Expanded(
+                      child: SearchAddBar(
+                        hintText: "Search departments...",
+                        buttonText: "Add Departments",
+                        onAddPressed: _showAddDepartmentPopup,
+                        onChanged: (value) {
+                          setState(() {
+                            _searchText = value;
+                            _selectedIndex = null;
+                          });
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              disabledBackgroundColor: disabledActionBg,
-                              disabledForegroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _showEditDepartmentPopup,
-                            child: const Text(
-                              "Edit",
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleUploadDepartments,
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Upload Departments'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              disabledBackgroundColor: disabledActionBg,
-                              disabledForegroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _confirmDeleteDepartment,
-                            child: const Text(
-                              "Delete",
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleExportDepartmentsCsv,
+                        icon: const Icon(Icons.download),
+                        label: const Text('Export CSV'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF1F6FEB),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ],
+                )
+              else ...[
+                SearchAddBar(
+                  hintText: "Search departments...",
+                  buttonText: "Add Departments",
+                  onAddPressed: _showAddDepartmentPopup,
+                  onChanged: (value) {
+                    setState(() {
+                      _searchText = value;
+                      _selectedIndex = null;
+                    });
+                  },
                 ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleUploadDepartments,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Upload Departments'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleExportDepartmentsCsv,
+                    icon: const Icon(Icons.download),
+                    label: const Text('Export CSV'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF1F6FEB),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 80,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 0,
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null
+                          ? null
+                          : _showEditDepartmentPopup,
+                      child: const Text(
+                        "Edit",
+                        style: TextStyle(fontSize: 15, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 80,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 0,
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null
+                          ? null
+                          : _confirmDeleteDepartment,
+                      child: const Text(
+                        "Delete",
+                        style: TextStyle(fontSize: 15, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

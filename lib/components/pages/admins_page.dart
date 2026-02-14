@@ -415,9 +415,9 @@ class _AdminsPageState extends State<AdminsPage> {
     return _buildSaasTable(
       columnWidths: const {
         0: FixedColumnWidth(72),
-        1: FixedColumnWidth(180),
-        2: FlexColumnWidth(1.5),
-        3: FlexColumnWidth(1.3),
+        1: FlexColumnWidth(1.1),
+        2: FlexColumnWidth(1.3),
+        3: FlexColumnWidth(1.2),
       },
     );
   }
@@ -528,7 +528,7 @@ class _AdminsPageState extends State<AdminsPage> {
 
   Widget _tableHeaderCell(String text, Color textColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 24),
       child: Text(
         text,
         style: TextStyle(
@@ -550,7 +550,7 @@ class _AdminsPageState extends State<AdminsPage> {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
         child: Text(
           text,
           overflow: TextOverflow.ellipsis,

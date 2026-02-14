@@ -673,8 +673,8 @@ class _TeachersPageState extends State<TeachersPage> {
     return _buildSaasTable(
       columnWidths: const {
         0: FixedColumnWidth(72),
-        1: FixedColumnWidth(180),
-        2: FlexColumnWidth(1.5),
+        1: FlexColumnWidth(1.1),
+        2: FlexColumnWidth(1.3),
         3: FlexColumnWidth(1.2),
       },
     );
@@ -787,7 +787,7 @@ class _TeachersPageState extends State<TeachersPage> {
 
   Widget _tableHeaderCell(String text, Color textColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 24),
       child: Text(
         text,
         style: TextStyle(
@@ -809,7 +809,7 @@ class _TeachersPageState extends State<TeachersPage> {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
         child: Text(
           text,
           overflow: TextOverflow.ellipsis,

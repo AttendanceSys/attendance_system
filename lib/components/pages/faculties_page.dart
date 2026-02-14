@@ -337,9 +337,9 @@ class _FacultiesPageState extends State<FacultiesPage> {
     return _buildSaasTable(
       columnWidths: const {
         0: FixedColumnWidth(72),
-        1: FixedColumnWidth(140),
-        2: FlexColumnWidth(1.6),
-        3: FixedColumnWidth(190),
+        1: FlexColumnWidth(1.15),
+        2: FlexColumnWidth(1.25),
+        3: FlexColumnWidth(1.2),
       },
     );
   }
@@ -452,7 +452,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
 
   Widget _tableHeaderCell(String text, Color textColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 24),
       child: Text(
         text,
         style: TextStyle(
@@ -474,7 +474,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
         child: Text(
           text,
           overflow: TextOverflow.ellipsis,

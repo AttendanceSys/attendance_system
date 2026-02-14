@@ -8,6 +8,8 @@ import '../../theme/super_admin_theme.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:convert';
+import 'dart:typed_data';
+import '../../utils/download_bytes.dart';
 
 class CoursesPage extends StatefulWidget {
   const CoursesPage({super.key});
@@ -434,6 +436,90 @@ class _CoursesPageState extends State<CoursesPage> {
     setState(() => _selectedIndex = null);
   }
 
+  String _facultyDisplay(String? facultyRef) {
+    final raw = (facultyRef ?? '').trim();
+    if (raw.isEmpty) {
+      if (Session.facultyRef == null) return '';
+      return _facultyNames[Session.facultyRef!.id] ?? Session.facultyRef!.id;
+    }
+    if (_facultyNames.containsKey(raw)) return _facultyNames[raw]!;
+    if (raw.contains('/')) {
+      final parts = raw.split('/').where((p) => p.isNotEmpty).toList();
+      if (parts.isNotEmpty && _facultyNames.containsKey(parts.last)) {
+        return _facultyNames[parts.last]!;
+      }
+    }
+    return raw;
+  }
+
+  String _departmentDisplayForClass(String? classRef) {
+    final classId = (classRef ?? '').trim();
+    if (classId.isEmpty) return '';
+    final deptId = _classDeptId[classId] ?? '';
+    if (deptId.isEmpty) return '';
+    return _departmentNames[deptId] ?? deptId;
+  }
+
+  Future<void> _handleExportCoursesCsv() async {
+    try {
+      final rows = <List<dynamic>>[
+        [
+          'No',
+          'Course code',
+          'Course name',
+          'Lecturer',
+          'Department',
+          'Class',
+          'Faculty',
+          'Semester',
+        ],
+      ];
+
+      for (int i = 0; i < _courses.length; i++) {
+        final c = _courses[i];
+        rows.add([
+          i + 1,
+          c.courseCode,
+          c.courseName,
+          _teacherDisplay(c.teacherRef),
+          _departmentDisplayForClass(c.classRef),
+          _classNames[c.classRef] ?? '',
+          _facultyDisplay(c.facultyRef),
+          c.semester ?? '',
+        ]);
+      }
+
+      final csv = const ListToCsvConverter().convert(rows);
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+      final now = DateTime.now();
+      final fileName =
+          'courses_${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}.csv';
+
+      final downloaded = await downloadBytes(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'text/csv;charset=utf-8',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            downloaded
+                ? 'CSV exported: $fileName'
+                : 'CSV export is currently supported on web only',
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Error exporting courses CSV: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to export CSV')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -500,6 +586,22 @@ class _CoursesPageState extends State<CoursesPage> {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleExportCoursesCsv,
+                        icon: const Icon(Icons.download),
+                        label: const Text('Export CSV'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF1F6FEB),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 )
               else ...[
@@ -525,6 +627,23 @@ class _CoursesPageState extends State<CoursesPage> {
                     style: ElevatedButton.styleFrom(
                       foregroundColor: Colors.white,
                       backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleExportCoursesCsv,
+                    icon: const Icon(Icons.download),
+                    label: const Text('Export CSV'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF1F6FEB),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),

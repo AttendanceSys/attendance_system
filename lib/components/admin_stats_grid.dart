@@ -482,6 +482,20 @@ class _DepartmentsPerFacultyChartState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final axisTextColor = scheme.onSurfaceVariant;
+    final tooltipBg = isDark ? scheme.surfaceContainerHighest : scheme.inverseSurface;
+    final tooltipText = isDark ? scheme.onSurface : scheme.onInverseSurface;
+    final gridColor = scheme.outlineVariant.withValues(alpha: isDark ? 0.35 : 0.5);
+    Color barColorAt(int i) {
+      final hsl = HSLColor.fromColor(scheme.primary);
+      final lightness = (isDark ? 0.56 : 0.46) + ((i % 5) * 0.04);
+      return hsl
+          .withSaturation((hsl.saturation * 0.82).clamp(0.45, 0.9))
+          .withLightness(lightness.clamp(0.25, 0.72))
+          .toColor();
+    }
     return FutureBuilder<Map<String, int>>(
       future: _futureCounts,
       builder: (c, s) {
@@ -501,7 +515,7 @@ class _DepartmentsPerFacultyChartState
                 barRods: [
                   BarChartRodData(
                     toY: e.value.toDouble(),
-                    color: theme.colorScheme.primary,
+                    color: barColorAt(e.key),
                     width: 18,
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -525,6 +539,13 @@ class _DepartmentsPerFacultyChartState
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
+                      tooltipRoundedRadius: 10,
+                      tooltipPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      tooltipMargin: 8,
+                      getTooltipColor: (group) => tooltipBg,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         final idx = group.x.toInt();
                         final label = (idx >= 0 && idx < labels.length)
@@ -534,7 +555,7 @@ class _DepartmentsPerFacultyChartState
                         return BarTooltipItem(
                           '$label\n$value',
                           TextStyle(
-                            color: theme.colorScheme.onSurface,
+                            color: tooltipText,
                             fontWeight: FontWeight.w600,
                           ),
                         );
@@ -558,6 +579,7 @@ class _DepartmentsPerFacultyChartState
                               txt,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w700,
+                                color: axisTextColor,
                               ),
                             ),
                           );
@@ -578,7 +600,9 @@ class _DepartmentsPerFacultyChartState
                             space: 6,
                             child: Text(
                               txt,
-                              style: theme.textTheme.bodySmall,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: axisTextColor,
+                              ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.center,
@@ -595,13 +619,21 @@ class _DepartmentsPerFacultyChartState
                           if (v % step != 0) return const SizedBox.shrink();
                           return Text(
                             v.toString(),
-                            style: theme.textTheme.bodySmall,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: axisTextColor,
+                            ),
                           );
                         },
                       ),
                     ),
                   ),
-                  gridData: FlGridData(show: false),
+                  gridData: FlGridData(
+                    show: true,
+                    horizontalInterval: step.toDouble(),
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (_) =>
+                        FlLine(color: gridColor, strokeWidth: 1),
+                  ),
                   borderData: FlBorderData(show: false),
                 ),
               ),
@@ -618,19 +650,24 @@ class _DepartmentsPerFacultyChartState
                       Container(
                         width: 10,
                         height: 10,
-                        color: theme.colorScheme.primary,
+                        color: barColorAt(i),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           labels[i],
-                          style: theme.textTheme.bodySmall,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: axisTextColor,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         values[i].toString(),
-                        style: theme.textTheme.bodySmall,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: axisTextColor,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   );
@@ -767,6 +804,20 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final axisTextColor = scheme.onSurfaceVariant;
+    final tooltipBg = isDark ? scheme.surfaceContainerHighest : scheme.inverseSurface;
+    final tooltipText = isDark ? scheme.onSurface : scheme.onInverseSurface;
+    final gridColor = scheme.outlineVariant.withValues(alpha: isDark ? 0.35 : 0.5);
+    Color barColorAt(int i) {
+      final hsl = HSLColor.fromColor(scheme.secondary);
+      final lightness = (isDark ? 0.58 : 0.48) + ((i % 5) * 0.035);
+      return hsl
+          .withSaturation((hsl.saturation * 0.8).clamp(0.4, 0.9))
+          .withLightness(lightness.clamp(0.26, 0.74))
+          .toColor();
+    }
     return FutureBuilder<Map<String, int>>(
       future: _futureCounts,
       builder: (c, s) {
@@ -786,7 +837,7 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
                 barRods: [
                   BarChartRodData(
                     toY: e.value.toDouble(),
-                    color: theme.colorScheme.secondary,
+                    color: barColorAt(e.key),
                     width: 18,
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -810,6 +861,13 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
+                      tooltipRoundedRadius: 10,
+                      tooltipPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      tooltipMargin: 8,
+                      getTooltipColor: (group) => tooltipBg,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         final idx = group.x.toInt();
                         final label = (idx >= 0 && idx < labels.length)
@@ -819,7 +877,7 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
                         return BarTooltipItem(
                           '$label\n$value',
                           TextStyle(
-                            color: theme.colorScheme.onSurface,
+                            color: tooltipText,
                             fontWeight: FontWeight.w600,
                           ),
                         );
@@ -843,6 +901,7 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
                               txt,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w700,
+                                color: axisTextColor,
                               ),
                             ),
                           );
@@ -863,7 +922,9 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
                             space: 6,
                             child: Text(
                               txt,
-                              style: theme.textTheme.bodySmall,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: axisTextColor,
+                              ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.center,
@@ -880,13 +941,21 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
                           if (v % step != 0) return const SizedBox.shrink();
                           return Text(
                             v.toString(),
-                            style: theme.textTheme.bodySmall,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: axisTextColor,
+                            ),
                           );
                         },
                       ),
                     ),
                   ),
-                  gridData: FlGridData(show: false),
+                  gridData: FlGridData(
+                    show: true,
+                    horizontalInterval: step.toDouble(),
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (_) =>
+                        FlLine(color: gridColor, strokeWidth: 1),
+                  ),
                   borderData: FlBorderData(show: false),
                 ),
               ),
@@ -903,19 +972,24 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
                       Container(
                         width: 10,
                         height: 10,
-                        color: theme.colorScheme.secondary,
+                        color: barColorAt(i),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           labels[i],
-                          style: theme.textTheme.bodySmall,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: axisTextColor,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         values[i].toString(),
-                        style: theme.textTheme.bodySmall,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: axisTextColor,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   );
