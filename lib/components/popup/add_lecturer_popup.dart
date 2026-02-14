@@ -7,9 +7,13 @@ import '../../theme/super_admin_theme.dart';
 
 class AddTeacherPopup extends StatefulWidget {
   final Teacher? teacher;
-  final List<String> facultyNames;
+  final Map<String, String> facultyOptions; // facultyId -> facultyName
 
-  const AddTeacherPopup({super.key, this.teacher, required this.facultyNames});
+  const AddTeacherPopup({
+    super.key,
+    this.teacher,
+    required this.facultyOptions,
+  });
 
   @override
   State<AddTeacherPopup> createState() => _AddTeacherPopupState();
@@ -34,6 +38,19 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
     _username = widget.teacher?.username;
     _password = widget.teacher?.password;
     _facultyId = widget.teacher?.facultyId;
+    // Support legacy records where facultyId stored as faculty name.
+    if (_facultyId != null &&
+        _facultyId!.trim().isNotEmpty &&
+        !widget.facultyOptions.containsKey(_facultyId)) {
+      final match = widget.facultyOptions.entries.where((e) {
+        return e.value.toLowerCase().trim() == _facultyId!.toLowerCase().trim();
+      });
+      if (match.isNotEmpty) {
+        _facultyId = match.first.key;
+      } else {
+        _facultyId = null;
+      }
+    }
   }
 
   @override
@@ -188,12 +205,12 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                     color: titleColor,
                     fontSize: fieldFontSize,
                   ),
-                  items: widget.facultyNames
+                  items: widget.facultyOptions.entries
                       .map(
-                        (name) => DropdownMenuItem(
-                          value: name,
+                        (entry) => DropdownMenuItem(
+                          value: entry.key,
                           child: Text(
-                            name,
+                            entry.value,
                             style: TextStyle(
                               color: titleColor,
                               fontSize: fieldFontSize,

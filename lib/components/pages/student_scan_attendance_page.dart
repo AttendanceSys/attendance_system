@@ -535,8 +535,8 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
             .limit(1)
             .get(),
       ]);
-      final dupQuery = requests[0] as QuerySnapshot<Map<String, dynamic>>;
-      final sessionQuery = requests[1] as QuerySnapshot<Map<String, dynamic>>;
+      final dupQuery = requests[0];
+      final sessionQuery = requests[1];
 
       if (dupQuery.docs.isNotEmpty) {
         debugPrint('Duplicate found while scanning code: $code');

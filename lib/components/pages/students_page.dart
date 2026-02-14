@@ -8,6 +8,7 @@ import '../../theme/teacher_theme.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:convert';
+import 'dart:math' as math;
 
 class StudentsPage extends StatefulWidget {
   const StudentsPage({super.key});
@@ -35,6 +36,16 @@ class _StudentsPageState extends State<StudentsPage> {
 
   String _searchText = '';
   int? _selectedIndex;
+  final math.Random _random = math.Random();
+
+  String _generateDefaultPassword() {
+    const specials = ['#', '&', '@', '!'];
+    final left = 10 + _random.nextInt(90); // 2 digits
+    final middle = 100 + _random.nextInt(900); // 3 digits
+    final s1 = specials[_random.nextInt(specials.length)];
+    final s2 = specials[_random.nextInt(specials.length)];
+    return '$left$s1$middle$s2';
+  }
 
   List<Student> get _filteredStudents => _students.where((s) {
     final dept = _departmentNames[s.departmentRef ?? ''] ?? '';
@@ -422,7 +433,13 @@ class _StudentsPageState extends State<StudentsPage> {
     if (ok == true) await _deleteStudent(s);
   }
 
-  void _handleRowTap(int index) => setState(() => _selectedIndex = index);
+  void _handleRowTap(int index) =>
+      setState(() => _selectedIndex = _selectedIndex == index ? null : index);
+
+  void _clearSelection() {
+    if (_selectedIndex == null) return;
+    setState(() => _selectedIndex = null);
+  }
 
   // Helpers to operate on the currently selected student
   void _showEditSelected() {
@@ -588,6 +605,7 @@ class _StudentsPageState extends State<StudentsPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
             ],
           ),
           Expanded(
@@ -611,127 +629,152 @@ class _StudentsPageState extends State<StudentsPage> {
   }
 
   Widget _buildDesktopTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<TeacherThemeColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-    return Table(
+    return _buildSaasTable(
       columnWidths: const {
-        0: FixedColumnWidth(48),
-        1: FixedColumnWidth(220),
-        2: FixedColumnWidth(140),
-        3: FixedColumnWidth(100),
-        4: IntrinsicColumnWidth(),
-        5: FixedColumnWidth(160),
+        0: FixedColumnWidth(60),
+        1: FlexColumnWidth(1.25),
+        2: FlexColumnWidth(1.45),
+        3: FlexColumnWidth(0.85),
+        4: FlexColumnWidth(1.65),
+        5: FlexColumnWidth(1.05),
       },
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell('No'),
-            _tableHeaderCell('Username'),
-            _tableHeaderCell('Full name'),
-            _tableHeaderCell('Gender'),
-            _tableHeaderCell('Department'),
-            _tableHeaderCell('Class'),
-          ],
-        ),
-        for (int i = 0; i < _filteredStudents.length; i++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == i ? highlight : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${i + 1}', onTap: () => _handleRowTap(i)),
-              _tableBodyCell(
-                _filteredStudents[i].username,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredStudents[i].fullname,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredStudents[i].gender,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _departmentNames[_filteredStudents[i].departmentRef ?? ''] ??
-                    '',
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _classNames[_filteredStudents[i].classRef ?? ''] ?? '',
-                onTap: () => _handleRowTap(i),
-              ),
-            ],
-          ),
-      ],
     );
   }
 
   Widget _buildMobileTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<TeacherThemeColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-    return Table(
-      defaultColumnWidth: const IntrinsicColumnWidth(),
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell('No'),
-            _tableHeaderCell('Username'),
-            _tableHeaderCell('Full name'),
-            _tableHeaderCell('Gender'),
-            _tableHeaderCell('Department'),
-            _tableHeaderCell('Class'),
-          ],
-        ),
-        for (int i = 0; i < _filteredStudents.length; i++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == i ? highlight : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${i + 1}', onTap: () => _handleRowTap(i)),
-              _tableBodyCell(
-                _filteredStudents[i].username,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredStudents[i].fullname,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredStudents[i].gender,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _departmentNames[_filteredStudents[i].departmentRef ?? ''] ??
-                    '',
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _classNames[_filteredStudents[i].classRef ?? ''] ?? '',
-                onTap: () => _handleRowTap(i),
-              ),
-            ],
-          ),
-      ],
+    return _buildSaasTable(
+      columnWidths: const {
+        0: FixedColumnWidth(60),
+        1: FixedColumnWidth(220),
+        2: FixedColumnWidth(180),
+        3: FixedColumnWidth(110),
+        4: FixedColumnWidth(200),
+        5: FixedColumnWidth(170),
+      },
     );
   }
 
-  Widget _tableHeaderCell(String text) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-    child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
+  Widget _buildSaasTable({required Map<int, TableColumnWidth> columnWidths}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
+    final scheme = Theme.of(context).colorScheme;
+    final surface = palette?.surface ?? scheme.surface;
+    final border =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : const Color(0xFFD7DCEA));
+    final headerBg = palette?.surfaceHigh ?? scheme.surfaceContainerHighest;
+    final textPrimary = palette?.textPrimary ?? scheme.onSurface;
+    final selectedBg =
+        palette?.selectedBg ??
+        Color.alphaBlend(
+          (palette?.accent ?? const Color(0xFF6A46FF)).withValues(alpha: 0.12),
+          surface,
+        );
+    final divider = border.withValues(alpha: isDark ? 0.7 : 0.85);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: divider),
+        boxShadow: [
+          BoxShadow(
+            color: (palette?.accent ?? const Color(0xFF6A46FF)).withValues(
+              alpha: isDark ? 0.06 : 0.08,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.basic,
+                child: GestureDetector(
+                  onTap: _clearSelection,
+                  behavior: HitTestBehavior.opaque,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+            Table(
+              columnWidths: columnWidths,
+              border: TableBorder(horizontalInside: BorderSide(color: divider)),
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: headerBg),
+                  children: [
+                    _tableHeaderCell('No', textPrimary),
+                    _tableHeaderCell('Username', textPrimary),
+                    _tableHeaderCell('Full name', textPrimary),
+                    _tableHeaderCell('Gender', textPrimary),
+                    _tableHeaderCell('Department', textPrimary),
+                    _tableHeaderCell('Class', textPrimary),
+                  ],
+                ),
+                for (int i = 0; i < _filteredStudents.length; i++)
+                  TableRow(
+                    decoration: BoxDecoration(
+                      color: _selectedIndex == i ? selectedBg : surface,
+                    ),
+                    children: [
+                      _tableBodyCell(
+                        '${i + 1}',
+                        textPrimary,
+                        onTap: () => _handleRowTap(i),
+                      ),
+                      _tableBodyCell(
+                        _filteredStudents[i].username,
+                        textPrimary,
+                        onTap: () => _handleRowTap(i),
+                      ),
+                      _tableBodyCell(
+                        _filteredStudents[i].fullname,
+                        textPrimary,
+                        onTap: () => _handleRowTap(i),
+                      ),
+                      _tableBodyCell(
+                        _filteredStudents[i].gender,
+                        textPrimary,
+                        onTap: () => _handleRowTap(i),
+                      ),
+                      _tableBodyCell(
+                        _departmentNames[_filteredStudents[i].departmentRef ?? ''] ??
+                            '',
+                        textPrimary,
+                        onTap: () => _handleRowTap(i),
+                      ),
+                      _tableBodyCell(
+                        _classNames[_filteredStudents[i].classRef ?? ''] ?? '',
+                        textPrimary,
+                        onTap: () => _handleRowTap(i),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tableHeaderCell(String text, Color textColor) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 14),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: 14,
+        color: textColor,
+        letterSpacing: 0.1,
+      ),
+      overflow: TextOverflow.ellipsis,
+    ),
   );
 
   String? _findIdByName(Map<String, String> map, String name) {
@@ -814,7 +857,10 @@ class _StudentsPageState extends State<StudentsPage> {
                 .toString()
                 .trim();
         final username = (row['username'] ?? '').toString().trim();
-        final password = (row['password'] ?? username).toString();
+        final rawPassword = (row['password'] ?? '').toString().trim();
+        final password = rawPassword.isEmpty
+            ? _generateDefaultPassword()
+            : rawPassword;
         if (fullname.isEmpty || username.isEmpty) {
           skipped.add(username.isEmpty ? fullname : username);
           continue;
@@ -885,6 +931,9 @@ class _StudentsPageState extends State<StudentsPage> {
 
   Future<bool> _addStudentFromUpload(Student s) async {
     try {
+      final effectivePassword = s.password.trim().isEmpty
+          ? _generateDefaultPassword()
+          : s.password;
       final q = await studentsCollection
           .where('username', isEqualTo: s.username)
           .get();
@@ -917,7 +966,7 @@ class _StudentsPageState extends State<StudentsPage> {
       final Map<String, dynamic> studentDoc = {
         'fullname': s.fullname,
         'username': s.username,
-        'password': s.password,
+        'password': effectivePassword,
         'gender': s.gender,
         'department_ref': s.departmentRef ?? '',
         'class_ref': s.classRef ?? '',
@@ -935,7 +984,7 @@ class _StudentsPageState extends State<StudentsPage> {
       await usersCollection.add({
         'username': s.username,
         'role': 'student',
-        'password': s.password,
+        'password': effectivePassword,
         'faculty_id': userFacultyValue ?? '',
         'created_at': FieldValue.serverTimestamp(),
         'updated_at': FieldValue.serverTimestamp(),
@@ -948,11 +997,24 @@ class _StudentsPageState extends State<StudentsPage> {
     }
   }
 
-  Widget _tableBodyCell(String text, {VoidCallback? onTap}) => InkWell(
+  Widget _tableBodyCell(String text, Color textColor, {VoidCallback? onTap}) =>
+      InkWell(
     onTap: onTap,
+    hoverColor: Colors.transparent,
+    splashColor: Colors.transparent,
+    highlightColor: Colors.transparent,
     child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      child: Text(text, overflow: TextOverflow.visible, softWrap: true),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+      child: Text(
+        text,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+        style: TextStyle(
+          fontSize: 14.5,
+          color: textColor,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     ),
   );
 }

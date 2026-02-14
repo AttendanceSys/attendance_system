@@ -1892,6 +1892,14 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
                                   selectedStudentId: selectedUsername,
                                   classSectionStudents: classSectionStudents,
                                   onStudentSelected: (studentId) {
+                                    if (selectedUsername == studentId) {
+                                      setState(() {
+                                        selectedUsername = null;
+                                        selectedStudentName = null;
+                                        selectedStudentClass = null;
+                                      });
+                                      return;
+                                    }
                                     final sectionsMap =
                                         classSectionStudents[selectedClass] ?? {};
                                     String? foundSection;

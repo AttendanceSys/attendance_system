@@ -6,6 +6,10 @@ import '../../models/lecturer.dart';
 import '../cards/searchBar.dart';
 import '../popup/add_lecturer_popup.dart';
 import '../../theme/super_admin_theme.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
+import 'dart:convert';
+import 'dart:math' as math;
 
 class TeachersPage extends StatefulWidget {
   const TeachersPage({super.key});
@@ -23,9 +27,20 @@ class _TeachersPageState extends State<TeachersPage> {
       .collection('users');
 
   List<Teacher> _teachers = [];
-  List<String> _facultyNames = [];
+  final Map<String, String> _facultyIdToName = {};
+  final Map<String, String> _facultyNameToId = {};
   String _searchText = '';
   int? _selectedIndex;
+  final math.Random _random = math.Random();
+
+  String _generateDefaultPassword() {
+    const specials = ['#', '&', '@', '!'];
+    final left = 10 + _random.nextInt(90); // 2 digits
+    final middle = 100 + _random.nextInt(900); // 3 digits
+    final s1 = specials[_random.nextInt(specials.length)];
+    final s2 = specials[_random.nextInt(specials.length)];
+    return '$left$s1$middle$s2';
+  }
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -62,13 +77,28 @@ class _TeachersPageState extends State<TeachersPage> {
       setState(() {
         _teachers = snapshot.docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
+          String facultyId = '';
+          final facCandidate = data['faculty_id'] ?? data['faculty_ref'] ?? data['faculty'];
+          if (facCandidate is DocumentReference) {
+            facultyId = facCandidate.id;
+          } else if (facCandidate is String) {
+            final s = facCandidate.trim();
+            if (s.contains('/')) {
+              final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+              facultyId = parts.isNotEmpty ? parts.last : s;
+            } else {
+              facultyId = s;
+            }
+          } else if (facCandidate != null) {
+            facultyId = facCandidate.toString();
+          }
 
           return Teacher(
             id: doc.id, // Auto-generated Firestore document ID
             teacherName: data['teacher_name'] ?? '',
             username: data['username'] ?? '',
             password: data['password'] ?? '',
-            facultyId: (data['faculty_id'] as DocumentReference?)?.id ?? '',
+            facultyId: facultyId,
             createdAt:
                 (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
           );
@@ -86,16 +116,25 @@ class _TeachersPageState extends State<TeachersPage> {
       final snapshot = await facultiesCollection.get();
 
       setState(() {
-        _facultyNames = snapshot.docs
-            .map((doc) {
+        _facultyIdToName
+          ..clear()
+          ..addEntries(
+            snapshot.docs.map((doc) {
               final data = doc.data() as Map<String, dynamic>;
-              return data['faculty_name'] ?? '';
-            })
-            .cast<String>()
-            .toList(); // Explicitly cast to List<String>
+              final name = (data['faculty_name'] ?? data['name'] ?? '')
+                  .toString()
+                  .trim();
+              return MapEntry(doc.id, name);
+            }),
+          );
+        _facultyNameToId
+          ..clear()
+          ..addEntries(_facultyIdToName.entries.map(
+            (e) => MapEntry(e.value.toLowerCase().trim(), e.key),
+          ));
       });
 
-      print("Fetched ${_facultyNames.length} faculties");
+      print("Fetched ${_facultyIdToName.length} faculties");
     } catch (e) {
       print("Error fetching faculties: $e");
     }
@@ -201,20 +240,194 @@ class _TeachersPageState extends State<TeachersPage> {
   Future<void> _showAddTeacherPopup() async {
     final result = await showDialog<Teacher>(
       context: context,
-      builder: (context) => AddTeacherPopup(facultyNames: _facultyNames),
+      builder: (context) => AddTeacherPopup(facultyOptions: _facultyIdToName),
     );
     if (result != null) {
       _addTeacher(result);
     }
   }
 
+  String? _resolveFacultyId(String rawValue) {
+    final raw = rawValue.trim();
+    if (raw.isEmpty) return null;
+    if (_facultyNameToId.containsKey(raw.toLowerCase())) {
+      return _facultyNameToId[raw.toLowerCase()];
+    }
+    if (raw.contains('/')) {
+      final parts = raw.split('/').where((p) => p.isNotEmpty).toList();
+      if (parts.isNotEmpty) return parts.last;
+    }
+    return raw;
+  }
+
+  Future<void> _handleUploadLecturers() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+      if (result == null) return;
+      final file = result.files.first;
+      if (file.bytes == null) return;
+
+      final content = utf8.decode(file.bytes!);
+      final rows = const CsvToListConverter(eol: '\n').convert(content);
+      if (rows.isEmpty) return;
+
+      final headers = rows.first
+          .map((h) => h.toString().toLowerCase().trim())
+          .toList();
+      final parsed = <Map<String, String>>[];
+
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.every((c) => (c ?? '').toString().trim().isEmpty)) continue;
+        final map = <String, String>{};
+        for (int c = 0; c < headers.length && c < row.length; c++) {
+          map[headers[c]] = row[c]?.toString().trim() ?? '';
+        }
+        parsed.add(map);
+      }
+
+      if (parsed.isEmpty) return;
+
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirm upload'),
+          content: Text('Import ${parsed.length} lecturers?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+
+      int added = 0;
+      int skipped = 0;
+      for (final row in parsed) {
+        final teacherName =
+            (row['teacher_name'] ?? row['lecturer_name'] ?? row['name'] ?? '')
+                .toString()
+                .trim();
+        final username = (row['username'] ?? '').toString().trim();
+        final rawPassword = (row['password'] ?? '').toString().trim();
+        final password = rawPassword.isEmpty
+            ? _generateDefaultPassword()
+            : rawPassword;
+        final facultyRaw =
+            (row['faculty_id'] ?? row['faculty'] ?? row['faculty_name'] ?? '')
+                .toString()
+                .trim();
+
+        final facultyId = _resolveFacultyId(facultyRaw) ?? '';
+        if (teacherName.isEmpty || username.isEmpty || facultyId.isEmpty) {
+          skipped++;
+          continue;
+        }
+
+        final teacher = Teacher(
+          id: '',
+          teacherName: teacherName,
+          username: username,
+          password: password,
+          facultyId: facultyId,
+          createdAt: DateTime.now(),
+        );
+
+        final ok = await _addTeacherFromUpload(teacher);
+        if (ok) {
+          added++;
+        } else {
+          skipped++;
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Imported $added, skipped $skipped')),
+        );
+      }
+      await _fetchTeachers();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to import lecturers')),
+        );
+      }
+      print('Error importing lecturers: $e');
+    }
+  }
+
+  Future<bool> _addTeacherFromUpload(Teacher teacher) async {
+    try {
+      final effectivePassword = teacher.password.trim().isEmpty
+          ? _generateDefaultPassword()
+          : teacher.password;
+      final teacherDup = await teachersCollection
+          .where('username', isEqualTo: teacher.username)
+          .limit(1)
+          .get();
+      if (teacherDup.docs.isNotEmpty) return false;
+
+      final userDup = await usersCollection
+          .where('username', isEqualTo: teacher.username)
+          .limit(1)
+          .get();
+      if (userDup.docs.isNotEmpty) return false;
+
+      final teacherData = {
+        'teacher_name': teacher.teacherName,
+        'username': teacher.username,
+        'password': effectivePassword,
+        'faculty_id': FirebaseFirestore.instance.doc(
+          '/faculties/${teacher.facultyId}',
+        ),
+        'created_at': FieldValue.serverTimestamp(),
+      };
+
+      final userData = {
+        'username': teacher.username,
+        'password': effectivePassword,
+        'role': 'teacher',
+        'faculty_id': FirebaseFirestore.instance.doc(
+          '/faculties/${teacher.facultyId}',
+        ),
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      };
+
+      await teachersCollection.add(teacherData);
+      await usersCollection.add(userData);
+      return true;
+    } catch (e) {
+      print('Error adding lecturer from upload: $e');
+      return false;
+    }
+  }
+
   Future<void> _showEditTeacherPopup() async {
     if (_selectedIndex == null) return;
-    final teacher = _filteredTeachers[_selectedIndex!];
+    Teacher teacher = _filteredTeachers[_selectedIndex!];
+    // Support legacy data where faculty stored as name.
+    if (!_facultyIdToName.containsKey(teacher.facultyId) &&
+        _facultyNameToId.containsKey(teacher.facultyId.toLowerCase().trim())) {
+      teacher = teacher.copyWith(
+        facultyId: _facultyNameToId[teacher.facultyId.toLowerCase().trim()],
+      );
+    }
     final result = await showDialog<Teacher>(
       context: context,
       builder: (context) =>
-          AddTeacherPopup(teacher: teacher, facultyNames: _facultyNames),
+          AddTeacherPopup(teacher: teacher, facultyOptions: _facultyIdToName),
     );
     if (result != null) {
       _updateTeacher(result);
@@ -251,8 +464,13 @@ class _TeachersPageState extends State<TeachersPage> {
 
   void _handleRowTap(int index) {
     setState(() {
-      _selectedIndex = index;
+      _selectedIndex = _selectedIndex == index ? null : index;
     });
+  }
+
+  void _clearSelection() {
+    if (_selectedIndex == null) return;
+    setState(() => _selectedIndex = null);
   }
 
   @override
@@ -288,17 +506,80 @@ class _TeachersPageState extends State<TeachersPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SearchAddBar(
-                      hintText: "Search Lecturer...",
-                      buttonText: "Add Lecturer",
-                      onAddPressed: _showAddTeacherPopup,
-                      onChanged: (value) {
-                        setState(() {
-                          _searchText = value;
-                          _selectedIndex = null;
-                        });
-                      },
-                    ),
+                    if (isDesktop)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SearchAddBar(
+                              hintText: "Search Lecturer...",
+                              buttonText: "Add Lecturer",
+                              onAddPressed: _showAddTeacherPopup,
+                              onChanged: (value) {
+                                setState(() {
+                                  _searchText = value;
+                                  _selectedIndex = null;
+                                });
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              onPressed: _handleUploadLecturers,
+                              icon: const Icon(Icons.upload_file),
+                              label: const Text('Upload Lecturers'),
+                              style: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                backgroundColor: const Color.fromARGB(
+                                  255,
+                                  0,
+                                  150,
+                                  80,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else ...[
+                      SearchAddBar(
+                        hintText: "Search Lecturer...",
+                        buttonText: "Add Lecturer",
+                        onAddPressed: _showAddTeacherPopup,
+                        onChanged: (value) {
+                          setState(() {
+                            _searchText = value;
+                            _selectedIndex = null;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _handleUploadLecturers,
+                          icon: const Icon(Icons.upload_file),
+                          label: const Text('Upload Lecturers'),
+                          style: ElevatedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: const Color.fromARGB(
+                              255,
+                              0,
+                              150,
+                              80,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -389,126 +670,155 @@ class _TeachersPageState extends State<TeachersPage> {
   }
 
   Widget _buildDesktopTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.vertical,
-      child: Table(
-        columnWidths: const {
-          0: FixedColumnWidth(64), // No
-          1: FixedColumnWidth(140), // Username
-          2: FixedColumnWidth(140), // Lecturer Name
-          3: FixedColumnWidth(120), // Faculty
-        },
-        border: TableBorder(
-          horizontalInside: BorderSide(color: Colors.grey.shade300),
-        ),
-        children: [
-          TableRow(
-            children: [
-              _tableHeaderCell("No"),
-              _tableHeaderCell("Username"),
-              _tableHeaderCell("Lecturer Name"),
-              _tableHeaderCell("Faculty"),
-            ],
-          ),
-          for (int index = 0; index < _filteredTeachers.length; index++)
-            TableRow(
-              decoration: BoxDecoration(
-                color: _selectedIndex == index ? highlight : Colors.transparent,
-              ),
-              children: [
-                _tableBodyCell(
-                  '${index + 1}',
-                  onTap: () => _handleRowTap(index),
-                ),
-                _tableBodyCell(
-                  _filteredTeachers[index].username,
-                  onTap: () => _handleRowTap(index),
-                ),
-                _tableBodyCell(
-                  _filteredTeachers[index].teacherName,
-                  onTap: () => _handleRowTap(index),
-                ),
-                _tableBodyCell(
-                  _filteredTeachers[index].facultyId,
-                  onTap: () => _handleRowTap(index),
-                ),
-              ],
-            ),
-        ],
-      ),
+    return _buildSaasTable(
+      columnWidths: const {
+        0: FixedColumnWidth(72),
+        1: FixedColumnWidth(180),
+        2: FlexColumnWidth(1.5),
+        3: FlexColumnWidth(1.2),
+      },
     );
   }
 
   Widget _buildMobileTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-
-    return Table(
-      defaultColumnWidth: const IntrinsicColumnWidth(),
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell("No"),
-            _tableHeaderCell("Username"),
-            _tableHeaderCell("Lecturer Name"),
-            _tableHeaderCell("Faculty"),
-          ],
-        ),
-        for (int index = 0; index < _filteredTeachers.length; index++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == index ? highlight : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(
-                _filteredTeachers[index].username,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                _filteredTeachers[index].teacherName,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                _filteredTeachers[index].facultyId,
-                onTap: () => _handleRowTap(index),
-              ),
-            ],
-          ),
-      ],
+    return _buildSaasTable(
+      columnWidths: const {
+        0: FixedColumnWidth(72),
+        1: FixedColumnWidth(180),
+        2: FixedColumnWidth(230),
+        3: FixedColumnWidth(210),
+      },
     );
   }
 
-  Widget _tableHeaderCell(String text) {
+  Widget _buildSaasTable({required Map<int, TableColumnWidth> columnWidths}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final scheme = Theme.of(context).colorScheme;
+    final surface = palette?.surface ?? scheme.surface;
+    final border =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : const Color(0xFFD7DCEA));
+    final headerBg = palette?.surfaceHigh ?? scheme.surfaceContainerHighest;
+    final textPrimary = palette?.textPrimary ?? scheme.onSurface;
+    final selectedBg =
+        palette?.selectedBg ??
+        Color.alphaBlend(
+          (palette?.accent ?? const Color(0xFF6A46FF)).withValues(alpha: 0.12),
+          surface,
+        );
+    final divider = border.withValues(alpha: isDark ? 0.7 : 0.85);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: divider),
+        boxShadow: [
+          BoxShadow(
+            color: (palette?.accent ?? const Color(0xFF6A46FF)).withValues(
+              alpha: isDark ? 0.06 : 0.08,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _clearSelection,
+                behavior: HitTestBehavior.opaque,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            Table(
+              columnWidths: columnWidths,
+              border: TableBorder(horizontalInside: BorderSide(color: divider)),
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: headerBg),
+                  children: [
+                    _tableHeaderCell("No", textPrimary),
+                    _tableHeaderCell("Username", textPrimary),
+                    _tableHeaderCell("Lecturer Name", textPrimary),
+                    _tableHeaderCell("Faculty", textPrimary),
+                  ],
+                ),
+                for (int index = 0; index < _filteredTeachers.length; index++)
+                  TableRow(
+                    decoration: BoxDecoration(
+                      color: _selectedIndex == index ? selectedBg : surface,
+                    ),
+                    children: [
+                      _tableBodyCell(
+                        '${index + 1}',
+                        textPrimary,
+                        onTap: () => _handleRowTap(index),
+                      ),
+                      _tableBodyCell(
+                        _filteredTeachers[index].username,
+                        textPrimary,
+                        onTap: () => _handleRowTap(index),
+                      ),
+                      _tableBodyCell(
+                        _filteredTeachers[index].teacherName,
+                        textPrimary,
+                        onTap: () => _handleRowTap(index),
+                      ),
+                      _tableBodyCell(
+                        _facultyIdToName[_filteredTeachers[index].facultyId] ??
+                            _filteredTeachers[index].facultyId,
+                        textPrimary,
+                        onTap: () => _handleRowTap(index),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tableHeaderCell(String text, Color textColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
       child: Text(
         text,
-        style: const TextStyle(fontWeight: FontWeight.bold),
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          color: textColor,
+          letterSpacing: 0.1,
+        ),
         textAlign: TextAlign.left,
         overflow: TextOverflow.ellipsis,
       ),
     );
   }
 
-  Widget _tableBodyCell(String text, {VoidCallback? onTap}) {
+  Widget _tableBodyCell(String text, Color textColor, {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap,
+      hoverColor: Colors.transparent,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(text, overflow: TextOverflow.ellipsis),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        child: Text(
+          text,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14.5,
+            color: textColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }

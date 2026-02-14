@@ -268,12 +268,18 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<TeacherThemeColors>();
     final scheme = Theme.of(context).colorScheme;
+    final pageBackground = Color.alphaBlend(
+      (palette?.accent ?? const Color(0xFF2667FF)).withValues(alpha: 0.035),
+      palette?.scaffold ?? scheme.surface,
+    );
     final surface = palette?.surface ?? scheme.surface;
     final inputFill = palette?.inputFill ?? scheme.surface;
-    final border = palette?.border ?? Theme.of(context).dividerColor;
+    final border = (palette?.border ?? Theme.of(context).dividerColor)
+        .withValues(alpha: 0.8);
     final titleColor = palette?.textPrimary ?? scheme.onSurface;
-    final subColor = palette?.textSecondary ?? scheme.onSurfaceVariant;
-    final accent = const Color(0xFF8372FE);
+    final subColor = (palette?.textSecondary ?? scheme.onSurfaceVariant)
+        .withValues(alpha: 0.95);
+    final accent = palette?.accent ?? const Color(0xFF2667FF);
 
     final displayName = _fullNameController.text.trim().isEmpty
         ? (_usernameController.text.trim().isEmpty
@@ -290,184 +296,191 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
         .map((p) => p.trim()[0].toUpperCase())
         .join();
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 24, 32, 32),
-      child: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Profile',
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w800,
-                      color: titleColor,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(22),
-                    decoration: BoxDecoration(
-                      color: surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: border.withValues(alpha: 0.65)),
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final isWide = constraints.maxWidth >= 760;
-                        // Save button removed for read-only profile; keep placeholder.
-                        final saveButton = const SizedBox.shrink();
-
-                        final info = Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 38,
-                              backgroundColor: accent,
-                              child: Text(
-                                initials.isEmpty ? 'T' : initials,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 26,
+    return Container(
+      color: pageBackground,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1360),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Profile',
+                          style: TextStyle(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w800,
+                            height: 1.15,
+                            color: titleColor,
+                            letterSpacing: -0.6,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Manage your account information and security settings.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: subColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: _cardDecoration(
+                            surface: surface,
+                            border: border,
+                            shadow: accent.withValues(alpha: 0.08),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 76,
+                                height: 76,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      accent.withValues(alpha: 0.9),
+                                      accent.withValues(alpha: 0.68),
+                                    ],
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    initials.isEmpty ? 'T' : initials,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 24,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w700,
+                                        color: titleColor,
+                                        letterSpacing: -0.4,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '@$displayUsername',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: subColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        _metaPill(
+                                          label: _roleLabel,
+                                          foreground: accent,
+                                          background: accent.withValues(
+                                            alpha: 0.1,
+                                          ),
+                                          border: accent.withValues(alpha: 0.26),
+                                        ),
+                                        _metaPill(
+                                          label: _gender,
+                                          foreground: titleColor,
+                                          background: titleColor.withValues(
+                                            alpha: 0.08,
+                                          ),
+                                          border: border,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        _sectionHeader(
+                          title: 'Account Settings',
+                          subtitle: 'Personal profile details and password controls.',
+                          titleColor: titleColor,
+                          subtitleColor: subColor,
+                        ),
+                        const SizedBox(height: 14),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final wide = constraints.maxWidth >= 1024;
+                            final leftCard = _buildProfileCard(
+                              surface: surface,
+                              border: border,
+                              titleColor: titleColor,
+                              inputFill: inputFill,
+                              accent: accent,
+                            );
+                            final rightCard = _buildPasswordCard(
+                              surface: surface,
+                              border: border,
+                              titleColor: titleColor,
+                              subColor: subColor,
+                              inputFill: inputFill,
+                              accent: accent,
+                            );
+
+                            if (wide) {
+                              return Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    displayName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 30,
-                                      fontWeight: FontWeight.w700,
-                                      color: titleColor,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '@$displayUsername',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: subColor,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 5,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: accent.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: accent.withValues(alpha: 0.35),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      _roleLabel,
-                                      style: TextStyle(
-                                        color: accent,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
+                                  Expanded(flex: 7, child: leftCard),
+                                  const SizedBox(width: 16),
+                                  Expanded(flex: 5, child: rightCard),
                                 ],
-                              ),
-                            ),
-                          ],
-                        );
+                              );
+                            }
 
-                        if (isWide) {
-                          return Row(
-                            children: [
-                              Expanded(child: info),
-                              const SizedBox(width: 12),
-                              saveButton,
-                            ],
-                          );
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            info,
-                            const SizedBox(height: 14),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: saveButton,
-                            ),
-                          ],
-                        );
-                      },
+                            return Column(
+                              children: [
+                                leftCard,
+                                const SizedBox(height: 16),
+                                rightCard,
+                              ],
+                            );
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Profile Information',
-                    style: TextStyle(
-                      color: titleColor,
-                      fontSize: 27,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final wide = constraints.maxWidth >= 980;
-                      final leftCard = _buildProfileCard(
-                        surface: surface,
-                        border: border,
-                        titleColor: titleColor,
-                        subColor: subColor,
-                        inputFill: inputFill,
-                      );
-                      final rightCard = _buildPasswordCard(
-                        surface: surface,
-                        border: border,
-                        titleColor: titleColor,
-                        subColor: subColor,
-                        inputFill: inputFill,
-                      );
-
-                      if (wide) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 2, child: leftCard),
-                            const SizedBox(width: 14),
-                            Expanded(flex: 1, child: rightCard),
-                          ],
-                        );
-                      }
-                      return Column(
-                        children: [
-                          leftCard,
-                          const SizedBox(height: 14),
-                          rightCard,
-                        ],
-                      );
-                    },
-                  ),
-                ],
+                ),
               ),
-            ),
+      ),
     );
   }
 
   String _roleLabelFromRaw(String raw) {
     final r = raw.trim().toLowerCase();
     if (r.isEmpty) return 'Lecturer';
-    if (r == 'super admin' || r == 'super_admin' || r == 'super-admin')
+    if (r == 'super admin' || r == 'super_admin' || r == 'super-admin') {
       return 'Super admin';
+    }
     if (r == 'admin') return 'Admin';
     if (r == 'teacher' || r == 'lecturer') return 'Lecturer';
     if (r == 'student') return 'Student';
@@ -487,56 +500,98 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
     required Color surface,
     required Color border,
     required Color titleColor,
-    required Color subColor,
     required Color inputFill,
+    required Color accent,
   }) {
-    final genders = const ['Male', 'Female'];
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border.withValues(alpha: 0.65)),
+      padding: const EdgeInsets.all(20),
+      decoration: _cardDecoration(
+        surface: surface,
+        border: border,
+        shadow: accent.withValues(alpha: 0.06),
       ),
       child: Form(
         key: _profileFormKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _label('Full Name', titleColor, subColor, required: true),
-            const SizedBox(height: 6),
+            _cardTitle(
+              title: 'Profile Information',
+              subtitle: 'Basic account details.',
+              titleColor: titleColor,
+              subtitleColor: titleColor.withValues(alpha: 0.62),
+            ),
+            const SizedBox(height: 18),
+            _label('Full Name', titleColor, required: true),
+            const SizedBox(height: 8),
             TextFormField(
               controller: _fullNameController,
               readOnly: true,
+              canRequestFocus: false,
+              mouseCursor: SystemMouseCursors.basic,
+              showCursor: false,
+              enableInteractiveSelection: false,
+              style: TextStyle(color: titleColor, fontWeight: FontWeight.w600),
               decoration: _inputDecoration(
                 inputFill,
                 border,
+                accent: accent,
                 hint: 'Full Name',
               ),
             ),
-            const SizedBox(height: 12),
-            _label('Username', titleColor, subColor, required: true),
-            const SizedBox(height: 6),
+            const SizedBox(height: 14),
+            _label('Username', titleColor, required: true),
+            const SizedBox(height: 8),
             TextFormField(
               controller: _usernameController,
               readOnly: true,
-              decoration: _inputDecoration(inputFill, border, hint: 'Username'),
+              canRequestFocus: false,
+              mouseCursor: SystemMouseCursors.basic,
+              showCursor: false,
+              enableInteractiveSelection: false,
+              style: TextStyle(color: titleColor, fontWeight: FontWeight.w600),
+              decoration: _inputDecoration(
+                inputFill,
+                border,
+                accent: accent,
+                hint: 'Username',
+              ),
             ),
-            const SizedBox(height: 12),
-            _label('Role', titleColor, subColor),
-            const SizedBox(height: 6),
+            const SizedBox(height: 14),
+            _label('Role', titleColor),
+            const SizedBox(height: 8),
             TextFormField(
               initialValue: _roleLabel,
               readOnly: true,
-              decoration: _inputDecoration(inputFill, border, hint: 'Role'),
+              canRequestFocus: false,
+              mouseCursor: SystemMouseCursors.basic,
+              showCursor: false,
+              enableInteractiveSelection: false,
+              style: TextStyle(color: titleColor, fontWeight: FontWeight.w600),
+              decoration: _inputDecoration(
+                inputFill,
+                border,
+                accent: accent,
+                hint: 'Role',
+              ),
             ),
-            const SizedBox(height: 12),
-            _label('Gender', titleColor, subColor),
-            const SizedBox(height: 6),
+            const SizedBox(height: 14),
+            _label('Gender', titleColor),
+            const SizedBox(height: 8),
             TextFormField(
               initialValue: _gender,
               readOnly: true,
-              decoration: _inputDecoration(inputFill, border, hint: 'Gender'),
+              canRequestFocus: false,
+              mouseCursor: SystemMouseCursors.basic,
+              showCursor: false,
+              enableInteractiveSelection: false,
+              style: TextStyle(color: titleColor, fontWeight: FontWeight.w600),
+              decoration: _inputDecoration(
+                inputFill,
+                border,
+                accent: accent,
+                hint: 'Gender',
+              ),
             ),
           ],
         ),
@@ -550,37 +605,38 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
     required Color titleColor,
     required Color subColor,
     required Color inputFill,
+    required Color accent,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border.withValues(alpha: 0.65)),
+      padding: const EdgeInsets.all(20),
+      decoration: _cardDecoration(
+        surface: surface,
+        border: border,
+        shadow: accent.withValues(alpha: 0.06),
       ),
       child: Form(
         key: _passwordFormKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Change Password',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: titleColor,
-              ),
+            _cardTitle(
+              title: 'Security',
+              subtitle: 'Update your login password.',
+              titleColor: titleColor,
+              subtitleColor: subColor,
             ),
-            const SizedBox(height: 12),
-            _label('Current Password', titleColor, subColor),
-            const SizedBox(height: 6),
+            const SizedBox(height: 18),
+            _label('Current Password', titleColor),
+            const SizedBox(height: 8),
             TextFormField(
               controller: _currentPasswordController,
               obscureText: !_showCurrentPassword,
+              style: TextStyle(color: titleColor, fontWeight: FontWeight.w600),
               decoration:
                   _inputDecoration(
                     inputFill,
                     border,
+                    accent: accent,
                     hint: 'Current Password',
                   ).copyWith(
                     suffixIcon: IconButton(
@@ -593,6 +649,7 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                         _showCurrentPassword
                             ? Icons.visibility
                             : Icons.visibility_off,
+                        color: subColor,
                       ),
                     ),
                   ),
@@ -603,16 +660,18 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                 return null;
               },
             ),
-            const SizedBox(height: 12),
-            _label('New Password', titleColor, subColor),
-            const SizedBox(height: 6),
+            const SizedBox(height: 14),
+            _label('New Password', titleColor),
+            const SizedBox(height: 8),
             TextFormField(
               controller: _newPasswordController,
               obscureText: !_showNewPassword,
+              style: TextStyle(color: titleColor, fontWeight: FontWeight.w600),
               decoration:
                   _inputDecoration(
                     inputFill,
                     border,
+                    accent: accent,
                     hint: 'New Password',
                   ).copyWith(
                     suffixIcon: IconButton(
@@ -623,27 +682,31 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                         _showNewPassword
                             ? Icons.visibility
                             : Icons.visibility_off,
+                        color: subColor,
                       ),
                     ),
                   ),
               validator: (value) {
                 final v = (value ?? '').trim();
                 if (v.isEmpty) return 'New password is required';
-                if (v.length < 6)
+                if (v.length < 6) {
                   return 'New password must be at least 6 characters';
+                }
                 return null;
               },
             ),
-            const SizedBox(height: 12),
-            _label('Confirm New Password', titleColor, subColor),
-            const SizedBox(height: 6),
+            const SizedBox(height: 14),
+            _label('Confirm New Password', titleColor),
+            const SizedBox(height: 8),
             TextFormField(
               controller: _confirmPasswordController,
               obscureText: !_showConfirmPassword,
+              style: TextStyle(color: titleColor, fontWeight: FontWeight.w600),
               decoration:
                   _inputDecoration(
                     inputFill,
                     border,
+                    accent: accent,
                     hint: 'Confirm New Password',
                   ).copyWith(
                     suffixIcon: IconButton(
@@ -656,6 +719,7 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                         _showConfirmPassword
                             ? Icons.visibility
                             : Icons.visibility_off,
+                        color: subColor,
                       ),
                     ),
                   ),
@@ -670,23 +734,24 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                 return null;
               },
             ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
                 onPressed: _savingPassword ? null : _savePassword,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF8372FE),
+                  backgroundColor: accent,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+                  minimumSize: const Size.fromHeight(46),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
                   ),
                 ),
-                child: _savingPassword
+                icon: _savingPassword
                     ? const SizedBox(
                         width: 16,
                         height: 16,
@@ -695,7 +760,8 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('Save Password'),
+                    : const Icon(Icons.lock_outline, size: 18),
+                label: Text(_savingPassword ? 'Saving...' : 'Save Password'),
               ),
             ),
           ],
@@ -704,12 +770,7 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
     );
   }
 
-  Widget _label(
-    String text,
-    Color titleColor,
-    Color subColor, {
-    bool required = false,
-  }) {
+  Widget _label(String text, Color titleColor, {bool required = false}) {
     return Row(
       children: [
         Text(
@@ -717,20 +778,11 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
           style: TextStyle(
             fontWeight: FontWeight.w600,
             color: titleColor,
-            fontSize: 13,
+            fontSize: 12.5,
+            letterSpacing: 0.2,
           ),
         ),
-        if (required) ...[
-          const SizedBox(width: 6),
-          Text(
-            '* Required',
-            style: TextStyle(
-              fontSize: 11,
-              color: subColor,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+        if (required) const SizedBox.shrink(),
       ],
     );
   }
@@ -738,33 +790,142 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
   InputDecoration _inputDecoration(
     Color fill,
     Color border, {
+    required Color accent,
     required String hint,
   }) {
     return InputDecoration(
       hintText: hint,
+      hintStyle: TextStyle(color: border.withValues(alpha: 0.95)),
       filled: true,
       fillColor: fill,
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      isDense: false,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: border),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: border, width: 1),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: border),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: border, width: 1),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Color(0xFF8372FE), width: 1.2),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: accent, width: 1.4),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.redAccent),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 1),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.redAccent, width: 1.2),
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration({
+    required Color surface,
+    required Color border,
+    required Color shadow,
+  }) {
+    return BoxDecoration(
+      color: surface,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: border.withValues(alpha: 0.9)),
+      boxShadow: [
+        BoxShadow(
+          color: shadow,
+          blurRadius: 24,
+          spreadRadius: 1,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionHeader({
+    required String title,
+    required String subtitle,
+    required Color titleColor,
+    required Color subtitleColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: titleColor,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: subtitleColor,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _cardTitle({
+    required String title,
+    required String subtitle,
+    required Color titleColor,
+    required Color subtitleColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: titleColor,
+            letterSpacing: -0.2,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: subtitleColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _metaPill({
+    required String label,
+    required Color foreground,
+    required Color background,
+    required Color border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontWeight: FontWeight.w700,
+          fontSize: 11.5,
+          height: 1,
+        ),
       ),
     );
   }

@@ -269,11 +269,15 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
         final Color accentColor = darkMode
             ? const Color.fromARGB(255, 170, 148, 255)
             : const Color(0xFF6A46FF);
+        final pageBg = Color.alphaBlend(
+          accentColor.withValues(alpha: darkMode ? 0.06 : 0.04),
+          bgColor,
+        );
 
         return Theme(
           data: darkMode ? ThemeData.dark() : ThemeData.light(),
           child: Scaffold(
-            backgroundColor: bgColor,
+            backgroundColor: pageBg,
 
             // ================= APP BAR =================
             appBar: AppBar(
@@ -299,159 +303,235 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
             // ================= BODY =================
             body: SafeArea(
               bottom: false,
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  // Avatar
-                  GestureDetector(
-                    onTap: _avatarImage != null
-                        ? () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => Dialog(
-                                backgroundColor: Colors.transparent,
-                                child: InteractiveViewer(
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Image.file(
-                                      _avatarImage!,
-                                      fit: BoxFit.contain,
-                                    ),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1020),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Profile',
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            color: textColor,
+                            letterSpacing: -0.5,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Manage your account information and preferences.',
+                          style: TextStyle(
+                            color: subTextColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: _cardDecoration(
+                            cardColor: cardColor,
+                            borderColor: borderColor,
+                            accentColor: accentColor,
+                          ),
+                          child: Row(
+                            children: [
+                              GestureDetector(
+                                onTap: _avatarImage != null
+                                    ? () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) => Dialog(
+                                            backgroundColor: Colors.transparent,
+                                            child: InteractiveViewer(
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(
+                                                  16,
+                                                ),
+                                                child: Image.file(
+                                                  _avatarImage!,
+                                                  fit: BoxFit.contain,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    : null,
+                                child: CircleAvatar(
+                                  radius: 34,
+                                  backgroundColor: accentColor.withValues(
+                                    alpha: 0.16,
                                   ),
+                                  backgroundImage: _avatarImage != null
+                                      ? FileImage(_avatarImage!)
+                                      : null,
+                                  child: _avatarImage == null
+                                      ? Text(
+                                          widget.avatarLetter,
+                                          style: TextStyle(
+                                            fontSize: 26,
+                                            fontWeight: FontWeight.bold,
+                                            color: accentColor,
+                                          ),
+                                        )
+                                      : null,
                                 ),
                               ),
-                            );
-                          }
-                        : null,
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundColor: cardColor,
-                      backgroundImage: _avatarImage != null
-                          ? FileImage(_avatarImage!)
-                          : null,
-                      child: _avatarImage == null
-                          ? Text(
-                              widget.avatarLetter,
-                              style: TextStyle(
-                                fontSize: 34,
-                                fontWeight: FontWeight.bold,
-                                color: accentColor,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 25,
+                                        fontWeight: FontWeight.w700,
+                                        color: textColor,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '@${widget.id}',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: subTextColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        _metaPill(
+                                          label: 'Student',
+                                          foreground: accentColor,
+                                          background: accentColor.withValues(
+                                            alpha: 0.11,
+                                          ),
+                                          border: accentColor.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                        ),
+                                        _metaPill(
+                                          label: widget.gender,
+                                          foreground: textColor,
+                                          background: textColor.withValues(
+                                            alpha: 0.08,
+                                          ),
+                                          border: borderColor,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
-                            )
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Name
-                  Text(
-                    widget.name,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: textColor,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Student',
-                    style: TextStyle(fontSize: 15, color: subTextColor),
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _profileCard(
-                            icon: Icons.person_outline,
-                            title: 'Student Name',
-                            value: widget.name,
-                            darkMode: darkMode,
-                            textColor: textColor,
-                            subTextColor: subTextColor,
-                            accentColor: accentColor,
-                            cardColor: cardColor,
-                            borderColor: borderColor,
+                            ],
                           ),
-                          _profileCard(
-                            icon: Icons.school_outlined,
-                            title: 'Class',
-                            value: widget.className,
-                            darkMode: darkMode,
-                            textColor: textColor,
-                            subTextColor: subTextColor,
-                            accentColor: accentColor,
-                            cardColor: cardColor,
-                            borderColor: borderColor,
-                          ),
-                          _profileCard(
-                            icon: Icons.calendar_today_outlined,
-                            title: 'Semester',
-                            value: _loadingSemester ? 'Loading...' : _semester,
-                            darkMode: darkMode,
-                            textColor: textColor,
-                            subTextColor: subTextColor,
-                            accentColor: accentColor,
-                            cardColor: cardColor,
-                            borderColor: borderColor,
-                          ),
-                          _profileCard(
-                            icon: Icons.person,
-                            title: 'Gender',
-                            value: widget.gender,
-                            darkMode: darkMode,
-                            textColor: textColor,
-                            subTextColor: subTextColor,
-                            accentColor: accentColor,
-                            cardColor: cardColor,
-                            borderColor: borderColor,
-                          ),
-                          _profileCard(
-                            icon: Icons.badge_outlined,
-                            title: 'Student Username',
-                            value: widget.id,
-                            darkMode: darkMode,
-                            textColor: textColor,
-                            subTextColor: subTextColor,
-                            accentColor: accentColor,
-                            cardColor: cardColor,
-                            borderColor: borderColor,
-                          ),
-                          _appearanceCard(
-                            darkMode: darkMode,
-                            textColor: textColor,
-                            subTextColor: subTextColor,
-                            accentColor: accentColor,
-                            cardColor: cardColor,
-                            borderColor: borderColor,
-                            themeMode: themeMode,
-                            onChanged: (mode) {
-                              StudentThemeController.instance.setThemeMode(
-                                mode,
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          ElevatedButton.icon(
-                            onPressed: _showChangePasswordDialog,
-                            icon: const Icon(Icons.lock_outline),
-                            label: const Text('Change Password'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: accentColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
+                        ),
+                        const SizedBox(height: 18),
+                        _sectionHeader(
+                          title: 'Account Settings',
+                          subtitle:
+                              'Personal profile details, appearance and password controls.',
+                          textColor: textColor,
+                          subTextColor: subTextColor,
+                        ),
+                        const SizedBox(height: 10),
+                        _profileCard(
+                          icon: Icons.person_outline,
+                          title: 'Student Name',
+                          value: widget.name,
+                          textColor: textColor,
+                          subTextColor: subTextColor,
+                          accentColor: accentColor,
+                          cardColor: cardColor,
+                          borderColor: borderColor,
+                        ),
+                        _profileCard(
+                          icon: Icons.school_outlined,
+                          title: 'Class',
+                          value: widget.className,
+                          textColor: textColor,
+                          subTextColor: subTextColor,
+                          accentColor: accentColor,
+                          cardColor: cardColor,
+                          borderColor: borderColor,
+                        ),
+                        _profileCard(
+                          icon: Icons.calendar_today_outlined,
+                          title: 'Semester',
+                          value: _loadingSemester ? 'Loading...' : _semester,
+                          textColor: textColor,
+                          subTextColor: subTextColor,
+                          accentColor: accentColor,
+                          cardColor: cardColor,
+                          borderColor: borderColor,
+                        ),
+                        _profileCard(
+                          icon: Icons.person,
+                          title: 'Gender',
+                          value: widget.gender,
+                          textColor: textColor,
+                          subTextColor: subTextColor,
+                          accentColor: accentColor,
+                          cardColor: cardColor,
+                          borderColor: borderColor,
+                        ),
+                        _profileCard(
+                          icon: Icons.badge_outlined,
+                          title: 'Student Username',
+                          value: widget.id,
+                          textColor: textColor,
+                          subTextColor: subTextColor,
+                          accentColor: accentColor,
+                          cardColor: cardColor,
+                          borderColor: borderColor,
+                        ),
+                        _appearanceCard(
+                          darkMode: darkMode,
+                          textColor: textColor,
+                          subTextColor: subTextColor,
+                          accentColor: accentColor,
+                          cardColor: cardColor,
+                          borderColor: borderColor,
+                          themeMode: themeMode,
+                          onChanged: (mode) {
+                            StudentThemeController.instance.setThemeMode(mode);
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton.icon(
+                          onPressed: _showChangePasswordDialog,
+                          icon: const Icon(Icons.lock_outline, size: 18),
+                          label: const Text('Change Password'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: accentColor,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(46),
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          // Appearance moved to AppBar actions
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
 
@@ -490,7 +570,6 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     required IconData icon,
     required String title,
     required String value,
-    required bool darkMode,
     required Color textColor,
     required Color subTextColor,
     required Color accentColor,
@@ -499,11 +578,11 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
+      padding: const EdgeInsets.all(15),
+      decoration: _cardDecoration(
+        cardColor: cardColor,
+        borderColor: borderColor,
+        accentColor: accentColor,
       ),
       child: Row(
         children: [
@@ -515,7 +594,12 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               children: [
                 Text(
                   title,
-                  style: TextStyle(fontSize: 13, color: subTextColor),
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: subTextColor,
+                    letterSpacing: 0.15,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -551,11 +635,11 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     ];
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
+      padding: const EdgeInsets.all(15),
+      decoration: _cardDecoration(
+        cardColor: cardColor,
+        borderColor: borderColor,
+        accentColor: accentColor,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -621,6 +705,81 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration({
+    required Color cardColor,
+    required Color borderColor,
+    required Color accentColor,
+  }) {
+    return BoxDecoration(
+      color: cardColor,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: borderColor),
+      boxShadow: [
+        BoxShadow(
+          color: accentColor.withValues(alpha: 0.08),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionHeader({
+    required String title,
+    required String subtitle,
+    required Color textColor,
+    required Color subTextColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: textColor,
+            letterSpacing: -0.2,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
+            color: subTextColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _metaPill({
+    required String label,
+    required Color foreground,
+    required Color background,
+    required Color border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontWeight: FontWeight.w700,
+          fontSize: 11.5,
+          height: 1,
+        ),
       ),
     );
   }

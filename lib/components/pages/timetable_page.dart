@@ -16,9 +16,6 @@ import 'dart:convert';
 // - Safe cell editing that avoids null-derefs and persists edits to Firestore.
 // - Replace your existing lib/components/pages/timetable_page.dart with this file.
 
-// duplicate removed
-import '../cards/searchBar.dart';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/super_admin_theme.dart';
@@ -186,6 +183,147 @@ class _TimetablePageState extends State<TimetablePage> {
       } catch (_) {}
     }
     return s;
+  }
+
+  Future<String> _resolveFacultyDisplayName({String? departmentId}) async {
+    Future<String> _nameFromFacultyRef(DocumentReference? ref) async {
+      if (ref == null) return '';
+      try {
+        final snap = await ref.get();
+        if (snap.exists && snap.data() != null) {
+          final data = snap.data() as Map<String, dynamic>;
+          final name =
+              (data['faculty_name'] ??
+                      data['name'] ??
+                      data['facultyName'] ??
+                      data['displayName'] ??
+                      data['title'] ??
+                      '')
+                  .toString()
+                  .trim();
+          if (name.isNotEmpty) return name;
+        }
+      } catch (_) {}
+
+      // If ref id is actually a faculty name (not a doc id), try by name lookup.
+      final fallbackId = ref.id.trim();
+      if (fallbackId.isEmpty) return '';
+      try {
+        final byFacultyName = await _firestore
+            .collection('faculties')
+            .where('faculty_name', isEqualTo: fallbackId)
+            .limit(1)
+            .get();
+        if (byFacultyName.docs.isNotEmpty) {
+          final data = byFacultyName.docs.first.data();
+          final n = (data['faculty_name'] ?? data['name'] ?? fallbackId)
+              .toString()
+              .trim();
+          if (n.isNotEmpty) return n;
+        }
+        final byName = await _firestore
+            .collection('faculties')
+            .where('name', isEqualTo: fallbackId)
+            .limit(1)
+            .get();
+        if (byName.docs.isNotEmpty) {
+          final data = byName.docs.first.data();
+          final n = (data['faculty_name'] ?? data['name'] ?? fallbackId)
+              .toString()
+              .trim();
+          if (n.isNotEmpty) return n;
+        }
+      } catch (_) {}
+      return '';
+    }
+
+    Future<DocumentReference?> _refFromDynamic(dynamic value) async {
+      if (value == null) return null;
+      if (value is DocumentReference) return value;
+      final raw = value.toString().trim();
+      if (raw.isEmpty) return null;
+      String id = raw;
+      if (raw.startsWith('/')) id = raw.substring(1);
+      if (id.contains('/')) {
+        final parts = id.split('/').where((p) => p.isNotEmpty).toList();
+        id = parts.isNotEmpty ? parts.last : id;
+      }
+      return _firestore.collection('faculties').doc(id);
+    }
+
+    // 1) department -> faculty reference
+    if (departmentId != null && departmentId.trim().isNotEmpty) {
+      try {
+        final depDoc = await _firestore
+            .collection('departments')
+            .doc(departmentId.trim())
+            .get();
+        if (depDoc.exists && depDoc.data() != null) {
+          final data = depDoc.data() as Map<String, dynamic>;
+          final depRef = await _refFromDynamic(
+            data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'],
+          );
+          final depName = await _nameFromFacultyRef(depRef);
+          if (depName.isNotEmpty) return depName;
+        }
+      } catch (_) {}
+    }
+
+    // 2) session faculty
+    final sessionName = await _nameFromFacultyRef(Session.facultyRef);
+    if (sessionName.isNotEmpty) return sessionName;
+
+    final username = Session.username?.trim() ?? '';
+    if (username.isNotEmpty) {
+      // 3) admins/<username> style
+      try {
+        final adminById = await _firestore.collection('admins').doc(username).get();
+        if (adminById.exists && adminById.data() != null) {
+          final data = adminById.data() as Map<String, dynamic>;
+          final ref = await _refFromDynamic(
+            data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'],
+          );
+          final name = await _nameFromFacultyRef(ref);
+          if (name.isNotEmpty) return name;
+        }
+      } catch (_) {}
+
+      // 4) admins query by username
+      try {
+        final adminQ = await _firestore
+            .collection('admins')
+            .where('username', isEqualTo: username)
+            .limit(1)
+            .get();
+        if (adminQ.docs.isNotEmpty) {
+          final data = adminQ.docs.first.data();
+          final ref = await _refFromDynamic(
+            data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'],
+          );
+          final name = await _nameFromFacultyRef(ref);
+          if (name.isNotEmpty) return name;
+        }
+      } catch (_) {}
+
+      // 5) users query fallback
+      try {
+        final userQ = await _firestore
+            .collection('users')
+            .where('username', isEqualTo: username)
+            .limit(1)
+            .get();
+        if (userQ.docs.isNotEmpty) {
+          final data = userQ.docs.first.data();
+          final ref = await _refFromDynamic(
+            data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'],
+          );
+          final name = await _nameFromFacultyRef(ref);
+          if (name.isNotEmpty) return name;
+        }
+      } catch (_) {}
+    }
+
+    return '';
   }
 
   // Synchronous cached getters (no network)
@@ -2144,8 +2282,22 @@ class _TimetablePageState extends State<TimetablePage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final palette = Theme.of(context).extension<SuperAdminColors>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = theme.brightness == Brightness.dark;
+    final pageBg = palette?.scaffold ?? scheme.surface;
+    final cardBg = palette?.surface ?? scheme.surfaceContainerLow;
+    final tableBg = palette?.surfaceHigh ?? scheme.surfaceContainer;
+    final borderColor = palette?.border ?? scheme.outlineVariant;
+    final titleColor = palette?.textPrimary ?? scheme.onSurface;
+    final subtitleColor = palette?.textSecondary ?? scheme.onSurfaceVariant;
+    final accent = palette?.accent ?? scheme.primary;
+    final danger = scheme.error;
+    final sidebarSelectedBg = isDark
+        ? const Color(0xFF4234A4)
+        : const Color(0xFF8372FE);
+    final inputFill = palette?.inputFill ?? scheme.surfaceContainerHighest;
     final grid = currentTimetable;
     final periodsForClass = currentPeriods;
     final showLecturerList =
@@ -2157,65 +2309,202 @@ class _TimetablePageState extends State<TimetablePage> {
     final canDelete = grid != null;
     final canExport = canDelete || showLecturerList;
 
+    Widget actionButton({
+      required String label,
+      required VoidCallback? onPressed,
+      IconData? icon,
+      Color? backgroundColor,
+      Color? foregroundColor,
+      bool outlined = false,
+      bool compact = false,
+      bool solid = false,
+    }) {
+      final baseBg = backgroundColor ?? accent;
+      final isPrimaryAction = baseBg.value == accent.value;
+      final isDangerAction = baseBg.value == danger.value;
+
+      final computedFilledBg = solid
+          ? baseBg
+          : isDark
+          ? (isDangerAction
+                ? scheme.errorContainer
+                : (isPrimaryAction
+                      ? scheme.primaryContainer
+                      : Color.alphaBlend(
+                          scheme.surface.withValues(alpha: 0.18),
+                          baseBg,
+                        )))
+          : baseBg;
+      final computedOutlinedBg = isDark
+          ? scheme.surfaceContainerHighest.withValues(alpha: 0.42)
+          : Colors.transparent;
+      final computedOutlinedFg = isDark
+          ? scheme.onSurface
+          : (foregroundColor ?? titleColor);
+      final computedFilledFg = solid
+          ? (foregroundColor ?? Colors.white)
+          : isDark
+          ? (isDangerAction
+                ? scheme.onErrorContainer
+                : (isPrimaryAction ? scheme.onPrimaryContainer : scheme.onSurface))
+          : (foregroundColor ?? scheme.onPrimary);
+      final outlinedSide = isDark
+          ? (foregroundColor != null
+                ? foregroundColor.withValues(alpha: 0.45)
+                : borderColor.withValues(alpha: 0.95))
+          : (foregroundColor ?? borderColor);
+
+      final style = outlined
+          ? OutlinedButton.styleFrom(
+              backgroundColor: computedOutlinedBg,
+              side: BorderSide(color: outlinedSide),
+              foregroundColor: computedOutlinedFg,
+              disabledForegroundColor: scheme.onSurface.withValues(alpha: 0.45),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 12 : 16,
+                vertical: compact ? 10 : 12,
+              ),
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            )
+          : ElevatedButton.styleFrom(
+              elevation: 0,
+              backgroundColor: computedFilledBg,
+              foregroundColor: computedFilledFg,
+              disabledBackgroundColor: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+              disabledForegroundColor: scheme.onSurface.withValues(alpha: 0.45),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 12 : 16,
+                vertical: compact ? 10 : 12,
+              ),
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            );
+      if (icon != null) {
+        return outlined
+            ? OutlinedButton.icon(
+                onPressed: onPressed,
+                icon: Icon(icon, size: 18),
+                label: Text(label),
+                style: style,
+              )
+            : ElevatedButton.icon(
+                onPressed: onPressed,
+                icon: Icon(icon, size: 18),
+                label: Text(label),
+                style: style,
+              );
+      }
+      return outlined
+          ? OutlinedButton(onPressed: onPressed, style: style, child: Text(label))
+          : ElevatedButton(onPressed: onPressed, style: style, child: Text(label));
+    }
+
+    Widget filterDropdown({
+      required String hint,
+      required bool loading,
+      required String? value,
+      required List<DropdownMenuItem<String>> items,
+      required ValueChanged<String?> onChanged,
+    }) {
+      return DropdownButtonFormField<String>(
+        value: value,
+        decoration: InputDecoration(
+          hintText: loading ? 'Loading...' : hint,
+          filled: true,
+          fillColor: inputFill,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: borderColor),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent),
+          ),
+        ),
+        dropdownColor: cardBg,
+        icon: Icon(Icons.expand_more, color: subtitleColor),
+        style: theme.textTheme.bodyMedium?.copyWith(color: titleColor, fontWeight: FontWeight.w600),
+        items: items,
+        onChanged: onChanged,
+      );
+    }
+
     return Scaffold(
+      backgroundColor: pageBg,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(32.0),
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 8),
               Text(
                 'Time Table',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? palette?.textPrimary : null,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: titleColor,
                 ),
               ),
-              const SizedBox(height: 16),
-              SearchAddBar(
-                hintText: 'Search Time Table...',
-                buttonText: '', // hide add button; we already have one below
-                onAddPressed: () {},
-                onChanged: (v) => setState(() => searchText = v),
+              const SizedBox(height: 4),
+              Text(
+                'Manage schedules by department, class, and lecturer.',
+                style: theme.textTheme.bodyMedium?.copyWith(color: subtitleColor),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 18),
+              TextField(
+                onChanged: (v) => setState(() => searchText = v),
+                style: theme.textTheme.bodyMedium?.copyWith(color: titleColor),
+                decoration: InputDecoration(
+                  hintText: 'Search timetable, class, course, or lecturer...',
+                  hintStyle: theme.textTheme.bodyMedium?.copyWith(color: subtitleColor),
+                  prefixIcon: Icon(Icons.search, color: subtitleColor),
+                  filled: true,
+                  fillColor: cardBg,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: accent),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color:
-                      palette?.surface ?? Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: (palette?.border ?? Theme.of(context).dividerColor)
-                        .withOpacity(0.25),
-                  ),
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderColor),
+                  boxShadow: [
+                    BoxShadow(
+                      color: scheme.shadow.withValues(alpha: isDark ? 0.24 : 0.12),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
+                      spacing: 10,
+                      runSpacing: 10,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        ElevatedButton.icon(
-                          style:
-                              ElevatedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ).merge(
-                                isDark
-                                    ? ElevatedButton.styleFrom(
-                                        backgroundColor: palette?.accent,
-                                        foregroundColor: palette?.textPrimary,
-                                      )
-                                    : null,
-                              ),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Create Time Table'),
+                        actionButton(
+                          label: 'Create Time Table',
+                          icon: Icons.add,
+                          backgroundColor: sidebarSelectedBg,
+                          foregroundColor: Colors.white,
+                          solid: true,
                           onPressed: () async {
                             // compute initial names and loaderArg (dep DocumentReference or id string)
                             String? initialDepName;
@@ -2289,497 +2578,177 @@ class _TimetablePageState extends State<TimetablePage> {
                             await _applyCreatePayload(payload);
                           },
                         ),
+                        actionButton(
+                          label: 'Reload',
+                          icon: Icons.refresh,
+                          outlined: true,
+                          foregroundColor: accent,
+                          onPressed: () async {
+                            setState(() {
+                              selectedDepartment = null;
+                              selectedClass = null;
+                              selectedLecturer = null;
+                              selectedCourse = null;
+                              _classes = [];
+                              _teachers = [];
+                              _coursesForSelectedClass = [];
+                              timetableData.clear();
+                              classPeriods.clear();
+                              spans.clear();
+                              editingEnabled = false;
+                            });
+                            await _loadDepartments();
+                          },
+                        ),
+                        actionButton(
+                          label: editingEnabled ? 'Done' : 'Edit',
+                          icon: Icons.edit_outlined,
+                          outlined: true,
+                          foregroundColor: titleColor,
+                          onPressed: !canEdit
+                              ? null
+                              : () => setState(() => editingEnabled = !editingEnabled),
+                        ),
+                        actionButton(
+                          label: 'Delete',
+                          icon: Icons.delete_outline,
+                          compact: true,
+                          backgroundColor: danger,
+                          foregroundColor: scheme.onError,
+                          onPressed: selectedClass == null
+                              ? null
+                              : () async {
+                                  final classDisplayName = await _resolveClassDisplayName(
+                                    selectedClass!,
+                                  );
+                                  final confirmDelete = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Delete Timetable'),
+                                      content: Text(
+                                        'Are you sure you want to delete the timetable for class "$classDisplayName"?',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          child: const Text('Delete'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmDelete == true) {
+                                    _deleteTimetable(deleteEntireClass: true);
+                                  }
+                                },
+                        ),
+                        actionButton(
+                          label: 'Export PDF',
+                          icon: Icons.picture_as_pdf_outlined,
+                          outlined: true,
+                          foregroundColor: titleColor,
+                          onPressed: canExport ? _exportPdfFlow : null,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 14,
+                      runSpacing: 12,
+                      children: [
                         SizedBox(
-                          height: 36,
-                          child: OutlinedButton.icon(
-                            icon: Icon(
-                              Icons.refresh,
-                              size: 18,
-                              color: isDark
-                                  ? (palette?.accent ?? const Color(0xFFFFFFFF))
-                                  : Colors.purple,
-                            ),
-                            label: Text(
-                              'Reload',
-                              style: TextStyle(
-                                color: isDark
-                                    ? (palette?.accent ??
-                                          const Color(0xFFFFFFFF))
-                                    : Colors.purple,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                color: isDark
-                                    ? (palette?.accent ??
-                                          const Color(0xFFFFFFFF))
-                                    : Colors.purple,
-                              ),
-                              foregroundColor: isDark
-                                  ? (palette?.accent ?? const Color(0xFFFFFFFF))
-                                  : Colors.purple,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            onPressed: () async {
+                          width: 250,
+                          child: filterDropdown(
+                            hint: 'Department',
+                            loading: _loadingDeps,
+                            value: selectedDepartment,
+                            items: _departments
+                                .map(
+                                  (d) => DropdownMenuItem<String>(
+                                    value: d['id'] as String,
+                                    child: Text(d['name'] as String),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) async {
                               setState(() {
-                                selectedDepartment = null;
+                                selectedDepartment = v;
                                 selectedClass = null;
-                                selectedLecturer = null;
-                                selectedCourse = null;
                                 _classes = [];
+                                selectedLecturer = null;
                                 _teachers = [];
-                                _coursesForSelectedClass = [];
-                                timetableData.clear();
-                                classPeriods.clear();
-                                spans.clear();
-                                editingEnabled = false;
                               });
-                              await _loadDepartments();
-                              // teachers/courses reload after re-selection
+
+                              dynamic loaderArg;
+                              try {
+                                final found = _departments.firstWhere(
+                                  (d) => d['id'] == v,
+                                  orElse: () => <String, dynamic>{},
+                                );
+                                if (found.isNotEmpty && found['ref'] is DocumentReference) {
+                                  loaderArg = found['ref'];
+                                } else {
+                                  loaderArg = v;
+                                }
+                              } catch (_) {
+                                loaderArg = v;
+                              }
+
+                              if (loaderArg != null) {
+                                await _loadClassesForDepartment(loaderArg);
+                              }
+                              await _loadTeachers();
+                              await _handleSelectionChangeSafe();
                             },
                           ),
                         ),
                         SizedBox(
-                          width: 100,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isDark
-                                  ? (palette?.accent ?? Colors.green)
-                                  : Colors.green,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            onPressed: !canEdit
-                                ? null
-                                : () => setState(
-                                    () => editingEnabled = !editingEnabled,
+                          width: 250,
+                          child: filterDropdown(
+                            hint: 'Class',
+                            loading: _loadingClasses,
+                            value: selectedClass,
+                            items: _classes
+                                .map(
+                                  (c) => DropdownMenuItem<String>(
+                                    value: c['id'] as String,
+                                    child: Text(c['name'] as String),
                                   ),
-                            child: Text(
-                              editingEnabled ? "Done" : "Edit",
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: isDark
-                                    ? (palette?.textPrimary ?? Colors.white)
-                                    : Colors.white,
-                              ),
-                            ),
+                                )
+                                .toList(),
+                            onChanged: (v) async {
+                              setState(() {
+                                selectedClass = v;
+                              });
+                              try {
+                                await _loadTeachers();
+                                await _handleSelectionChangeSafe();
+                              } catch (err, st) {
+                                debugPrint(
+                                  'Error in selection change after class select: $err\n$st',
+                                );
+                              }
+                            },
                           ),
                         ),
                         SizedBox(
-                          width: 100,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            onPressed: selectedClass == null
-                                ? null
-                                : () async {
-                                    final classDisplayName =
-                                        await _resolveClassDisplayName(
-                                          selectedClass!,
-                                        );
-
-                                    final confirmDelete = await showDialog<bool>(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: const Text('Delete Timetable'),
-                                        content: Text(
-                                          'Are you sure you want to delete the timetable for class "$classDisplayName"?',
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, false),
-                                            child: const Text('Cancel'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(ctx, true),
-                                            child: const Text('Delete'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-
-                                    if (confirmDelete == true) {
-                                      _deleteTimetable(deleteEntireClass: true);
-                                    }
-                                  },
-                            child: const Text(
-                              "Delete",
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Export PDF',
-                          onPressed: canExport ? _exportPdfFlow : null,
-                          icon: Icon(
-                            Icons.picture_as_pdf_outlined,
-                            color: isDark ? Colors.white : palette?.iconColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        // Department dropdown
-                        Container(
-                          constraints: const BoxConstraints(
-                            minWidth: 130,
-                            maxWidth: 240,
-                          ),
-                          child: InputDecorator(
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 5,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: isDark
-                                      ? (palette?.border ??
-                                            const Color(0xFF3A3F4A))
-                                      : const Color(0xFFE5E7EB),
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: isDark
-                                      ? (palette?.border ??
-                                            const Color(0xFF3A3F4A))
-                                      : const Color(0xFFE5E7EB),
-                                ),
-                              ),
-                              focusedBorder: isDark
-                                  ? OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(
-                                        color:
-                                            palette?.accent ??
-                                            const Color(0xFF7C3AED),
-                                      ),
-                                    )
-                                  : null,
-                              isDense: true,
-                              filled: true,
-                              fillColor: isDark
-                                  ? (palette?.inputFill ??
-                                        const Color(0xFF2A2F3A))
-                                  : Colors.white,
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                dropdownColor: isDark
-                                    ? (palette?.surface ??
-                                          const Color(0xFF1F2430))
-                                    : null,
-                                style: isDark
-                                    ? TextStyle(
-                                        color:
-                                            palette?.textPrimary ??
-                                            Colors.white,
-                                      )
-                                    : null,
-                                hint: _loadingDeps
-                                    ? (isDark
-                                          ? Text(
-                                              'Loading...',
-                                              style: TextStyle(
-                                                color: palette?.textSecondary,
-                                              ),
-                                            )
-                                          : const Text('Loading...'))
-                                    : (isDark
-                                          ? Text(
-                                              'Department',
-                                              style: TextStyle(
-                                                color: palette?.textSecondary,
-                                              ),
-                                            )
-                                          : const Text('Department')),
-                                isExpanded: true,
-                                value: selectedDepartment,
-                                items: _departments
-                                    .map(
-                                      (d) => DropdownMenuItem<String>(
-                                        value: d['id'] as String,
-                                        child: isDark
-                                            ? Text(
-                                                d['name'] as String,
-                                                style: TextStyle(
-                                                  color: palette?.textPrimary,
-                                                ),
-                                              )
-                                            : Text(d['name'] as String),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (v) async {
-                                  setState(() {
-                                    selectedDepartment = v;
-                                    selectedClass = null;
-                                    _classes = [];
-                                    // clear previous lecturer selection when department changes
-                                    selectedLecturer = null;
-                                    _teachers = [];
-                                  });
-
-                                  dynamic loaderArg;
-                                  try {
-                                    final found = _departments.firstWhere(
-                                      (d) => d['id'] == v,
-                                      orElse: () => <String, dynamic>{},
-                                    );
-                                    if (found.isNotEmpty &&
-                                        found['ref'] is DocumentReference) {
-                                      loaderArg = found['ref'];
-                                    } else {
-                                      loaderArg = v;
-                                    }
-                                  } catch (_) {
-                                    loaderArg = v;
-                                  }
-
-                                  if (loaderArg != null) {
-                                    await _loadClassesForDepartment(loaderArg);
-                                  }
-                                  // ensure teachers reflect current session/faculty
-                                  await _loadTeachers();
-                                  await _handleSelectionChangeSafe();
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Class dropdown
-                        Container(
-                          constraints: const BoxConstraints(
-                            minWidth: 130,
-                            maxWidth: 240,
-                          ),
-                          child: InputDecorator(
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 5,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: isDark
-                                      ? (palette?.border ??
-                                            const Color(0xFF3A3F4A))
-                                      : const Color(0xFFE5E7EB),
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: isDark
-                                      ? (palette?.border ??
-                                            const Color(0xFF3A3F4A))
-                                      : const Color(0xFFE5E7EB),
-                                ),
-                              ),
-                              focusedBorder: isDark
-                                  ? OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(
-                                        color:
-                                            palette?.accent ??
-                                            const Color(0xFF7C3AED),
-                                      ),
-                                    )
-                                  : null,
-                              isDense: true,
-                              filled: true,
-                              fillColor: isDark
-                                  ? (palette?.inputFill ??
-                                        const Color(0xFF2A2F3A))
-                                  : Colors.white,
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                dropdownColor: isDark
-                                    ? (palette?.surface ??
-                                          const Color(0xFF1F2430))
-                                    : null,
-                                style: isDark
-                                    ? TextStyle(
-                                        color:
-                                            palette?.textPrimary ??
-                                            Colors.white,
-                                      )
-                                    : null,
-                                hint: _loadingClasses
-                                    ? (isDark
-                                          ? Text(
-                                              'Loading...',
-                                              style: TextStyle(
-                                                color: palette?.textSecondary,
-                                              ),
-                                            )
-                                          : const Text('Loading...'))
-                                    : (isDark
-                                          ? Text(
-                                              'Class',
-                                              style: TextStyle(
-                                                color: palette?.textSecondary,
-                                              ),
-                                            )
-                                          : const Text('Class')),
-                                isExpanded: true,
-                                value: selectedClass,
-                                items: _classes
-                                    .map(
-                                      (c) => DropdownMenuItem<String>(
-                                        value: c['id'] as String,
-                                        child: isDark
-                                            ? Text(
-                                                c['name'] as String,
-                                                style: TextStyle(
-                                                  color: palette?.textPrimary,
-                                                ),
-                                              )
-                                            : Text(c['name'] as String),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (v) async {
-                                  setState(() {
-                                    selectedClass = v;
-                                  });
-                                  try {
-                                    // Ensure lecturer list refreshes after class selection
-                                    await _loadTeachers();
-                                    await _handleSelectionChangeSafe();
-                                  } catch (err, st) {
-                                    debugPrint(
-                                      'Error in selection change after class select: $err\n$st',
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Lecturer dropdown
-                        Container(
-                          constraints: const BoxConstraints(
-                            minWidth: 130,
-                            maxWidth: 240,
-                          ),
-                          child: InputDecorator(
-                            decoration: InputDecoration(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 5,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: isDark
-                                      ? (palette?.border ??
-                                            const Color(0xFF3A3F4A))
-                                      : const Color(0xFFE5E7EB),
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: isDark
-                                      ? (palette?.border ??
-                                            const Color(0xFF3A3F4A))
-                                      : const Color(0xFFE5E7EB),
-                                ),
-                              ),
-                              focusedBorder: isDark
-                                  ? OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(
-                                        color:
-                                            palette?.accent ??
-                                            const Color(0xFF7C3AED),
-                                      ),
-                                    )
-                                  : null,
-                              isDense: true,
-                              filled: true,
-                              fillColor: isDark
-                                  ? (palette?.inputFill ??
-                                        const Color(0xFF2A2F3A))
-                                  : Colors.white,
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                dropdownColor: isDark
-                                    ? (palette?.surface ??
-                                          const Color(0xFF1F2430))
-                                    : null,
-                                style: isDark
-                                    ? TextStyle(
-                                        color:
-                                            palette?.textPrimary ??
-                                            Colors.white,
-                                      )
-                                    : null,
-                                hint: _loadingTeachers
-                                    ? (isDark
-                                          ? Text(
-                                              'Loading...',
-                                              style: TextStyle(
-                                                color: palette?.textSecondary,
-                                              ),
-                                            )
-                                          : const Text('Loading...'))
-                                    : (isDark
-                                          ? Text(
-                                              'Lecturer',
-                                              style: TextStyle(
-                                                color: palette?.textSecondary,
-                                              ),
-                                            )
-                                          : const Text('Lecturer')),
-                                isExpanded: true,
-                                value: selectedLecturer,
-                                items: _teachers
-                                    .map(
-                                      (t) => DropdownMenuItem<String>(
-                                        value: t['name'] as String,
-                                        child: isDark
-                                            ? Text(
-                                                t['name'] as String,
-                                                style: TextStyle(
-                                                  color: palette?.textPrimary,
-                                                ),
-                                              )
-                                            : Text(t['name'] as String),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (v) =>
-                                    setState(() => selectedLecturer = v),
-                              ),
-                            ),
+                          width: 250,
+                          child: filterDropdown(
+                            hint: 'Lecturer',
+                            loading: _loadingTeachers,
+                            value: selectedLecturer,
+                            items: _teachers
+                                .map(
+                                  (t) => DropdownMenuItem<String>(
+                                    value: t['name'] as String,
+                                    child: Text(t['name'] as String),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) => setState(() => selectedLecturer = v),
                           ),
                         ),
                       ],
@@ -2787,32 +2756,29 @@ class _TimetablePageState extends State<TimetablePage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Expanded(
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? (palette?.surfaceHigh ?? const Color(0xFF1F2430))
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
+                    color: tableBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: borderColor),
                     boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
+                    BoxShadow(
+                        color: scheme.shadow.withValues(alpha: isDark ? 0.2 : 0.1),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: (grid == null)
                       ? (showLecturerList
                             ? FutureBuilder<List<TimetableSlot>>(
-                                future:
-                                    _collectLecturerSessionsAcrossDepartment(),
+                                future: _collectLecturerSessionsAcrossDepartment(),
                                 builder: (context, snapshot) {
-                                  if (snapshot.connectionState ==
-                                      ConnectionState.waiting) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
                                     return const Center(
                                       child: CircularProgressIndicator(),
                                     );
@@ -2822,13 +2788,7 @@ class _TimetablePageState extends State<TimetablePage> {
                                     return Center(
                                       child: Text(
                                         'No sessions found for this lecturer in the selected department.',
-                                        style: TextStyle(
-                                          color:
-                                              palette?.textSecondary ??
-                                              (isDark
-                                                  ? Colors.grey.shade400
-                                                  : Colors.grey.shade600),
-                                        ),
+                                        style: TextStyle(color: subtitleColor),
                                         textAlign: TextAlign.center,
                                       ),
                                     );
@@ -2838,14 +2798,8 @@ class _TimetablePageState extends State<TimetablePage> {
                               )
                             : Center(
                                 child: Text(
-                                  'Please select Department and Class to view the timetable.',
-                                  style: TextStyle(
-                                    color:
-                                        palette?.textSecondary ??
-                                        (isDark
-                                            ? Colors.grey.shade400
-                                            : Colors.grey.shade600),
-                                  ),
+                                  'Select a department and class to view timetable data.',
+                                  style: TextStyle(color: subtitleColor),
                                   textAlign: TextAlign.center,
                                 ),
                               ))
@@ -2856,8 +2810,7 @@ class _TimetablePageState extends State<TimetablePage> {
                           editing: editingEnabled,
                           selectedLecturer: selectedLecturer,
                           teachers: _teachers,
-                          onCellTap: (d, p) =>
-                              _openEditCellDialog(dayIndex: d, periodIndex: p),
+                          onCellTap: (d, p) => _openEditCellDialog(dayIndex: d, periodIndex: p),
                         ),
                 ),
               ),
@@ -2944,6 +2897,9 @@ class _TimetablePageState extends State<TimetablePage> {
     final pdf = pw.Document();
     final headerImage = await _loadPdfHeaderImage();
     final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+    final facultyDisplay = await _resolveFacultyDisplayName(
+      departmentId: selectedDepartment,
+    );
 
     final periods = (classPeriods[depKey]?[classKey] ?? currentPeriods);
     final grid =
@@ -2988,7 +2944,13 @@ class _TimetablePageState extends State<TimetablePage> {
           ),
         ),
         build: (ctx) => [
-          _pdfHeader(depKey, classKey, dateStr, headerImage: headerImage),
+          _pdfHeader(
+            depKey,
+            classKey,
+            dateStr,
+            faculty: facultyDisplay,
+            headerImage: headerImage,
+          ),
           pw.SizedBox(height: 8),
           if (periods.isEmpty)
             pw.Text(
@@ -3031,6 +2993,7 @@ class _TimetablePageState extends State<TimetablePage> {
     String dep,
     String cls,
     String dateStr, {
+    String? faculty,
     pw.ImageProvider? headerImage,
   }) {
     return pw.Column(
@@ -3043,6 +3006,11 @@ class _TimetablePageState extends State<TimetablePage> {
           style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 4),
+        pw.Text(
+          (faculty != null && faculty.trim().isNotEmpty)
+              ? 'Faculty: ${faculty.trim()}'
+              : 'Faculty: ',
+        ),
         pw.Text('Department: $dep   Class: $cls'),
         pw.Text('Exported: $dateStr'),
       ],
@@ -3055,9 +3023,10 @@ class _TimetablePageState extends State<TimetablePage> {
   }) {
     final headerColor = PdfColors.grey200;
     final breakFill = PdfColors.grey300;
+    final rowAlt = PdfColor.fromInt(0xFFF8FAFC);
 
     final tableHeaders = ['Day', ...periods];
-    final dataRows = <List<pw.Widget>>[];
+    final dataRows = <pw.TableRow>[];
 
     for (int d = 0; d < days.length; d++) {
       final row = grid.length > d
@@ -3065,11 +3034,13 @@ class _TimetablePageState extends State<TimetablePage> {
           : List<String>.filled(periods.length, '');
       final cells = <pw.Widget>[
         pw.Container(
-          width: 40,
-          padding: const pw.EdgeInsets.all(4),
+          padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 6),
           child: pw.Text(
             days[d],
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 10,
+            ),
           ),
         ),
       ];
@@ -3077,29 +3048,64 @@ class _TimetablePageState extends State<TimetablePage> {
         final label = periods[p];
         final isBreak = label.toLowerCase().contains('break');
         final raw = p < row.length ? row[p] : '';
-        final display = raw.trim().isEmpty || raw.toLowerCase() == 'break'
+        final trimmed = raw.trim();
+        final display = trimmed.isEmpty || trimmed.toLowerCase() == 'break'
             ? (isBreak ? 'Break' : '')
-            : raw;
+            : trimmed;
+        final parts = display.split('\n');
+        final course = parts.isNotEmpty ? parts.first.trim() : '';
+        final lecturer = parts.length > 1 ? parts.sublist(1).join(' ').trim() : '';
         cells.add(
           pw.Container(
             padding: const pw.EdgeInsets.all(4),
             decoration: pw.BoxDecoration(
               color: isBreak ? breakFill : null,
-              border: pw.Border.all(color: PdfColors.grey400, width: 0.3),
             ),
-            child: pw.Text(display, style: pw.TextStyle(fontSize: 9)),
+            child: (display.isEmpty || display == 'Break')
+                ? pw.Text(
+                    display,
+                    style: pw.TextStyle(
+                      fontSize: 9,
+                      color: display == 'Break' ? PdfColors.grey800 : PdfColors.grey600,
+                    ),
+                  )
+                : pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        course,
+                        style: pw.TextStyle(
+                          fontSize: 9,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      if (lecturer.isNotEmpty)
+                        pw.Text(
+                          lecturer,
+                          style: pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                        ),
+                    ],
+                  ),
           ),
         );
       }
-      dataRows.add(cells);
+      dataRows.add(
+        pw.TableRow(
+          decoration: pw.BoxDecoration(
+            color: d.isEven ? rowAlt : PdfColors.white,
+          ),
+          children: cells,
+        ),
+      );
     }
 
     return pw.Table(
+      tableWidth: pw.TableWidth.max,
       border: pw.TableBorder.all(color: PdfColors.grey500, width: 0.5),
       defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
       columnWidths: {
-        0: pw.FixedColumnWidth(42),
-        for (int i = 1; i < tableHeaders.length; i++) i: pw.FlexColumnWidth(2),
+        0: const pw.FlexColumnWidth(0.9),
+        for (int i = 1; i < tableHeaders.length; i++) i: const pw.FlexColumnWidth(2.3),
       },
       children: [
         pw.TableRow(
@@ -3107,20 +3113,23 @@ class _TimetablePageState extends State<TimetablePage> {
           children: tableHeaders
               .map(
                 (h) => pw.Padding(
-                  padding: const pw.EdgeInsets.all(4),
+                  padding: const pw.EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 6,
+                  ),
                   child: pw.Text(
                     h,
                     textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(
                       fontWeight: pw.FontWeight.bold,
-                      fontSize: 9,
+                      fontSize: 10,
                     ),
                   ),
                 ),
               )
               .toList(),
         ),
-        ...dataRows.map((cells) => pw.TableRow(children: cells)),
+        ...dataRows,
       ],
     );
   }
@@ -3159,7 +3168,13 @@ class _TimetablePageState extends State<TimetablePage> {
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.all(4),
-              child: pw.Text(label, style: const pw.TextStyle(fontSize: 10)),
+              child: pw.Text(
+                label,
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.all(4),
@@ -3258,6 +3273,9 @@ class _TimetablePageState extends State<TimetablePage> {
     final pdf = pw.Document();
     final headerImage = await _loadPdfHeaderImage();
     final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+    final facultyDisplay = await _resolveFacultyDisplayName(
+      departmentId: selectedDepartment,
+    );
 
     pdf.addPage(
       pw.MultiPage(
@@ -3277,6 +3295,11 @@ class _TimetablePageState extends State<TimetablePage> {
               style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 4),
+            pw.Text(
+              facultyDisplay.trim().isNotEmpty
+                  ? 'Faculty: $facultyDisplay'
+                  : 'Faculty: ',
+            ),
             pw.Text('Department: $depDisplay'),
             pw.Text('Lecturer: $lecturerName'),
             pw.Text('Exported: $dateStr'),
@@ -3297,9 +3320,7 @@ class _TimetablePageState extends State<TimetablePage> {
 
   pw.Widget _pdfLecturerTable(List<TimetableSlot> slots) {
     final headers = ['Day', 'Time', 'Class', 'Course'];
-    final rows = slots
-        .map((s) => [s.day, s.periodLabel, s.className, s.course])
-        .toList();
+    final rowAlt = PdfColor.fromInt(0xFFF8FAFC);
 
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.grey500, width: 0.5),
@@ -3328,20 +3349,35 @@ class _TimetablePageState extends State<TimetablePage> {
               )
               .toList(),
         ),
-        ...rows.map(
-          (r) => pw.TableRow(
-            children: r
-                .map(
-                  (c) => pw.Padding(
-                    padding: const pw.EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 6,
-                    ),
-                    child: pw.Text(c),
+        ...slots.asMap().entries.map(
+          (entry) {
+            final idx = entry.key;
+            final s = entry.value;
+            final cells = [s.day, s.periodLabel, s.className, s.course];
+            return pw.TableRow(
+              decoration: pw.BoxDecoration(
+                color: idx.isEven ? rowAlt : PdfColors.white,
+              ),
+              children: cells.asMap().entries.map((cellEntry) {
+                final col = cellEntry.key;
+                final text = cellEntry.value;
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 6,
                   ),
-                )
-                .toList(),
-          ),
+                  child: pw.Text(
+                    text,
+                    style: pw.TextStyle(
+                      fontWeight: (col == 0 || col == 1)
+                          ? pw.FontWeight.bold
+                          : pw.FontWeight.normal,
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
         ),
       ],
     );
@@ -3358,10 +3394,13 @@ class _LecturerListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<SuperAdminColors>();
+    final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cellStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      color: palette?.textPrimary ?? (isDark ? Colors.white : Colors.black),
+      color: palette?.textPrimary ?? scheme.onSurface,
     );
+    final dayValueStyle = cellStyle?.copyWith(fontWeight: FontWeight.w700);
+    final timeValueStyle = cellStyle?.copyWith(fontWeight: FontWeight.w700);
 
     return Column(
       children: [
@@ -3369,7 +3408,7 @@ class _LecturerListView extends StatelessWidget {
           decoration: BoxDecoration(
             color:
                 palette?.surfaceHigh ??
-                (isDark ? const Color(0xFF1F2430) : Colors.grey.shade200),
+                scheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(8),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -3382,7 +3421,7 @@ class _LecturerListView extends StatelessWidget {
                   style: isDark
                       ? TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: palette?.textSecondary ?? Colors.grey.shade400,
+                          color: palette?.textSecondary ?? scheme.onSurfaceVariant,
                         )
                       : const TextStyle(fontWeight: FontWeight.bold),
                 ),
@@ -3394,7 +3433,7 @@ class _LecturerListView extends StatelessWidget {
                   style: isDark
                       ? TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: palette?.textSecondary ?? Colors.grey.shade400,
+                          color: palette?.textSecondary ?? scheme.onSurfaceVariant,
                         )
                       : const TextStyle(fontWeight: FontWeight.bold),
                 ),
@@ -3406,7 +3445,7 @@ class _LecturerListView extends StatelessWidget {
                   style: isDark
                       ? TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: palette?.textSecondary ?? Colors.grey.shade400,
+                          color: palette?.textSecondary ?? scheme.onSurfaceVariant,
                         )
                       : const TextStyle(fontWeight: FontWeight.bold),
                 ),
@@ -3418,7 +3457,7 @@ class _LecturerListView extends StatelessWidget {
                   style: isDark
                       ? TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: palette?.textSecondary ?? Colors.grey.shade400,
+                          color: palette?.textSecondary ?? scheme.onSurfaceVariant,
                         )
                       : const TextStyle(fontWeight: FontWeight.bold),
                 ),
@@ -3433,8 +3472,8 @@ class _LecturerListView extends StatelessWidget {
             separatorBuilder: (_, __) => Divider(
               height: 1,
               color: isDark
-                  ? (palette?.border ?? const Color(0xFF2D3340))
-                  : const Color(0xFFE5E7EB),
+                  ? (palette?.border ?? scheme.outlineVariant)
+                  : scheme.outlineVariant,
             ),
             itemBuilder: (context, index) {
               final s = slots[index];
@@ -3442,10 +3481,10 @@ class _LecturerListView extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 child: Row(
                   children: [
-                    Expanded(flex: 1, child: Text(s.day, style: cellStyle)),
+                    Expanded(flex: 1, child: Text(s.day, style: dayValueStyle)),
                     Expanded(
                       flex: 2,
-                      child: Text(s.periodLabel, style: cellStyle),
+                      child: Text(s.periodLabel, style: timeValueStyle),
                     ),
                     Expanded(
                       flex: 2,
@@ -3493,29 +3532,44 @@ class _TimetableGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     const double headerHeight = 50.0;
     const double dividerHeight = 1.0;
+    const double rowMinHeight = 62.0;
 
     final palette = Theme.of(context).extension<SuperAdminColors>();
+    final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = palette?.border ?? scheme.outlineVariant;
+    final headerBg = palette?.surfaceHigh ?? scheme.surfaceContainerHigh;
+    final breakBg = palette?.inputFill ?? scheme.surfaceContainerHighest;
+    final primaryText = palette?.textPrimary ?? scheme.onSurface;
+    final secondaryText = palette?.textSecondary ?? scheme.onSurfaceVariant;
+    final rowAltBg = Color.alphaBlend(
+      scheme.onSurface.withValues(alpha: isDark ? 0.03 : 0.02),
+      scheme.surface,
+    );
+    final accent = palette?.accent ?? scheme.primary;
     final highlightShape = RoundedRectangleBorder(
       side: BorderSide(
         color: editing
             ? (isDark
-                  ? (palette?.accent ?? const Color(0xFF3B4B9B))
-                  : const Color(0xFF3B4B9B))
+                  ? accent.withValues(alpha: 0.85)
+                  : accent.withValues(alpha: 0.75))
             : Colors.transparent,
+        width: 1.2,
       ),
     );
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final periodColWidth = _periodWidthFor(constraints);
-        final dayColWidth = periodColWidth * 0.5;
-
         // Build trimmed view when a lecturer filter is active: remove empty cols/rows
         List<String> displayPeriods = List<String>.from(periods);
         List<List<String>> displayGrid = timetable
             .map((r) => List<String>.from(r, growable: true))
             .toList(growable: true);
+        List<String> displayDays = List<String>.generate(
+          displayGrid.length,
+          (i) => days[i % days.length],
+          growable: true,
+        );
         final bool filterByLecturer =
             selectedLecturer != null &&
             selectedLecturer!.trim().isNotEmpty &&
@@ -3571,18 +3625,42 @@ class _TimetableGrid extends StatelessWidget {
             newGrid.add(row);
           }
 
-          // Remove rows that are completely empty
+          // Remove rows that are completely empty and keep day labels aligned.
           final filteredGrid = <List<String>>[];
-          for (final row in newGrid) {
+          final filteredDays = <String>[];
+          for (int i = 0; i < newGrid.length; i++) {
+            final row = newGrid[i];
             final any = row.any(
               (c) => c.trim().isNotEmpty && c.toLowerCase() != 'break',
             );
-            if (any) filteredGrid.add(row);
+            if (any) {
+              filteredGrid.add(row);
+              filteredDays.add(i < displayDays.length ? displayDays[i] : '');
+            }
           }
 
           displayPeriods = newPeriods;
           displayGrid = filteredGrid.isNotEmpty ? filteredGrid : newGrid;
+          displayDays = filteredGrid.isNotEmpty
+              ? filteredDays
+              : List<String>.generate(
+                  newGrid.length,
+                  (i) => i < displayDays.length ? displayDays[i] : '',
+                  growable: true,
+                );
         }
+
+        final int periodsCount = displayPeriods.isEmpty
+            ? 1
+            : displayPeriods.length;
+        final double minPeriodColWidth = _periodWidthFor(constraints);
+        final double dayColWidth =
+            ((constraints.maxWidth * 0.12).clamp(112.0, 156.0)).toDouble();
+        final double responsivePeriodWidth =
+            (constraints.maxWidth - dayColWidth) / periodsCount;
+        final double periodColWidth = responsivePeriodWidth > minPeriodColWidth
+            ? responsivePeriodWidth
+            : minPeriodColWidth;
 
         final totalWidth = dayColWidth + periodColWidth * displayPeriods.length;
         final childWidth = totalWidth > constraints.maxWidth
@@ -3599,46 +3677,65 @@ class _TimetableGrid extends StatelessWidget {
             width: childWidth,
             child: Column(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: dayColWidth,
-                      height: headerHeight,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      alignment: Alignment.centerLeft,
-                      child: const Text(
-                        'Day',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    ...displayPeriods.map((p) {
-                      final isBreak = p.toLowerCase().contains('break');
-                      return Container(
-                        width: periodColWidth,
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: dayColWidth,
                         height: headerHeight,
-                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        alignment: Alignment.centerLeft,
                         decoration: BoxDecoration(
+                          color: headerBg,
                           border: Border(
-                            left: BorderSide(color: Colors.grey.shade300),
+                            bottom: BorderSide(color: borderColor),
                           ),
-                          color: isBreak ? Colors.grey.shade100 : null,
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
-                          p,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                          'DAY',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                            fontSize: 11,
+                            color: primaryText,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      );
-                    }),
-                  ],
+                      ),
+                      ...displayPeriods.map((p) {
+                        final isBreak = p.toLowerCase().contains('break');
+                        return Container(
+                          width: periodColWidth,
+                          height: headerHeight,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              left: BorderSide(color: borderColor),
+                              bottom: BorderSide(color: borderColor),
+                            ),
+                            color: isBreak ? breakBg : headerBg,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            p,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                              color: primaryText,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
                 ),
-                const Divider(height: dividerHeight),
+                Divider(height: dividerHeight, color: borderColor),
                 SizedBox(
                   height: rowsAreaHeight,
                   child: ListView.builder(
@@ -3652,14 +3749,26 @@ class _TimetableGrid extends StatelessWidget {
                             children: [
                               Container(
                                 width: dayColWidth,
+                                constraints: const BoxConstraints(
+                                  minHeight: rowMinHeight,
+                                ),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 12,
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                alignment: Alignment.centerLeft,
+                                decoration: BoxDecoration(
+                                  color: rowIdx.isEven
+                                      ? rowAltBg
+                                      : Colors.transparent,
                                 ),
                                 child: Text(
-                                  days[rowIdx % days.length],
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                                  rowIdx < displayDays.length
+                                      ? displayDays[rowIdx]
+                                      : '',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: primaryText,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -3716,11 +3825,11 @@ class _TimetableGrid extends StatelessWidget {
                                       content = Opacity(
                                         opacity: 0.5,
                                         child: Text(
-                                          'Tap to add',
+                                          'No session',
                                           style: TextStyle(
                                             fontStyle: FontStyle.italic,
-                                            color: Colors.grey.shade600,
-                                            fontSize: 12,
+                                            color: secondaryText,
+                                            fontSize: 11,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
@@ -3733,16 +3842,19 @@ class _TimetableGrid extends StatelessWidget {
                                           : null,
                                       child: Container(
                                         width: periodColWidth,
+                                        constraints: const BoxConstraints(
+                                          minHeight: rowMinHeight,
+                                        ),
                                         padding: const EdgeInsets.all(10),
                                         decoration: BoxDecoration(
                                           border: Border(
                                             left: BorderSide(
-                                              color: Colors.grey.shade300,
+                                              color: borderColor,
                                             ),
                                           ),
                                           color: isBreak
-                                              ? Colors.grey.shade100
-                                              : null,
+                                              ? breakBg
+                                              : (rowIdx.isEven ? rowAltBg : Colors.transparent),
                                         ),
                                         foregroundDecoration:
                                             (editing && !isBreak)
@@ -3758,22 +3870,42 @@ class _TimetableGrid extends StatelessWidget {
 
                                 // Build normal content for matching/visible cells
                                 if (courseOnly.isEmpty) {
-                                  if (editing && !isBreak) {
+                                  if (isBreak) {
+                                    content = Center(
+                                      child: Text(
+                                        'Break',
+                                        style: TextStyle(
+                                          color: secondaryText,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    );
+                                  } else if (editing) {
                                     content = Opacity(
                                       opacity: 0.5,
                                       child: Text(
-                                        'Tap to add',
+                                        'No session',
                                         style: TextStyle(
                                           fontStyle: FontStyle.italic,
-                                          color: Colors.grey.shade600,
-                                          fontSize: 12,
+                                          color: secondaryText,
+                                          fontSize: 11,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     );
                                   } else {
-                                    content = const SizedBox.shrink();
+                                    content = Center(
+                                      child: Text(
+                                        '—',
+                                        style: TextStyle(
+                                          color: secondaryText,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    );
                                   }
                                 } else {
                                   content = Column(
@@ -3782,8 +3914,9 @@ class _TimetableGrid extends StatelessWidget {
                                     children: [
                                       Text(
                                         courseOnly,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w600,
+                                          color: primaryText,
                                         ),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
@@ -3793,9 +3926,7 @@ class _TimetableGrid extends StatelessWidget {
                                         Text(
                                           lecturerOnly,
                                           style: TextStyle(
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Colors.black87,
+                                            color: secondaryText,
                                             fontSize: 12,
                                           ),
                                           maxLines: 2,
@@ -3811,22 +3942,23 @@ class _TimetableGrid extends StatelessWidget {
                                       : null,
                                   child: Container(
                                     width: periodColWidth,
+                                    constraints: const BoxConstraints(
+                                      minHeight: rowMinHeight,
+                                    ),
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
                                       border: Border(
                                         left: BorderSide(
-                                          color: Colors.grey.shade300,
+                                          color: borderColor,
                                         ),
                                       ),
                                       color: isBreak
-                                          ? Colors.grey.shade100
-                                          : null,
+                                          ? breakBg
+                                          : (rowIdx.isEven ? rowAltBg : Colors.transparent),
                                       boxShadow: (editing && !isBreak)
                                           ? [
                                               BoxShadow(
-                                                color: Colors.blue.withOpacity(
-                                                  0.05,
-                                                ),
+                                                color: accent.withValues(alpha: 0.10),
                                                 blurRadius: 4,
                                                 offset: const Offset(0, 2),
                                               ),
@@ -3842,7 +3974,7 @@ class _TimetableGrid extends StatelessWidget {
                               }),
                             ],
                           ),
-                          const Divider(height: 1),
+                          Divider(height: 1, color: borderColor),
                         ],
                       );
                     },

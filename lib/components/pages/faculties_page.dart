@@ -334,124 +334,156 @@ class _FacultiesPageState extends State<FacultiesPage> {
   }
 
   Widget _buildDesktopTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-
-    return Table(
+    return _buildSaasTable(
       columnWidths: const {
-        0: FixedColumnWidth(64), // No
-        1: FixedColumnWidth(120), // Faculty Code
-        2: FixedColumnWidth(180), // Faculty Name
-        3: FixedColumnWidth(130), // Created At
+        0: FixedColumnWidth(72),
+        1: FixedColumnWidth(140),
+        2: FlexColumnWidth(1.6),
+        3: FixedColumnWidth(190),
       },
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell("No"),
-            _tableHeaderCell("Faculty Code"),
-            _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Establishment Date"),
-          ],
-        ),
-        for (int index = 0; index < _filteredFaculties.length; index++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == index ? highlight : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(
-                _filteredFaculties[index].code,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                _filteredFaculties[index].name,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                "${_filteredFaculties[index].establishmentDate.day.toString().padLeft(2, '0')} "
-                "${_monthString(_filteredFaculties[index].establishmentDate.month)} "
-                "${_filteredFaculties[index].establishmentDate.year}",
-                onTap: () => _handleRowTap(index),
-              ),
-            ],
-          ),
-      ],
     );
   }
 
   Widget _buildMobileTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-
-    return Table(
-      defaultColumnWidth: const IntrinsicColumnWidth(),
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell("No"),
-            _tableHeaderCell("Faculty Code"),
-            _tableHeaderCell("Faculty Name"),
-            _tableHeaderCell("Created At"),
-          ],
-        ),
-        for (int index = 0; index < _filteredFaculties.length; index++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == index ? highlight : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${index + 1}', onTap: () => _handleRowTap(index)),
-              _tableBodyCell(
-                _filteredFaculties[index].code,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                _filteredFaculties[index].name,
-                onTap: () => _handleRowTap(index),
-              ),
-              _tableBodyCell(
-                "${_filteredFaculties[index].establishmentDate.day.toString().padLeft(2, '0')} "
-                "${_monthString(_filteredFaculties[index].establishmentDate.month)} "
-                "${_filteredFaculties[index].establishmentDate.year}",
-                onTap: () => _handleRowTap(index),
-              ),
-            ],
-          ),
-      ],
+    return _buildSaasTable(
+      columnWidths: const {
+        0: FixedColumnWidth(72),
+        1: FixedColumnWidth(140),
+        2: FixedColumnWidth(220),
+        3: FixedColumnWidth(190),
+      },
     );
   }
 
-  Widget _tableHeaderCell(String text) {
+  Widget _buildSaasTable({required Map<int, TableColumnWidth> columnWidths}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final scheme = Theme.of(context).colorScheme;
+    final surface = palette?.surface ?? scheme.surface;
+    final border =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : const Color(0xFFD7DCEA));
+    final headerBg = palette?.surfaceHigh ?? scheme.surfaceContainerHighest;
+    final textPrimary = palette?.textPrimary ?? scheme.onSurface;
+    final selectedBg =
+        palette?.selectedBg ??
+        Color.alphaBlend(
+          (palette?.accent ?? const Color(0xFF6A46FF)).withValues(alpha: 0.12),
+          surface,
+        );
+    final divider = border.withValues(alpha: isDark ? 0.7 : 0.85);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: divider),
+        boxShadow: [
+          BoxShadow(
+            color: (palette?.accent ?? const Color(0xFF6A46FF)).withValues(
+              alpha: isDark ? 0.06 : 0.08,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _clearSelection,
+                behavior: HitTestBehavior.opaque,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            Table(
+              columnWidths: columnWidths,
+              border: TableBorder(horizontalInside: BorderSide(color: divider)),
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: headerBg),
+                  children: [
+                    _tableHeaderCell("No", textPrimary),
+                    _tableHeaderCell("Faculty Code", textPrimary),
+                    _tableHeaderCell("Faculty Name", textPrimary),
+                    _tableHeaderCell("Establishment Date", textPrimary),
+                  ],
+                ),
+                for (int index = 0; index < _filteredFaculties.length; index++)
+                  TableRow(
+                    decoration: BoxDecoration(
+                      color: _selectedIndex == index ? selectedBg : surface,
+                    ),
+                    children: [
+                      _tableBodyCell(
+                        '${index + 1}',
+                        textPrimary,
+                        onTap: () => _handleRowTap(index),
+                      ),
+                      _tableBodyCell(
+                        _filteredFaculties[index].code,
+                        textPrimary,
+                        onTap: () => _handleRowTap(index),
+                      ),
+                      _tableBodyCell(
+                        _filteredFaculties[index].name,
+                        textPrimary,
+                        onTap: () => _handleRowTap(index),
+                      ),
+                      _tableBodyCell(
+                        "${_filteredFaculties[index].establishmentDate.day.toString().padLeft(2, '0')} "
+                        "${_monthString(_filteredFaculties[index].establishmentDate.month)} "
+                        "${_filteredFaculties[index].establishmentDate.year}",
+                        textPrimary,
+                        onTap: () => _handleRowTap(index),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tableHeaderCell(String text, Color textColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
       child: Text(
         text,
-        style: const TextStyle(fontWeight: FontWeight.bold),
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          color: textColor,
+          letterSpacing: 0.1,
+        ),
         textAlign: TextAlign.left,
         overflow: TextOverflow.ellipsis,
       ),
     );
   }
 
-  Widget _tableBodyCell(String text, {VoidCallback? onTap}) {
+  Widget _tableBodyCell(String text, Color textColor, {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap,
+      hoverColor: Colors.transparent,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(text, overflow: TextOverflow.ellipsis),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        child: Text(
+          text,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14.5,
+            color: textColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }
@@ -476,7 +508,12 @@ class _FacultiesPageState extends State<FacultiesPage> {
 
   void _handleRowTap(int index) {
     setState(() {
-      _selectedIndex = index;
+      _selectedIndex = _selectedIndex == index ? null : index;
     });
+  }
+
+  void _clearSelection() {
+    if (_selectedIndex == null) return;
+    setState(() => _selectedIndex = null);
   }
 }
