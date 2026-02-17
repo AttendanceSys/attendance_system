@@ -846,11 +846,8 @@ class _ClassesPageState extends State<ClassesPage> {
               child: isDesktop
                   ? _buildDesktopTable()
                   : SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: _buildMobileTable(),
-                      ),
+                      scrollDirection: Axis.horizontal,
+                      child: _buildMobileTable(),
                     ),
             ),
           ),
@@ -916,18 +913,10 @@ class _ClassesPageState extends State<ClassesPage> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Stack(
+        child: Column(
           children: [
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _clearSelection,
-                behavior: HitTestBehavior.opaque,
-                child: const SizedBox.expand(),
-              ),
-            ),
             Table(
               columnWidths: columnWidths,
-              border: TableBorder(horizontalInside: BorderSide(color: divider)),
               children: [
                 TableRow(
                   decoration: BoxDecoration(color: headerBg),
@@ -938,52 +927,64 @@ class _ClassesPageState extends State<ClassesPage> {
                     _tableHeaderCell("Status", textPrimary),
                   ],
                 ),
-                for (int index = 0; index < _filteredClasses.length; index++)
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: _selectedIndex == index ? selectedBg : surface,
-                    ),
-                    children: [
-                      _tableBodyCell(
-                        '${index + 1}',
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                      _tableBodyCell(
-                        _filteredClasses[index].className,
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                      _tableBodyCell(
-                        _departmentNames[_filteredClasses[index].departmentRef] ??
-                            _filteredClasses[index].departmentRef,
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 10,
-                          horizontal: 16,
+              ],
+            ),
+            Container(height: 1, color: divider),
+            Expanded(
+              child: SingleChildScrollView(
+                primary: false,
+                child: Table(
+                  columnWidths: columnWidths,
+                  border: TableBorder(horizontalInside: BorderSide(color: divider)),
+                  children: [
+                    for (int index = 0; index < _filteredClasses.length; index++)
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: _selectedIndex == index ? selectedBg : surface,
                         ),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Transform.scale(
-                            scale: 0.94,
-                            child: Switch.adaptive(
-                              value: _filteredClasses[index].status,
-                              onChanged: (value) => _toggleActive(index, value),
-                              activeColor: const Color(0xFF1DBA73),
-                              inactiveThumbColor: const Color(0xFFD33D57),
-                              inactiveTrackColor: const Color(
-                                0xFFD33D57,
-                              ).withValues(alpha: 0.35),
+                        children: [
+                          _tableBodyCell(
+                            '${index + 1}',
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                          _tableBodyCell(
+                            _filteredClasses[index].className,
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                          _tableBodyCell(
+                            _departmentNames[_filteredClasses[index].departmentRef] ??
+                                _filteredClasses[index].departmentRef,
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 10,
+                              horizontal: 16,
+                            ),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Transform.scale(
+                                scale: 0.94,
+                                child: Switch.adaptive(
+                                  value: _filteredClasses[index].status,
+                                  onChanged: (value) => _toggleActive(index, value),
+                                  activeColor: const Color(0xFF1DBA73),
+                                  inactiveThumbColor: const Color(0xFFD33D57),
+                                  inactiveTrackColor: const Color(
+                                    0xFFD33D57,
+                                  ).withValues(alpha: 0.35),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ],
         ),

@@ -868,21 +868,10 @@ class _StudentsPageState extends State<StudentsPage> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Stack(
+        child: Column(
           children: [
-            Positioned.fill(
-              child: MouseRegion(
-                cursor: SystemMouseCursors.basic,
-                child: GestureDetector(
-                  onTap: _clearSelection,
-                  behavior: HitTestBehavior.opaque,
-                  child: const SizedBox.expand(),
-                ),
-              ),
-            ),
             Table(
               columnWidths: columnWidths,
-              border: TableBorder(horizontalInside: BorderSide(color: divider)),
               children: [
                 TableRow(
                   decoration: BoxDecoration(color: headerBg),
@@ -895,46 +884,58 @@ class _StudentsPageState extends State<StudentsPage> {
                     _tableHeaderCell('Class', textPrimary),
                   ],
                 ),
-                for (int i = 0; i < _filteredStudents.length; i++)
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: _selectedIndex == i ? selectedBg : surface,
-                    ),
-                    children: [
-                      _tableBodyCell(
-                        '${i + 1}',
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _filteredStudents[i].username,
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _filteredStudents[i].fullname,
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _filteredStudents[i].gender,
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _departmentNames[_filteredStudents[i].departmentRef ?? ''] ??
-                            '',
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _classNames[_filteredStudents[i].classRef ?? ''] ?? '',
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                    ],
-                  ),
               ],
+            ),
+            Container(height: 1, color: divider),
+            Expanded(
+              child: SingleChildScrollView(
+                primary: false,
+                child: Table(
+                  columnWidths: columnWidths,
+                  border: TableBorder(horizontalInside: BorderSide(color: divider)),
+                  children: [
+                    for (int i = 0; i < _filteredStudents.length; i++)
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: _selectedIndex == i ? selectedBg : surface,
+                        ),
+                        children: [
+                          _tableBodyCell(
+                            '${i + 1}',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredStudents[i].username,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredStudents[i].fullname,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredStudents[i].gender,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _departmentNames[_filteredStudents[i].departmentRef ?? ''] ??
+                                '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _classNames[_filteredStudents[i].classRef ?? ''] ?? '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

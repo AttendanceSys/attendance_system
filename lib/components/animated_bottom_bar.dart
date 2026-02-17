@@ -9,6 +9,7 @@ class AnimatedBottomBar extends StatefulWidget {
   final double lift; // pixels
   final Duration duration;
   final double activeSize;
+  final bool reserveLiftSpace;
 
   const AnimatedBottomBar({
     super.key,
@@ -17,6 +18,7 @@ class AnimatedBottomBar extends StatefulWidget {
     this.lift = 30.0,
     this.duration = const Duration(milliseconds: 180),
     this.activeSize = 70.0,
+    this.reserveLiftSpace = true,
   });
 
   @override
@@ -36,13 +38,18 @@ class _AnimatedBottomBarState extends State<AnimatedBottomBar> {
     return SafeArea(
       child: Container(
         color: Colors.transparent,
-        padding: const EdgeInsets.only(bottom: 6, top: 2),
+        padding: EdgeInsets.only(
+          bottom: 6,
+          top: widget.reserveLiftSpace ? 2 : 0,
+        ),
         child: Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.topCenter,
           children: [
             Container(
-              margin: EdgeInsets.only(top: widget.lift * 0.45),
+              margin: EdgeInsets.only(
+                top: widget.reserveLiftSpace ? widget.lift * 0.45 : 0,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 color: theme.card,

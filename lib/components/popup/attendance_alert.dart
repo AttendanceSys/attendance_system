@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../theme/super_admin_theme.dart';
+import '../student_theme_controller.dart';
 
 enum AttendanceAlertType {
   alreadyRecorded,
@@ -10,7 +10,6 @@ enum AttendanceAlertType {
 }
 
 class AttendanceAlert {
-  // Convenience show methods (all accept optional subject/date/time details)
   static Future<void> showAlreadyRecorded(
     BuildContext context, {
     String? subject,
@@ -23,7 +22,7 @@ class AttendanceAlert {
     subject: subject,
     date: date,
     time: time,
-    title: 'Already Attendance\nMarked',
+    title: 'Attendance Already Marked',
     onClose: onClose,
   );
 
@@ -82,7 +81,6 @@ class AttendanceAlert {
     String? subject,
     String? date,
     String? time,
-    // By default do not auto-close; caller may pass a Duration to auto-close.
     Duration? autoCloseAfter,
     VoidCallback? onClose,
   }) => _show(
@@ -91,7 +89,7 @@ class AttendanceAlert {
     subject: subject,
     date: date,
     time: time,
-    title: 'Attendance Marked\nSuccessfully',
+    title: 'Attendance Marked Successfully',
     autoCloseAfter: autoCloseAfter,
     onClose: onClose,
   );
@@ -122,7 +120,7 @@ class AttendanceAlert {
         details ?? 'Your scan was flagged as suspicious and will be reviewed.',
     onClose: onClose,
   );
-  // Generic show function
+
   static Future<void> _show(
     BuildContext context, {
     required AttendanceAlertType type,
@@ -144,14 +142,14 @@ class AttendanceAlert {
       onClose: onClose,
     );
 
-    // Show dialog. Make alerts non-dismissible: require the user to press OK.
-    showDialog(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => WillPopScope(onWillPop: () async => false, child: dialog),
+      builder: (_) => PopScope(canPop: false, child: dialog),
     );
 
-    // autoCloseAfter intentionally ignored to ensure dialog requires explicit OK
+    // Intentionally ignored. Keep explicit OK close for consistency.
+    if (autoCloseAfter != null) {}
   }
 }
 
@@ -174,43 +172,41 @@ class _AttendanceAlertDialog extends StatelessWidget {
     this.onClose,
   });
 
-  Color get _primaryColor {
+  Color _toneColor(StudentThemeProxy theme) {
     switch (type) {
       case AttendanceAlertType.success:
-        return const Color(0xFF19C37D);
+        return const Color(0xFF16B36A);
       case AttendanceAlertType.alreadyRecorded:
-      case AttendanceAlertType.info:
-        return Colors.orange.shade700;
+        return const Color(0xFF1F8FE5);
       case AttendanceAlertType.notYourClass:
       case AttendanceAlertType.qrExpired:
-        return Colors.red.shade600;
+        return const Color(0xFFE24646);
+      case AttendanceAlertType.info:
+        return const Color(0xFFE68A00);
     }
   }
 
-  IconData get _icon {
+  IconData _icon() {
     switch (type) {
       case AttendanceAlertType.success:
-        return Icons.check;
+        return Icons.check_rounded;
       case AttendanceAlertType.alreadyRecorded:
-        return Icons
-            .check_circle; // show success-looking icon for already-recorded
+        return Icons.verified_rounded;
       case AttendanceAlertType.notYourClass:
-        return Icons.block;
+        return Icons.block_rounded;
       case AttendanceAlertType.qrExpired:
-        return Icons.timer_off;
+        return Icons.timer_off_rounded;
       case AttendanceAlertType.info:
-        return Icons.info_outline;
+        return Icons.info_rounded;
     }
   }
 
-  String get _effectiveTitle => title ?? _defaultTitle;
-
-  String get _defaultTitle {
+  String _defaultTitle() {
     switch (type) {
       case AttendanceAlertType.success:
-        return 'Attendance Marked\nSuccessfully';
+        return 'Attendance Marked Successfully';
       case AttendanceAlertType.alreadyRecorded:
-        return 'Already Attendance\nMarked';
+        return 'Attendance Already Marked';
       case AttendanceAlertType.notYourClass:
         return 'Not Your Class';
       case AttendanceAlertType.qrExpired:
@@ -220,15 +216,14 @@ class _AttendanceAlertDialog extends StatelessWidget {
     }
   }
 
-  String get _effectiveMessage {
-    if (message != null && message!.isNotEmpty) return message!;
+  String _defaultMessage() {
     switch (type) {
       case AttendanceAlertType.success:
-        return 'Attendance successfully recorded.';
+        return 'Attendance has been recorded for this session.';
       case AttendanceAlertType.alreadyRecorded:
         return 'Attendance for this session has already been recorded.';
       case AttendanceAlertType.notYourClass:
-        return 'This QR/session does not belong to your assigned class or subject.';
+        return 'This QR/session does not belong to your assigned class.';
       case AttendanceAlertType.qrExpired:
         return 'This QR/session has expired. Please request a new active session.';
       case AttendanceAlertType.info:
@@ -236,34 +231,37 @@ class _AttendanceAlertDialog extends StatelessWidget {
     }
   }
 
-  Widget _infoRow(
-    BuildContext c,
-    String label,
-    String? value,
-    Color labelColor,
-    Color valueColor,
-  ) {
-    if (value == null || value.trim().isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, top: 4),
+  Widget _metaTile({
+    required String label,
+    required String value,
+    required Color fg,
+    required Color bg,
+    required Color border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '$label: ',
             style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: labelColor,
+              color: fg.withValues(alpha: 0.72),
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
           ),
           Expanded(
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w400,
-                color: valueColor,
+                color: fg,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
               ),
             ),
           ),
@@ -274,152 +272,115 @@ class _AttendanceAlertDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface =
-        palette?.surface ?? (isDark ? const Color(0xFF262C3A) : Colors.white);
-    final textPrimary =
-        palette?.textPrimary ?? (isDark ? Colors.white : Colors.black87);
-    final textSecondary =
-        palette?.textSecondary ??
-        (isDark ? const Color(0xFFB5BDCB) : Colors.black54);
+    final studentTheme = StudentThemeController.instance.theme;
+    final isDark = StudentThemeController.instance.isDarkMode;
+    final tone = _toneColor(studentTheme);
+    final titleText = title?.trim().isNotEmpty == true ? title!.trim() : _defaultTitle();
+    final messageText = message?.trim().isNotEmpty == true
+        ? message!.trim()
+        : _defaultMessage();
 
-    final double screenW = MediaQuery.of(context).size.width;
-    final double dialogW = screenW < 420 ? screenW * 0.96 : 380;
-    final double dialogH = MediaQuery.of(context).size.height < 700
-        ? MediaQuery.of(context).size.height * 0.82
-        : 520;
+    final infoValues = <MapEntry<String, String>>[];
+    if ((subject ?? '').trim().isNotEmpty) {
+      infoValues.add(MapEntry('Subject', subject!.trim()));
+    }
+    if ((date ?? '').trim().isNotEmpty) {
+      infoValues.add(MapEntry('Date', date!.trim()));
+    }
+    if ((time ?? '').trim().isNotEmpty) {
+      infoValues.add(MapEntry('Time', time!.trim()));
+    }
 
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      backgroundColor: surface,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: dialogW, maxHeight: dialogH),
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 380),
+        decoration: BoxDecoration(
+          color: studentTheme.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: studentTheme.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.30 : 0.12),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 22, 18),
-          child: SizedBox(
-            // fixed height equal to the maximum dialog height so inner scrolling works
-            height: dialogH,
-            child: Column(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                // Scrollable content area (title, icon, message, info rows)
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Title (large)
-                        Text(
-                          _effectiveTitle,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Large circular icon (center)
-                        Container(
-                          width: 140,
-                          height: 140,
-                          decoration: BoxDecoration(
-                            color: _primaryColor,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Icon(_icon, color: Colors.white, size: 80),
-                          ),
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        // Message (optional short message)
-                        if (_effectiveMessage.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6.0,
-                            ),
-                            child: Text(
-                              _effectiveMessage,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: textSecondary,
-                              ),
-                            ),
-                          ),
-
-                        const SizedBox(height: 12),
-
-                        // Info rows (subject / date / time)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                          child: Column(
-                            children: [
-                              _infoRow(
-                                context,
-                                'Subject',
-                                subject,
-                                textSecondary,
-                                textPrimary,
-                              ),
-                              _infoRow(
-                                context,
-                                'Date',
-                                date,
-                                textSecondary,
-                                textPrimary,
-                              ),
-                              _infoRow(
-                                context,
-                                'Time',
-                                time,
-                                textSecondary,
-                                textPrimary,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 74,
+                height: 74,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(_icon(), color: tone, size: 40),
+              ),
+              Text(
+                titleText,
+                style: TextStyle(
+                  color: studentTheme.foreground,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                ),
+              ),
+              if (messageText.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  messageText,
+                  style: TextStyle(
+                    color: studentTheme.hint,
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+              if (infoValues.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                ...infoValues.map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _metaTile(
+                      label: e.key,
+                      value: e.value,
+                      fg: studentTheme.foreground,
+                      bg: studentTheme.inputBackground,
+                      border: studentTheme.border,
                     ),
                   ),
                 ),
-
-                // OK button bottom-right (fixed)
-                Row(
-                  children: [
-                    const Spacer(),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: palette?.accent ?? Colors.blue,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 28,
-                          vertical: 14,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        elevation: 4,
-                      ),
-                      onPressed: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
-                        if (onClose != null) onClose!();
-                      },
-                      child: const Text(
-                        'OK',
-                        style: TextStyle(fontSize: 20, color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
               ],
-            ),
+              const SizedBox(height: 8),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: studentTheme.button,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(46),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  }
+                  onClose?.call();
+                },
+                child: const Text(
+                  'OK',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
           ),
         ),
       ),

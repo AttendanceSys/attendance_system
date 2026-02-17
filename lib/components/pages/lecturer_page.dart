@@ -10,6 +10,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import '../../utils/download_bytes.dart';
 
 class TeachersPage extends StatefulWidget {
   const TeachersPage({super.key});
@@ -367,6 +369,47 @@ class _TeachersPageState extends State<TeachersPage> {
     }
   }
 
+  Future<void> _handleExportLecturersCsv() async {
+    try {
+      final rows = <List<dynamic>>[
+        ['No', 'Username', 'Lecturer Name', 'Faculty'],
+      ];
+      for (int i = 0; i < _teachers.length; i++) {
+        final t = _teachers[i];
+        rows.add([
+          i + 1,
+          t.username,
+          t.teacherName,
+          _facultyIdToName[t.facultyId] ?? t.facultyId,
+        ]);
+      }
+
+      final csv = const ListToCsvConverter().convert(rows);
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+      final now = DateTime.now();
+      final fileName =
+          'lecturers_${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}.csv';
+
+      final downloaded = await downloadBytes(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'text/csv;charset=utf-8',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            downloaded
+                ? 'CSV exported: $fileName'
+                : 'CSV export is currently supported on web only',
+          ),
+        ),
+      );
+    } catch (e) {
+      _showSnack('Failed to export lecturers CSV');
+    }
+  }
+
   Future<bool> _addTeacherFromUpload(Teacher teacher) async {
     try {
       final effectivePassword = teacher.password.trim().isEmpty
@@ -543,6 +586,22 @@ class _TeachersPageState extends State<TeachersPage> {
                               ),
                             ),
                           ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              onPressed: _handleExportLecturersCsv,
+                              icon: const Icon(Icons.download),
+                              label: const Text('Export CSV'),
+                              style: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                backgroundColor: const Color(0xFF1F6FEB),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       )
                     else ...[
@@ -573,6 +632,23 @@ class _TeachersPageState extends State<TeachersPage> {
                               150,
                               80,
                             ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _handleExportLecturersCsv,
+                          icon: const Icon(Icons.download),
+                          label: const Text('Export CSV'),
+                          style: ElevatedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: const Color(0xFF1F6FEB),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -656,11 +732,8 @@ class _TeachersPageState extends State<TeachersPage> {
               child: isDesktop
                   ? _buildDesktopTable()
                   : SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: _buildMobileTable(),
-                      ),
+                      scrollDirection: Axis.horizontal,
+                      child: _buildMobileTable(),
                     ),
             ),
           ),
@@ -726,18 +799,10 @@ class _TeachersPageState extends State<TeachersPage> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Stack(
+        child: Column(
           children: [
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _clearSelection,
-                behavior: HitTestBehavior.opaque,
-                child: const SizedBox.expand(),
-              ),
-            ),
             Table(
               columnWidths: columnWidths,
-              border: TableBorder(horizontalInside: BorderSide(color: divider)),
               children: [
                 TableRow(
                   decoration: BoxDecoration(color: headerBg),
@@ -748,36 +813,48 @@ class _TeachersPageState extends State<TeachersPage> {
                     _tableHeaderCell("Faculty", textPrimary),
                   ],
                 ),
-                for (int index = 0; index < _filteredTeachers.length; index++)
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: _selectedIndex == index ? selectedBg : surface,
-                    ),
-                    children: [
-                      _tableBodyCell(
-                        '${index + 1}',
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                      _tableBodyCell(
-                        _filteredTeachers[index].username,
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                      _tableBodyCell(
-                        _filteredTeachers[index].teacherName,
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                      _tableBodyCell(
-                        _facultyIdToName[_filteredTeachers[index].facultyId] ??
-                            _filteredTeachers[index].facultyId,
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                    ],
-                  ),
               ],
+            ),
+            Container(height: 1, color: divider),
+            Expanded(
+              child: SingleChildScrollView(
+                primary: false,
+                child: Table(
+                  columnWidths: columnWidths,
+                  border: TableBorder(horizontalInside: BorderSide(color: divider)),
+                  children: [
+                    for (int index = 0; index < _filteredTeachers.length; index++)
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: _selectedIndex == index ? selectedBg : surface,
+                        ),
+                        children: [
+                          _tableBodyCell(
+                            '${index + 1}',
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                          _tableBodyCell(
+                            _filteredTeachers[index].username,
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                          _tableBodyCell(
+                            _filteredTeachers[index].teacherName,
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                          _tableBodyCell(
+                            _facultyIdToName[_filteredTeachers[index].facultyId] ??
+                                _filteredTeachers[index].facultyId,
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

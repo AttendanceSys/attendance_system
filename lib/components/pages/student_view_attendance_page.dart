@@ -322,19 +322,6 @@ class _StudentViewAttendanceMobileState
         final avatarLetter = studentName.trim().isNotEmpty
             ? studentName.trim()[0].toUpperCase()
             : '';
-        final studentClassDisplay =
-            (_studentData?['className'] ?? _studentData?['class_name'] ?? '')
-                .toString();
-        final semester =
-            (_studentData?['semester'] ?? _studentData?['sem'] ?? '')
-                .toString();
-        final gender = (_studentData?['gender'] ?? '')?.toString() ?? '';
-        final id =
-            (_studentData?['id'] ??
-                    _studentData?['student_id'] ??
-                    _studentData?['username'] ??
-                    '')
-                .toString();
         return Scaffold(
           backgroundColor: theme.background,
           body: SafeArea(
@@ -373,14 +360,7 @@ class _StudentViewAttendanceMobileState
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => StudentProfilePage(
-                                  name: studentName,
-                                  className: studentClassDisplay,
-                                  semester: semester,
-                                  gender: gender,
-                                  id: id,
-                                  avatarLetter: avatarLetter,
-                                ),
+                                builder: (_) => const StudentProfilePage(),
                               ),
                             );
                           },
@@ -576,14 +556,7 @@ class _StudentViewAttendanceMobileState
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => StudentProfilePage(
-                            name: studentName,
-                            className: studentClassDisplay,
-                            semester: semester,
-                            gender: gender,
-                            id: id,
-                            avatarLetter: avatarLetter,
-                          ),
+                          builder: (_) => const StudentProfilePage(),
                         ),
                       );
                     }

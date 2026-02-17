@@ -712,11 +712,8 @@ class _CoursesPageState extends State<CoursesPage> {
                     child: isDesktop
                         ? _buildDesktopTable()
                         : SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: _buildMobileTable(),
-                            ),
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
                           ),
                   ),
           ),
@@ -885,18 +882,10 @@ class _CoursesPageState extends State<CoursesPage> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Stack(
+        child: Column(
           children: [
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _clearSelection,
-                behavior: HitTestBehavior.opaque,
-                child: const SizedBox.expand(),
-              ),
-            ),
             Table(
               columnWidths: columnWidths,
-              border: TableBorder(horizontalInside: BorderSide(color: divider)),
               children: [
                 TableRow(
                   decoration: BoxDecoration(color: headerBg),
@@ -910,51 +899,63 @@ class _CoursesPageState extends State<CoursesPage> {
                     _tableHeaderCell('Semester', textPrimary),
                   ],
                 ),
-                for (int i = 0; i < _filteredCourses.length; i++)
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: _selectedIndex == i ? selectedBg : surface,
-                    ),
-                    children: [
-                      _tableBodyCell(
-                        '${i + 1}',
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _filteredCourses[i].courseCode,
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _filteredCourses[i].courseName,
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _teacherDisplay(_filteredCourses[i].teacherRef),
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _departmentNames[_classDeptId[_filteredCourses[i].classRef]] ??
-                            '',
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _classNames[_filteredCourses[i].classRef] ?? '',
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                      _tableBodyCell(
-                        _filteredCourses[i].semester ?? '',
-                        textPrimary,
-                        onTap: () => _handleRowTap(i),
-                      ),
-                    ],
-                  ),
               ],
+            ),
+            Container(height: 1, color: divider),
+            Expanded(
+              child: SingleChildScrollView(
+                primary: false,
+                child: Table(
+                  columnWidths: columnWidths,
+                  border: TableBorder(horizontalInside: BorderSide(color: divider)),
+                  children: [
+                    for (int i = 0; i < _filteredCourses.length; i++)
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: _selectedIndex == i ? selectedBg : surface,
+                        ),
+                        children: [
+                          _tableBodyCell(
+                            '${i + 1}',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredCourses[i].courseCode,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredCourses[i].courseName,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _teacherDisplay(_filteredCourses[i].teacherRef),
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _departmentNames[_classDeptId[_filteredCourses[i].classRef]] ??
+                                '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _classNames[_filteredCourses[i].classRef] ?? '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredCourses[i].semester ?? '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

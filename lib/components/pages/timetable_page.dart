@@ -186,7 +186,7 @@ class _TimetablePageState extends State<TimetablePage> {
   }
 
   Future<String> _resolveFacultyDisplayName({String? departmentId}) async {
-    Future<String> _nameFromFacultyRef(DocumentReference? ref) async {
+    Future<String> nameFromFacultyRef(DocumentReference? ref) async {
       if (ref == null) return '';
       try {
         final snap = await ref.get();
@@ -237,7 +237,7 @@ class _TimetablePageState extends State<TimetablePage> {
       return '';
     }
 
-    Future<DocumentReference?> _refFromDynamic(dynamic value) async {
+    Future<DocumentReference?> refFromDynamic(dynamic value) async {
       if (value == null) return null;
       if (value is DocumentReference) return value;
       final raw = value.toString().trim();
@@ -260,17 +260,17 @@ class _TimetablePageState extends State<TimetablePage> {
             .get();
         if (depDoc.exists && depDoc.data() != null) {
           final data = depDoc.data() as Map<String, dynamic>;
-          final depRef = await _refFromDynamic(
+          final depRef = await refFromDynamic(
             data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'],
           );
-          final depName = await _nameFromFacultyRef(depRef);
+          final depName = await nameFromFacultyRef(depRef);
           if (depName.isNotEmpty) return depName;
         }
       } catch (_) {}
     }
 
     // 2) session faculty
-    final sessionName = await _nameFromFacultyRef(Session.facultyRef);
+    final sessionName = await nameFromFacultyRef(Session.facultyRef);
     if (sessionName.isNotEmpty) return sessionName;
 
     final username = Session.username?.trim() ?? '';
@@ -280,10 +280,10 @@ class _TimetablePageState extends State<TimetablePage> {
         final adminById = await _firestore.collection('admins').doc(username).get();
         if (adminById.exists && adminById.data() != null) {
           final data = adminById.data() as Map<String, dynamic>;
-          final ref = await _refFromDynamic(
+          final ref = await refFromDynamic(
             data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'],
           );
-          final name = await _nameFromFacultyRef(ref);
+          final name = await nameFromFacultyRef(ref);
           if (name.isNotEmpty) return name;
         }
       } catch (_) {}
@@ -297,10 +297,10 @@ class _TimetablePageState extends State<TimetablePage> {
             .get();
         if (adminQ.docs.isNotEmpty) {
           final data = adminQ.docs.first.data();
-          final ref = await _refFromDynamic(
+          final ref = await refFromDynamic(
             data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'],
           );
-          final name = await _nameFromFacultyRef(ref);
+          final name = await nameFromFacultyRef(ref);
           if (name.isNotEmpty) return name;
         }
       } catch (_) {}
@@ -314,10 +314,10 @@ class _TimetablePageState extends State<TimetablePage> {
             .get();
         if (userQ.docs.isNotEmpty) {
           final data = userQ.docs.first.data();
-          final ref = await _refFromDynamic(
+          final ref = await refFromDynamic(
             data['faculty_ref'] ?? data['faculty_id'] ?? data['faculty'],
           );
-          final name = await _nameFromFacultyRef(ref);
+          final name = await nameFromFacultyRef(ref);
           if (name.isNotEmpty) return name;
         }
       } catch (_) {}

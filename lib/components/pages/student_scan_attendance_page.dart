@@ -22,6 +22,7 @@ class StudentScanAttendancePage extends StatefulWidget {
 
 class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
     with SingleTickerProviderStateMixin {
+  static bool _locationPromptShownThisSession = false;
   final MobileScannerController _controller = MobileScannerController();
   String? scanResult;
   bool _isProcessingScan = false;
@@ -29,13 +30,6 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
   double _zoomScale = 0.0;
   double _baseZoomScale = 0.0;
   Map<String, dynamic>? _cachedStudentProfileData;
-  // Loaded student profile fields (populated from Firestore)
-  String? _profileName;
-  String? _profileClassName;
-  String? _profileSemester;
-  String? _profileGender;
-  String? _profileId;
-  String? _profileAvatarLetter;
 
   @override
   void initState() {
@@ -45,8 +39,11 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
     _controller.zoomScaleState.addListener(_onZoomScaleChanged);
-    // Load the student's profile for use when opening the profile page
+    // Load the student's profile and cache for attendance checks
     _loadProfileForCurrentUser();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showLocationSetupPromptOnEntry();
+    });
   }
 
   void _onZoomScaleChanged() {
@@ -64,36 +61,25 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       if (doc == null || !doc.exists) return;
       final data = doc.data() ?? <String, dynamic>{};
       _cachedStudentProfileData = Map<String, dynamic>.from(data);
-      final name =
-          (data['fullname'] ??
-                  data['fullName'] ??
-                  data['name'] ??
-                  data['studentName'] ??
-                  username)
-              .toString();
-      final className =
-          (data['className'] ?? data['class_name'] ?? data['class'] ?? '')
-              .toString();
-      final semester = (data['semester'] ?? data['sem'] ?? '').toString();
-      final gender = (data['gender'] ?? '').toString();
-      final id =
-          (data['studentId'] ?? data['id'] ?? data['username'] ?? username)
-              .toString();
-      final avatar = (name.isNotEmpty
-          ? name.trim()[0].toUpperCase()
-          : (id.isNotEmpty ? id[0].toUpperCase() : 'S'));
-      if (mounted) {
-        setState(() {
-          _profileName = name;
-          _profileClassName = className;
-          _profileSemester = semester;
-          _profileGender = gender;
-          _profileId = id;
-          _profileAvatarLetter = avatar;
-        });
-      }
     } catch (e, st) {
       debugPrint('Error loading profile for scanner page: $e\n$st');
+    }
+  }
+
+  Future<void> _showLocationSetupPromptOnEntry() async {
+    if (!mounted || _locationPromptShownThisSession) return;
+    _locationPromptShownThisSession = true;
+
+    final turnOn = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _LocationSetupPromptDialog(),
+    );
+
+    if (!mounted) return;
+    if (turnOn == true) {
+      await LocationService.ensureLocationReady();
+      await LocationService.getCurrentPosition();
     }
   }
 
@@ -614,13 +600,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       }
 
       if (anomaly.flag) {
-        // Allow but show flagged notice
-        if (mounted) {
-          await AttendanceAlert.showAnomalyFlagged(
-            context,
-            details: 'Suspicious scan: ${anomaly.reason}',
-          );
-        }
+        // Non-blocking anomalies should not interrupt successful marking with
+        // a modal alert before success. Keep as debug signal only.
+        debugPrint('Non-blocking anomaly flagged: ${anomaly.reason}');
       }
 
       await _writeAttendanceForSession(code, sessionDoc, sessionData, pos);
@@ -656,13 +638,6 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
 
   @override
   Widget build(BuildContext context) {
-    final studentName = _profileName ?? '';
-    final avatarLetter = _profileAvatarLetter ?? '';
-    final className = _profileClassName ?? '';
-    final semester = _profileSemester ?? '';
-    final gender = _profileGender ?? '';
-    final id = _profileId ?? '';
-
     return AnimatedBuilder(
       animation: StudentThemeController.instance,
       builder: (context, _) {
@@ -884,6 +859,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                 ),
                 AnimatedBottomBar(
                   currentIndex: 1,
+                  reserveLiftSpace: false,
                   onTap: (index) async {
                     if (index == 0) {
                       Navigator.pushReplacement(
@@ -899,14 +875,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => StudentProfilePage(
-                            name: studentName,
-                            className: className,
-                            semester: semester,
-                            gender: gender,
-                            id: id,
-                            avatarLetter: avatarLetter,
-                          ),
+                          builder: (_) => const StudentProfilePage(),
                         ),
                       );
                       if (!mounted) return;
@@ -929,6 +898,141 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
           ),
         );
       },
+    );
+  }
+}
+
+class _LocationSetupPromptDialog extends StatelessWidget {
+  const _LocationSetupPromptDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final studentTheme = StudentThemeController.instance.theme;
+    final isDark = StudentThemeController.instance.isDarkMode;
+    final tone = studentTheme.button;
+    return Dialog(
+      backgroundColor: studentTheme.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'For a better experience, your device will need to use Location Accuracy',
+              style: TextStyle(
+                color: studentTheme.foreground,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'The following settings should be on:',
+              style: TextStyle(
+                color: studentTheme.hint,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _PromptRow(
+              icon: Icons.location_on_outlined,
+              text: 'Device location',
+              iconColor: tone,
+              textColor: studentTheme.foreground,
+            ),
+            const SizedBox(height: 10),
+            _PromptRow(
+              icon: Icons.gps_fixed,
+              text:
+                  'Location Accuracy, which provides more accurate location for apps and services.',
+              iconColor: tone,
+              textColor: studentTheme.foreground,
+            ),
+            const SizedBox(height: 18),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  style: TextButton.styleFrom(
+                    foregroundColor: studentTheme.foreground,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(color: studentTheme.border),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  child: const Text('No, thanks'),
+                ),
+                const SizedBox(width: 10),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: tone,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
+                  ),
+                  child: const Text('Turn on'),
+                ),
+              ],
+            ),
+            if (isDark)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Divider(
+                  height: 1,
+                  color: studentTheme.border.withValues(alpha: 0.45),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PromptRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color iconColor;
+  final Color textColor;
+
+  const _PromptRow({
+    required this.icon,
+    required this.text,
+    required this.iconColor,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: iconColor, size: 22),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 14,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

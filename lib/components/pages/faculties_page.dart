@@ -6,6 +6,11 @@ import '../popup/add_faculty_popup.dart';
 import '../cards/searchBar.dart';
 import 'package:flutter/material.dart';
 import '../../theme/super_admin_theme.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:csv/csv.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+import '../../utils/download_bytes.dart';
 
 class FacultiesPage extends StatefulWidget {
   const FacultiesPage({super.key});
@@ -159,6 +164,195 @@ class _FacultiesPageState extends State<FacultiesPage> {
     }
   }
 
+  DateTime _parseEstablishmentDate(String raw) {
+    final s = raw.trim();
+    if (s.isEmpty) return DateTime.now();
+    final iso = DateTime.tryParse(s);
+    if (iso != null) return iso;
+
+    final parts = s.split(RegExp(r'\s+'));
+    if (parts.length == 3) {
+      final day = int.tryParse(parts[0]) ?? 1;
+      final year = int.tryParse(parts[2]) ?? DateTime.now().year;
+      const months = {
+        'jan': 1,
+        'feb': 2,
+        'mar': 3,
+        'apr': 4,
+        'may': 5,
+        'jun': 6,
+        'jul': 7,
+        'aug': 8,
+        'sep': 9,
+        'oct': 10,
+        'nov': 11,
+        'dec': 12,
+      };
+      final month = months[parts[1].toLowerCase().substring(0, 3)] ?? 1;
+      return DateTime(year, month, day);
+    }
+    return DateTime.now();
+  }
+
+  Future<void> _handleExportFacultiesCsv() async {
+    try {
+      final rows = <List<dynamic>>[
+        ['No', 'Faculty Code', 'Faculty Name', 'Establishment Date'],
+      ];
+      for (int i = 0; i < _faculties.length; i++) {
+        final f = _faculties[i];
+        rows.add([
+          i + 1,
+          f.code,
+          f.name,
+          '${f.establishmentDate.year.toString().padLeft(4, '0')}-${f.establishmentDate.month.toString().padLeft(2, '0')}-${f.establishmentDate.day.toString().padLeft(2, '0')}',
+        ]);
+      }
+
+      final csv = const ListToCsvConverter().convert(rows);
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+      final now = DateTime.now();
+      final fileName =
+          'faculties_${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}.csv';
+
+      final downloaded = await downloadBytes(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'text/csv;charset=utf-8',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            downloaded
+                ? 'CSV exported: $fileName'
+                : 'CSV export is currently supported on web only',
+          ),
+        ),
+      );
+    } catch (e) {
+      _showSnack('Failed to export faculties CSV');
+    }
+  }
+
+  Future<bool> _addFacultyFromUpload(Faculty f) async {
+    try {
+      final code = f.code.trim();
+      final name = f.name.trim();
+      if (code.isEmpty || name.isEmpty) return false;
+      final exists = await _facultyExists(code: code, name: name);
+      if (exists) return false;
+      await facultiesCollection.add({
+        'faculty_code': code,
+        'faculty_name': name,
+        'created_at': FieldValue.serverTimestamp(),
+        'establishment_date': f.establishmentDate.toIso8601String(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _handleUploadFaculties() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+        withData: true,
+      );
+      if (result == null) return;
+      final file = result.files.first;
+      if (file.bytes == null) return;
+      final content = utf8.decode(file.bytes!);
+      final rows = const CsvToListConverter(eol: '\n').convert(content);
+      if (rows.isEmpty) return;
+
+      final headers = rows.first
+          .map((h) => h.toString().toLowerCase().trim())
+          .toList();
+      final parsed = <Map<String, String>>[];
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        if (row.every((c) => (c ?? '').toString().trim().isEmpty)) continue;
+        final map = <String, String>{};
+        for (int c = 0; c < headers.length && c < row.length; c++) {
+          map[headers[c]] = row[c]?.toString().trim() ?? '';
+        }
+        parsed.add(map);
+      }
+      if (parsed.isEmpty) return;
+
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirm upload'),
+          content: Text('Import ${parsed.length} faculties?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) return;
+
+      int added = 0;
+      int skipped = 0;
+      for (final row in parsed) {
+        final code =
+            (row['faculty_code'] ??
+                    row['faculty code'] ??
+                    row['code'] ??
+                    '')
+                .toString()
+                .trim();
+        final name =
+            (row['faculty_name'] ??
+                    row['faculty name'] ??
+                    row['name'] ??
+                    '')
+                .toString()
+                .trim();
+        final dateRaw =
+            (row['establishment_date'] ??
+                    row['establishment date'] ??
+                    row['date'] ??
+                    '')
+                .toString()
+                .trim();
+        if (code.isEmpty || name.isEmpty) {
+          skipped++;
+          continue;
+        }
+
+        final faculty = Faculty(
+          id: '',
+          code: code,
+          name: name,
+          establishmentDate: _parseEstablishmentDate(dateRaw),
+          createdAt: DateTime.now(),
+        );
+        final ok = await _addFacultyFromUpload(faculty);
+        if (ok) {
+          added++;
+        } else {
+          skipped++;
+        }
+      }
+
+      await _fetchFaculties();
+      _showSnack('Imported $added, skipped $skipped');
+    } catch (e) {
+      _showSnack('Failed to import faculties');
+    }
+  }
+
   Future<void> _showEditFacultyPopup() async {
     if (_selectedIndex == null) return;
     final faculty = _filteredFaculties[_selectedIndex!];
@@ -223,89 +417,168 @@ class _FacultiesPageState extends State<FacultiesPage> {
             ),
           ),
           const SizedBox(height: 24),
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              if (isDesktop)
+                Row(
                   children: [
-                    SearchAddBar(
-                      hintText: "Search Faculty...",
-                      buttonText: "Add Faculty",
-                      onAddPressed: _showAddFacultyPopup,
-                      onChanged: (value) {
-                        setState(() {
-                          _searchText = value;
-                          _selectedIndex = null;
-                        });
-                      },
+                    Expanded(
+                      child: SearchAddBar(
+                        hintText: "Search Faculty...",
+                        buttonText: "Add Faculty",
+                        onAddPressed: _showAddFacultyPopup,
+                        onChanged: (value) {
+                          setState(() {
+                            _searchText = value;
+                            _selectedIndex = null;
+                          });
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              disabledBackgroundColor: disabledActionBg,
-                              disabledForegroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _showEditFacultyPopup,
-                            child: const Text(
-                              "Edit",
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleUploadFaculties,
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Upload Faculties'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              disabledBackgroundColor: disabledActionBg,
-                              disabledForegroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _confirmDeleteFaculty,
-                            child: const Text(
-                              "Delete",
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleExportFacultiesCsv,
+                        icon: const Icon(Icons.download),
+                        label: const Text('Export CSV'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF1F6FEB),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ],
+                )
+              else ...[
+                SearchAddBar(
+                  hintText: "Search Faculty...",
+                  buttonText: "Add Faculty",
+                  onAddPressed: _showAddFacultyPopup,
+                  onChanged: (value) {
+                    setState(() {
+                      _searchText = value;
+                      _selectedIndex = null;
+                    });
+                  },
                 ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleUploadFaculties,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Upload Faculties'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleExportFacultiesCsv,
+                    icon: const Icon(Icons.download),
+                    label: const Text('Export CSV'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF1F6FEB),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 80,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 0,
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null
+                          ? null
+                          : _showEditFacultyPopup,
+                      child: const Text(
+                        "Edit",
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 80,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 0,
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null
+                          ? null
+                          : _confirmDeleteFaculty,
+                      child: const Text(
+                        "Delete",
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -315,16 +588,10 @@ class _FacultiesPageState extends State<FacultiesPage> {
               width: double.infinity,
               color: Colors.transparent,
               child: isDesktop
-                  ? SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: _buildDesktopTable(),
-                    )
+                  ? _buildDesktopTable()
                   : SingleChildScrollView(
-                      scrollDirection: Axis.vertical,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: _buildMobileTable(),
-                      ),
+                      scrollDirection: Axis.horizontal,
+                      child: _buildMobileTable(),
                     ),
             ),
           ),
@@ -390,18 +657,10 @@ class _FacultiesPageState extends State<FacultiesPage> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Stack(
+        child: Column(
           children: [
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _clearSelection,
-                behavior: HitTestBehavior.opaque,
-                child: const SizedBox.expand(),
-              ),
-            ),
             Table(
               columnWidths: columnWidths,
-              border: TableBorder(horizontalInside: BorderSide(color: divider)),
               children: [
                 TableRow(
                   decoration: BoxDecoration(color: headerBg),
@@ -412,37 +671,49 @@ class _FacultiesPageState extends State<FacultiesPage> {
                     _tableHeaderCell("Establishment Date", textPrimary),
                   ],
                 ),
-                for (int index = 0; index < _filteredFaculties.length; index++)
-                  TableRow(
-                    decoration: BoxDecoration(
-                      color: _selectedIndex == index ? selectedBg : surface,
-                    ),
-                    children: [
-                      _tableBodyCell(
-                        '${index + 1}',
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                      _tableBodyCell(
-                        _filteredFaculties[index].code,
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                      _tableBodyCell(
-                        _filteredFaculties[index].name,
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                      _tableBodyCell(
-                        "${_filteredFaculties[index].establishmentDate.day.toString().padLeft(2, '0')} "
-                        "${_monthString(_filteredFaculties[index].establishmentDate.month)} "
-                        "${_filteredFaculties[index].establishmentDate.year}",
-                        textPrimary,
-                        onTap: () => _handleRowTap(index),
-                      ),
-                    ],
-                  ),
               ],
+            ),
+            Container(height: 1, color: divider),
+            Expanded(
+              child: SingleChildScrollView(
+                primary: false,
+                child: Table(
+                  columnWidths: columnWidths,
+                  border: TableBorder(horizontalInside: BorderSide(color: divider)),
+                  children: [
+                    for (int index = 0; index < _filteredFaculties.length; index++)
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: _selectedIndex == index ? selectedBg : surface,
+                        ),
+                        children: [
+                          _tableBodyCell(
+                            '${index + 1}',
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                          _tableBodyCell(
+                            _filteredFaculties[index].code,
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                          _tableBodyCell(
+                            _filteredFaculties[index].name,
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                          _tableBodyCell(
+                            "${_filteredFaculties[index].establishmentDate.day.toString().padLeft(2, '0')} "
+                            "${_monthString(_filteredFaculties[index].establishmentDate.month)} "
+                            "${_filteredFaculties[index].establishmentDate.year}",
+                            textPrimary,
+                            onTap: () => _handleRowTap(index),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

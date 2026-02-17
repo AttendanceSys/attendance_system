@@ -177,7 +177,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           ref = _firestore.collection('faculties').doc(raw);
         }
       }
-      if (ref == null) return '';
       final snap = await ref.get();
       if (!snap.exists) return '';
       final data = snap.data() as Map<String, dynamic>?;
