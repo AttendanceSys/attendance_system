@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../services/location_service.dart';
 import '../../services/device_service.dart';
@@ -642,9 +643,22 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       animation: StudentThemeController.instance,
       builder: (context, _) {
         final theme = StudentThemeController.instance.theme;
-        return Scaffold(
-          backgroundColor: theme.background,
-          appBar: AppBar(
+        final isDark =
+            StudentThemeController.instance.brightness == Brightness.dark;
+        final panelColor = theme.card.withValues(alpha: 0.84);
+        final panelText = theme.foreground;
+        final panelMuted = theme.hint;
+        final scanLineColor = theme.button;
+        final overlayStyle = SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        );
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: overlayStyle,
+          child: Scaffold(
+            backgroundColor: theme.background,
+            appBar: AppBar(
             title: const Text('Scan QR Code'),
             backgroundColor: theme.appBar,
             elevation: 0,
@@ -655,7 +669,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
               fontWeight: FontWeight.w600,
             ),
           ),
-          body: SafeArea(
+            body: SafeArea(
             child: Column(
               children: [
                 Expanded(
@@ -697,6 +711,8 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                 painter: _ScanWindowOverlayPainter(
                                   cutOutRect: cutOutRect,
                                   borderRadius: 18,
+                                  overlayColor: theme.background,
+                                  cornerColor: theme.foreground,
                                 ),
                                 child: const SizedBox.expand(),
                               ),
@@ -713,6 +729,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                     painter: _ScanLinePainter(
                                       cutOutRect: cutOutRect,
                                       lineY: lineY,
+                                      lineColor: scanLineColor,
                                     ),
                                     child: const SizedBox.expand(),
                                   );
@@ -725,8 +742,11 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                               bottom: 94,
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.44),
+                                  color: panelColor,
                                   borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: theme.border.withValues(alpha: 0.65),
+                                  ),
                                 ),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 14,
@@ -735,12 +755,12 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Text(
+                                    Text(
                                       'Align the QR inside the frame',
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        color: panelText,
                                         fontSize: 13,
-                                        fontWeight: FontWeight.w500,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -749,21 +769,21 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                         IconButton(
                                           onPressed: () =>
                                               _setZoomScale(_zoomScale - 0.1),
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.remove_circle_outline,
-                                            color: Colors.white,
+                                            color: panelText,
                                           ),
                                         ),
                                         Expanded(
                                           child: SliderTheme(
                                             data: SliderTheme.of(context)
                                                 .copyWith(
-                                                  activeTrackColor:
-                                                      Colors.white,
-                                                  inactiveTrackColor:
-                                                      Colors.white24,
-                                                  thumbColor: Colors.white,
-                                                  overlayColor: Colors.white24,
+                                                  activeTrackColor: scanLineColor,
+                                                  inactiveTrackColor: panelMuted
+                                                      .withValues(alpha: 0.3),
+                                                  thumbColor: scanLineColor,
+                                                  overlayColor: scanLineColor
+                                                      .withValues(alpha: 0.2),
                                                 ),
                                             child: Slider(
                                               min: 0,
@@ -779,9 +799,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                         IconButton(
                                           onPressed: () =>
                                               _setZoomScale(_zoomScale + 0.1),
-                                          icon: const Icon(
+                                          icon: Icon(
                                             Icons.add_circle_outline,
-                                            color: Colors.white,
+                                            color: panelText,
                                           ),
                                         ),
                                       ],
@@ -797,8 +817,11 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                 top: 24,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.5),
+                                    color: panelColor,
                                     borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: theme.border.withValues(alpha: 0.65),
+                                    ),
                                   ),
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -809,26 +832,25 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                       Expanded(
                                         child: Text(
                                           _isProcessingScan
-                                              ? 'Processing attendance...'
+                                          ? 'Processing attendance...'
                                               : 'Scanned: $scanResult',
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
+                                          style: TextStyle(
+                                            color: panelText,
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
                                       ),
                                       if (_isProcessingScan)
-                                        const SizedBox(
+                                        SizedBox(
                                           width: 18,
                                           height: 18,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                  Colors.white,
-                                                ),
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                              scanLineColor,
+                                            ),
                                           ),
                                         )
                                       else
@@ -840,10 +862,10 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                                             });
                                             _controller.start();
                                           },
-                                          child: const Text(
+                                          child: Text(
                                             'Scan again',
                                             style: TextStyle(
-                                              color: Colors.white,
+                                              color: scanLineColor,
                                             ),
                                           ),
                                         ),
@@ -894,6 +916,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
                   },
                 ),
               ],
+            ),
             ),
           ),
         );
@@ -1041,14 +1064,18 @@ class _ScanWindowOverlayPainter extends CustomPainter {
   _ScanWindowOverlayPainter({
     required this.cutOutRect,
     required this.borderRadius,
+    required this.overlayColor,
+    required this.cornerColor,
   });
 
   final Rect cutOutRect;
   final double borderRadius;
+  final Color overlayColor;
+  final Color cornerColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final overlayPaint = Paint()..color = Colors.black.withOpacity(0.55);
+    final overlayPaint = Paint()..color = overlayColor.withValues(alpha: 0.56);
     final clearPaint = Paint()..blendMode = BlendMode.clear;
 
     canvas.saveLayer(Offset.zero & size, Paint());
@@ -1061,7 +1088,7 @@ class _ScanWindowOverlayPainter extends CustomPainter {
     canvas.restore();
 
     final cornerPaint = Paint()
-      ..color = Colors.white
+      ..color = cornerColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4
       ..strokeCap = StrokeCap.round;
@@ -1084,15 +1111,22 @@ class _ScanWindowOverlayPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ScanWindowOverlayPainter oldDelegate) {
     return oldDelegate.cutOutRect != cutOutRect ||
-        oldDelegate.borderRadius != borderRadius;
+        oldDelegate.borderRadius != borderRadius ||
+        oldDelegate.overlayColor != overlayColor ||
+        oldDelegate.cornerColor != cornerColor;
   }
 }
 
 class _ScanLinePainter extends CustomPainter {
-  _ScanLinePainter({required this.cutOutRect, required this.lineY});
+  _ScanLinePainter({
+    required this.cutOutRect,
+    required this.lineY,
+    required this.lineColor,
+  });
 
   final Rect cutOutRect;
   final double lineY;
+  final Color lineColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1100,9 +1134,9 @@ class _ScanLinePainter extends CustomPainter {
       ..shader =
           LinearGradient(
             colors: [
-              Colors.cyanAccent.withOpacity(0.0),
-              Colors.cyanAccent.withOpacity(0.95),
-              Colors.cyanAccent.withOpacity(0.0),
+              lineColor.withValues(alpha: 0.0),
+              lineColor.withValues(alpha: 0.94),
+              lineColor.withValues(alpha: 0.0),
             ],
           ).createShader(
             Rect.fromLTWH(cutOutRect.left, lineY - 1, cutOutRect.width, 2),
@@ -1115,6 +1149,8 @@ class _ScanLinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ScanLinePainter oldDelegate) {
-    return oldDelegate.lineY != lineY || oldDelegate.cutOutRect != cutOutRect;
+    return oldDelegate.lineY != lineY ||
+        oldDelegate.cutOutRect != cutOutRect ||
+        oldDelegate.lineColor != lineColor;
   }
 }
