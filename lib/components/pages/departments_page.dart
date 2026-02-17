@@ -4,6 +4,7 @@ import '../../models/department.dart';
 import '../../services/session.dart';
 import '../popup/add_department_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import '../../theme/super_admin_theme.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
@@ -35,6 +36,7 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
   final List<String> _statusOptions = ['Active', 'in active'];
   String _searchText = '';
   int? _selectedIndex;
+  bool _loading = true;
 
   List<Department> get _filteredDepartments => _departments
       .where(
@@ -49,8 +51,14 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
   @override
   void initState() {
     super.initState();
-    _fetchTeachers();
-    _fetchDepartments();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await Future.wait([_fetchTeachers(), _fetchDepartments()]);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   Future<void> _fetchTeachers() async {
@@ -703,16 +711,18 @@ class _DepartmentsPageState extends State<DepartmentsPage> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _buildMobileTable(),
-                    ),
-            ),
+            child: _loading
+                ? const DepartmentsPageSkeleton()
+                : Container(
+                    width: double.infinity,
+                    color: Colors.transparent,
+                    child: isDesktop
+                        ? _buildDesktopTable()
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
+                  ),
           ),
         ],
       ),

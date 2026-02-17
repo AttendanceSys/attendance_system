@@ -4,6 +4,7 @@ import '../../models/user.dart';
 import '../../services/session.dart';
 import '../popup/edit_user_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import '../../theme/super_admin_theme.dart';
 
 class FacultyUserHandlingPage extends StatefulWidget {
@@ -23,6 +24,7 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
   List<AppUser> _students = [];
   String _searchText = '';
   int? _selectedIndex;
+  bool _loading = true;
 
   // track per-user password visibility by user id
   final Map<String, bool> _showPasswordById = {};
@@ -41,7 +43,14 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
   @override
   void initState() {
     super.initState();
-    _fetchStudents();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _fetchStudents();
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   @override
@@ -545,16 +554,18 @@ class _FacultyUserHandlingPageState extends State<FacultyUserHandlingPage> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _buildMobileTable(),
-                    ),
-            ),
+            child: _loading
+                ? const UserHandlingPageSkeleton()
+                : Container(
+                    width: double.infinity,
+                    color: Colors.transparent,
+                    child: isDesktop
+                        ? _buildDesktopTable()
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
+                  ),
           ),
         ],
       ),

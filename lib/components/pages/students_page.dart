@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/student.dart';
 import '../popup/add_student_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import '../../services/session.dart';
 import '../../theme/teacher_theme.dart';
 import 'package:file_picker/file_picker.dart';
@@ -789,7 +790,7 @@ class _StudentsPageState extends State<StudentsPage> {
           ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const StudentsPageSkeleton()
                 : Container(
                     width: double.infinity,
                     color: Colors.transparent,

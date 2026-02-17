@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/classes.dart';
 import '../popup/add_class_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import '../../services/session.dart';
 import '../../theme/super_admin_theme.dart';
 import 'package:file_picker/file_picker.dart';
@@ -32,6 +33,7 @@ class _ClassesPageState extends State<ClassesPage> {
 
   String _searchText = '';
   int? _selectedIndex;
+  bool _loading = true;
 
   List<SchoolClass> get _filteredClasses => _classes
       .where(
@@ -46,8 +48,14 @@ class _ClassesPageState extends State<ClassesPage> {
   @override
   void initState() {
     super.initState();
-    _fetchDepartments();
-    _fetchClasses();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await Future.wait([_fetchDepartments(), _fetchClasses()]);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   Future<void> _fetchDepartments() async {
@@ -840,16 +848,18 @@ class _ClassesPageState extends State<ClassesPage> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _buildMobileTable(),
-                    ),
-            ),
+            child: _loading
+                ? const ClassesPageSkeleton()
+                : Container(
+                    width: double.infinity,
+                    color: Colors.transparent,
+                    child: isDesktop
+                        ? _buildDesktopTable()
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
+                  ),
           ),
         ],
       ),

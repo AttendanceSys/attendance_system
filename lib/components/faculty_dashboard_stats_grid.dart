@@ -102,6 +102,9 @@ class DashboardStatsGrid extends StatelessWidget {
         _fetchCount('students'),
       ]),
       builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const _FacultyDashboardGridSkeleton(cardCount: 4);
+        }
         final counts = snapshot.data ?? const [0, 0, 0, 0];
 
         return LayoutBuilder(
@@ -322,15 +325,178 @@ class _ChartLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator.adaptive(
-          strokeWidth: 2.5,
-          valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-        ),
+    return const SizedBox.shrink();
+  }
+}
+
+class _FacultyDashboardGridSkeleton extends StatelessWidget {
+  final int cardCount;
+
+  const _FacultyDashboardGridSkeleton({required this.cardCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final card = scheme.surfaceContainerHigh.withValues(alpha: 0.5);
+    final line = scheme.surfaceContainerHighest.withValues(alpha: 0.58);
+    final border = scheme.outlineVariant.withValues(alpha: 0.45);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        int crossAxis;
+        if (width < 550) {
+          crossAxis = 1;
+        } else if (width < 900) {
+          crossAxis = 2;
+        } else if (width < 1300) {
+          crossAxis = 3;
+        } else {
+          crossAxis = 4;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.builder(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              itemCount: cardCount,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxis,
+                crossAxisSpacing: 22,
+                mainAxisSpacing: 16,
+                mainAxisExtent: 90,
+              ),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemBuilder: (_, __) => Container(
+                decoration: BoxDecoration(
+                  color: card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: border),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: LayoutBuilder(
+                builder: (context, inner) {
+                  final isNarrow = inner.maxWidth < 900;
+                  if (isNarrow) {
+                    return Column(
+                      children: [
+                        _FacultySkeletonChartBlock(line: line, border: border, h: 240),
+                        const SizedBox(height: 12),
+                        _FacultySkeletonChartBlock(line: line, border: border, h: 200),
+                        const SizedBox(height: 12),
+                        _FacultySkeletonChartBlock(line: line, border: border, h: 200),
+                        const SizedBox(height: 12),
+                        _FacultySkeletonChartBlock(line: line, border: border, h: 180),
+                      ],
+                    );
+                  }
+                  return Column(
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: _FacultySkeletonChartBlock(
+                              line: line,
+                              border: border,
+                              h: 260,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: _FacultySkeletonChartBlock(
+                              line: line,
+                              border: border,
+                              h: 220,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: _FacultySkeletonChartBlock(
+                              line: line,
+                              border: border,
+                              h: 220,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: _FacultySkeletonChartBlock(
+                              line: line,
+                              border: border,
+                              h: 200,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FacultySkeletonChartBlock extends StatelessWidget {
+  final Color line;
+  final Color border;
+  final double h;
+
+  const _FacultySkeletonChartBlock({
+    required this.line,
+    required this.border,
+    required this.h,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: h,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 180,
+            height: 16,
+            decoration: BoxDecoration(
+              color: line,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: line.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

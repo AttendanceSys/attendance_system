@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/lecturer.dart';
 import '../cards/searchBar.dart';
 import '../popup/add_lecturer_popup.dart';
+import '../admin_page_skeleton.dart';
 import '../../theme/super_admin_theme.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
@@ -34,6 +35,7 @@ class _TeachersPageState extends State<TeachersPage> {
   String _searchText = '';
   int? _selectedIndex;
   final math.Random _random = math.Random();
+  bool _loading = true;
 
   String _generateDefaultPassword() {
     const specials = ['#', '&', '@', '!'];
@@ -68,8 +70,14 @@ class _TeachersPageState extends State<TeachersPage> {
   @override
   void initState() {
     super.initState();
-    _fetchTeachers();
-    _fetchFaculties();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await Future.wait([_fetchTeachers(), _fetchFaculties()]);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   Future<void> _fetchTeachers() async {
@@ -726,16 +734,18 @@ class _TeachersPageState extends State<TeachersPage> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _buildMobileTable(),
-                    ),
-            ),
+            child: _loading
+                ? const LecturersPageSkeleton()
+                : Container(
+                    width: double.infinity,
+                    color: Colors.transparent,
+                    child: isDesktop
+                        ? _buildDesktopTable()
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
+                  ),
           ),
         ],
       ),

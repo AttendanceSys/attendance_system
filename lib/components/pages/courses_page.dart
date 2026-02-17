@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/course.dart';
 import '../popup/add_course_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import '../../services/session.dart';
 import '../../theme/super_admin_theme.dart';
 import 'package:file_picker/file_picker.dart';
@@ -705,7 +706,7 @@ class _CoursesPageState extends State<CoursesPage> {
           const SizedBox(height: 8),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const CoursesPageSkeleton()
                 : Container(
                     width: double.infinity,
                     color: Colors.transparent,

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/user.dart';
 import '../popup/edit_user_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import '../../theme/super_admin_theme.dart';
 
 class UserHandlingPage extends StatefulWidget {
@@ -27,6 +28,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
   List<AppUser> _users = [];
   String _searchText = '';
   int? _selectedIndex;
+  bool _loading = true;
 
   // Track password visibility by user id
   final Map<String, bool> _showPasswordById = {};
@@ -45,7 +47,14 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
   @override
   void initState() {
     super.initState();
-    _fetchUsers();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _fetchUsers();
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   @override
@@ -558,16 +567,18 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
           const SizedBox(height: 12),
 
           Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _buildMobileTable(),
-                    ),
-            ),
+            child: _loading
+                ? const UserHandlingPageSkeleton()
+                : Container(
+                    width: double.infinity,
+                    color: Colors.transparent,
+                    child: isDesktop
+                        ? _buildDesktopTable()
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
+                  ),
           ),
 
           const SizedBox(height: 8),

@@ -28,7 +28,7 @@ class AdminDashboardStatsGrid extends StatelessWidget {
       ]),
       builder: (context, AsyncSnapshot<List<int>> snapshot) {
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
+          return const _DashboardGridSkeleton(cardCount: 3);
         }
 
         final facultiesCount = snapshot.data![0];
@@ -150,6 +150,150 @@ class AdminDashboardStatsGrid extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _DashboardGridSkeleton extends StatelessWidget {
+  final int cardCount;
+
+  const _DashboardGridSkeleton({required this.cardCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final card = scheme.surfaceContainerHigh.withValues(alpha: 0.5);
+    final line = scheme.surfaceContainerHighest.withValues(alpha: 0.58);
+    final border = scheme.outlineVariant.withValues(alpha: 0.45);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        int crossAxis;
+        if (width < 550) {
+          crossAxis = 1;
+        } else if (width < 900) {
+          crossAxis = 2;
+        } else if (width < 1300) {
+          crossAxis = 3;
+        } else {
+          crossAxis = 4;
+        }
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GridView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: cardCount,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxis,
+                  crossAxisSpacing: 22,
+                  mainAxisSpacing: 16,
+                  mainAxisExtent: 90,
+                ),
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemBuilder: (_, __) => Container(
+                  decoration: BoxDecoration(
+                    color: card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: border),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: LayoutBuilder(
+                  builder: (context, inner) {
+                    final isNarrow = inner.maxWidth < 900;
+                    if (isNarrow) {
+                      return Column(
+                        children: [
+                          _SkeletonChartBlock(line: line, border: border, h: 260),
+                          const SizedBox(height: 12),
+                          _SkeletonChartBlock(line: line, border: border, h: 260),
+                        ],
+                      );
+                    }
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: _SkeletonChartBlock(
+                            line: line,
+                            border: border,
+                            h: 300,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: _SkeletonChartBlock(
+                            line: line,
+                            border: border,
+                            h: 300,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SkeletonChartBlock extends StatelessWidget {
+  final Color line;
+  final Color border;
+  final double h;
+
+  const _SkeletonChartBlock({
+    required this.line,
+    required this.border,
+    required this.h,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: h,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 180,
+            height: 16,
+            decoration: BoxDecoration(
+              color: line,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: line.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -499,7 +643,7 @@ class _DepartmentsPerFacultyChartState
     return FutureBuilder<Map<String, int>>(
       future: _futureCounts,
       builder: (c, s) {
-        if (!s.hasData) return const Center(child: CircularProgressIndicator());
+        if (!s.hasData) return const SizedBox.shrink();
         final map = s.data!;
         if (map.isEmpty) return const Center(child: Text('No department data'));
 
@@ -821,7 +965,7 @@ class _TeachersPerFacultyChartState extends State<TeachersPerFacultyChart> {
     return FutureBuilder<Map<String, int>>(
       future: _futureCounts,
       builder: (c, s) {
-        if (!s.hasData) return const Center(child: CircularProgressIndicator());
+        if (!s.hasData) return const SizedBox.shrink();
         final map = s.data!;
         if (map.isEmpty) return const Center(child: Text('No teachers data'));
 

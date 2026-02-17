@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/faculty.dart';
 import '../popup/add_faculty_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import 'package:flutter/material.dart';
 import '../../theme/super_admin_theme.dart';
 import 'package:file_picker/file_picker.dart';
@@ -26,6 +27,7 @@ class _FacultiesPageState extends State<FacultiesPage> {
   List<Faculty> _faculties = [];
   String _searchText = '';
   int? _selectedIndex;
+  bool _loading = true;
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -51,7 +53,14 @@ class _FacultiesPageState extends State<FacultiesPage> {
   @override
   void initState() {
     super.initState();
-    _fetchFaculties();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _fetchFaculties();
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   Future<bool> _facultyExists({
@@ -584,16 +593,18 @@ class _FacultiesPageState extends State<FacultiesPage> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _buildMobileTable(),
-                    ),
-            ),
+            child: _loading
+                ? const FacultiesPageSkeleton()
+                : Container(
+                    width: double.infinity,
+                    color: Colors.transparent,
+                    child: isDesktop
+                        ? _buildDesktopTable()
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
+                  ),
           ),
         ],
       ),

@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import '../../models/admin.dart';
 import '../popup/add_admin_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import '../../theme/super_admin_theme.dart';
 import '../../utils/download_bytes.dart';
 
@@ -32,6 +33,7 @@ class _AdminsPageState extends State<AdminsPage> {
   List<String> _facultyNames = [];
   String _searchText = '';
   int? _selectedIndex;
+  bool _loading = true;
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -57,8 +59,14 @@ class _AdminsPageState extends State<AdminsPage> {
   @override
   void initState() {
     super.initState();
-    _fetchAdmins();
-    _fetchFaculties();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await Future.wait([_fetchAdmins(), _fetchFaculties()]);
+    if (mounted) {
+      setState(() => _loading = false);
+    }
   }
 
   Future<void> _fetchAdmins() async {
@@ -716,16 +724,18 @@ class _AdminsPageState extends State<AdminsPage> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.transparent,
-              child: isDesktop
-                  ? _buildDesktopTable()
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _buildMobileTable(),
-                    ),
-            ),
+            child: _loading
+                ? const AdminsPageSkeleton()
+                : Container(
+                    width: double.infinity,
+                    color: Colors.transparent,
+                    child: isDesktop
+                        ? _buildDesktopTable()
+                        : SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
+                          ),
+                  ),
           ),
         ],
       ),
