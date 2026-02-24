@@ -403,14 +403,6 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                                           ),
                                           border: accent.withValues(alpha: 0.26),
                                         ),
-                                        _metaPill(
-                                          label: _gender,
-                                          foreground: titleColor,
-                                          background: titleColor.withValues(
-                                            alpha: 0.08,
-                                          ),
-                                          border: border,
-                                        ),
                                       ],
                                     ),
                                   ],

@@ -68,9 +68,19 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
     super.dispose();
   }
 
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
+  }
+
+  void _showErrorSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _fetchPercentageForDepartment() async {
     if (selectedDepartment == null) return;
-    setState(() {
+    _safeSetState(() {
       loadingPercentage = true;
       percentageRows = [];
     });
@@ -521,7 +531,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       }
     }
 
-    setState(() {
+    _safeSetState(() {
       percentageRows = rows;
       loadingPercentage = false;
     });
@@ -605,7 +615,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   // Firestore loaders
   // --------------------------
   Future<void> _loadDepartments() async {
-    setState(() {
+    _safeSetState(() {
       loadingDepartments = true;
       departments = [];
       classesForDept = [];
@@ -725,22 +735,20 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         }
       }
 
-      setState(() {
+      _safeSetState(() {
         departments = deptSet.toList()..sort();
       });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load departments: $e')));
+      _showErrorSnack('Failed to load departments: $e');
     } finally {
-      setState(() {
+      _safeSetState(() {
         loadingDepartments = false;
       });
     }
   }
 
   Future<void> _loadClassesForDepartment(String dept) async {
-    setState(() {
+    _safeSetState(() {
       loadingClasses = true;
       classesForDept = [];
       selectedClass = null;
@@ -846,15 +854,13 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         }
       }
 
-      setState(() {
+      _safeSetState(() {
         classesForDept = clsSet.toList()..sort();
       });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load classes: $e')));
+      _showErrorSnack('Failed to load classes: $e');
     } finally {
-      setState(() {
+      _safeSetState(() {
         loadingClasses = false;
       });
     }
@@ -864,7 +870,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
   // NEW: load teachers for the selected department
   // --------------------------
   Future<void> _loadTeachersForDepartment(String dept) async {
-    setState(() {
+    _safeSetState(() {
       loadingTeachers = true;
       teachersForDept = [];
       selectedTeacher = null;
@@ -984,23 +990,21 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         }
       }
 
-      setState(() {
+      _safeSetState(() {
         teachersForDept = teacherSet.toList()..sort();
       });
     } catch (e) {
       debugPrint('Failed to load teachers: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load teachers: $e')));
+      _showErrorSnack('Failed to load teachers: $e');
     } finally {
-      setState(() {
+      _safeSetState(() {
         loadingTeachers = false;
       });
     }
   }
 
   Future<void> _loadSubjectsForClass(String cls) async {
-    setState(() {
+    _safeSetState(() {
       loadingSubjects = true;
       coursesForClass = [];
       selectedCourse = null;
@@ -1023,7 +1027,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         } catch (_) {}
       }
       if (classId == null || classId.isEmpty) {
-        setState(() {
+        _safeSetState(() {
           coursesForClass = [];
         });
         return;
@@ -1093,15 +1097,13 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         }
       }
 
-      setState(() {
+      _safeSetState(() {
         coursesForClass = courseSet.toList()..sort();
       });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load subjects: $e')));
+      _showErrorSnack('Failed to load subjects: $e');
     } finally {
-      setState(() {
+      _safeSetState(() {
         loadingSubjects = false;
       });
     }
@@ -1117,7 +1119,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       return;
     }
 
-    setState(() {
+    _safeSetState(() {
       loadingStudents = true;
       classSectionStudents = {};
     });
@@ -1252,18 +1254,16 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         sections.putIfAbsent(section, () => []).add(studentMap);
       }
 
-      setState(() {
+      _safeSetState(() {
         classSectionStudents = {selectedClass!: sections};
       });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to load students: $e')));
-      setState(() {
+      _showErrorSnack('Failed to load students: $e');
+      _safeSetState(() {
         classSectionStudents = {};
       });
     } finally {
-      setState(() {
+      _safeSetState(() {
         loadingStudents = false;
       });
     }
@@ -1286,9 +1286,7 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
         'courses': courses,
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update student courses: $e')),
-      );
+      _showErrorSnack('Failed to update student courses: $e');
     }
   }
 
@@ -1311,16 +1309,12 @@ class _AttendanceUnifiedPageState extends State<AttendanceUnifiedPage> {
       if (foundDocId != null) break;
     }
 
-    setState(() {});
+    _safeSetState(() {});
 
     if (foundDocId != null) {
       await _updateStudentCoursesInFirestore(foundDocId, updatedRecords);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Student document not found to save changes.'),
-        ),
-      );
+      _showErrorSnack('Student document not found to save changes.');
     }
   }
 
@@ -2453,129 +2447,137 @@ class _AttendanceTable extends StatelessWidget {
           ),
           clipBehavior: Clip.antiAlias,
           child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: DataTable(
-                showCheckboxColumn: false,
-                columnSpacing: tableColSpacing.toDouble(),
-                horizontalMargin: 16,
-                dividerThickness: 0.8,
-                headingRowHeight: 48,
-                dataRowMinHeight: 56,
-                dataRowMaxHeight: 56,
-                headingRowColor: WidgetStateProperty.all<Color?>(
-                  palette?.surfaceHigh ?? scheme.surfaceContainerHighest,
-                ),
-                columns: [
-                  DataColumn(
-                    label: Text("No", style: headerTextStyle),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                child: DataTable(
+                  showCheckboxColumn: false,
+                  columnSpacing: tableColSpacing.toDouble(),
+                  horizontalMargin: 16,
+                  dividerThickness: 0.8,
+                  headingRowHeight: 48,
+                  dataRowMinHeight: 56,
+                  dataRowMaxHeight: 56,
+                  headingRowColor: WidgetStateProperty.all<Color?>(
+                    palette?.surfaceHigh ?? scheme.surfaceContainerHighest,
                   ),
-                  DataColumn(
-                    label: Text("Student", style: headerTextStyle),
-                  ),
-                  DataColumn(
-                    label: Text("Department", style: headerTextStyle),
-                  ),
-                  DataColumn(
-                    label: Text("Class", style: headerTextStyle),
-                  ),
-                  DataColumn(
-                    label: Text("Course", style: headerTextStyle),
-                  ),
-                ],
-                rows: List.generate(filtered.length, (index) {
-                  final row = filtered[index];
-                  final username = row['username']?.toString() ?? '';
-                  final fullName = row['name']?.toString() ?? '';
-                  final selected = selectedStudentId == username;
+                  columns: [
+                    DataColumn(
+                      label: Text("No", style: headerTextStyle),
+                    ),
+                    DataColumn(
+                      label: Text("Student", style: headerTextStyle),
+                    ),
+                    DataColumn(
+                      label: Text("Department", style: headerTextStyle),
+                    ),
+                    DataColumn(
+                      label: Text("Class", style: headerTextStyle),
+                    ),
+                    DataColumn(
+                      label: Text("Course", style: headerTextStyle),
+                    ),
+                  ],
+                  rows: List.generate(filtered.length, (index) {
+                    final row = filtered[index];
+                    final username = row['username']?.toString() ?? '';
+                    final fullName = row['name']?.toString() ?? '';
+                    final selected = selectedStudentId == username;
 
-                  void openStudentDetails() {
-                    try {
-                      final idVal = username;
-                      if (idVal.isEmpty) {
+                    void openStudentDetails() {
+                      try {
+                        final idVal = username;
+                        if (idVal.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Student id is missing.'),
+                            ),
+                          );
+                          return;
+                        }
+                        onStudentSelected(idVal);
+                      } catch (e, st) {
+                        debugPrint('Error selecting student: $e\n$st');
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Student id is missing.'),
+                          SnackBar(
+                            content: Text('Error selecting student: $e'),
                           ),
                         );
-                        return;
                       }
-                      onStudentSelected(idVal);
-                    } catch (e, st) {
-                      debugPrint('Error selecting student: $e\n$st');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error selecting student: $e'),
-                        ),
-                      );
                     }
-                  }
 
-                  return DataRow(
-                    selected: selected,
-                    onSelectChanged: (_) => openStudentDetails(),
-                    color: WidgetStateProperty.resolveWith<Color?>((states) {
-                      if (states.contains(WidgetState.selected)) {
-                        return scheme.primaryContainer.withValues(alpha: 0.55);
-                      }
-                      if (states.contains(WidgetState.hovered)) {
-                        return scheme.surfaceContainerHighest.withValues(
-                          alpha: 0.45,
-                        );
-                      }
-                      return null;
-                    }),
-                    cells: [
-                      DataCell(Text('${index + 1}', style: rowTextStyle)),
-                      DataCell(
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircleAvatar(
-                              radius: 14,
-                              backgroundColor:
-                                  palette?.highlight ??
-                                  scheme.primaryContainer.withValues(alpha: 0.7),
-                              child: Text(
-                                initialsOf(fullName.isEmpty ? username : fullName),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: palette?.textPrimary ??
-                                      scheme.onPrimaryContainer,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  fullName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: rowTextStyle.copyWith(
-                                    fontWeight: FontWeight.w600,
+                    return DataRow(
+                      selected: selected,
+                      onSelectChanged: (_) => openStudentDetails(),
+                      color: WidgetStateProperty.resolveWith<Color?>((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return scheme.primaryContainer.withValues(alpha: 0.55);
+                        }
+                        if (states.contains(WidgetState.hovered)) {
+                          return scheme.surfaceContainerHighest.withValues(
+                            alpha: 0.45,
+                          );
+                        }
+                        return null;
+                      }),
+                      cells: [
+                        DataCell(Text('${index + 1}', style: rowTextStyle)),
+                        DataCell(
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircleAvatar(
+                                radius: 14,
+                                backgroundColor:
+                                    palette?.highlight ??
+                                    scheme.primaryContainer.withValues(
+                                      alpha: 0.7,
+                                    ),
+                                child: Text(
+                                  initialsOf(
+                                    fullName.isEmpty ? username : fullName,
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: palette?.textPrimary ??
+                                        scheme.onPrimaryContainer,
                                   ),
                                 ),
-                              ],
+                              ),
+                              const SizedBox(width: 10),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    fullName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: rowTextStyle.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        DataCell(Text(department, style: rowTextStyle)),
+                        DataCell(Text(className, style: rowTextStyle)),
+                        DataCell(
+                          Text(
+                            course,
+                            style: rowTextStyle.copyWith(
+                              fontWeight: FontWeight.w500,
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                      DataCell(Text(department, style: rowTextStyle)),
-                      DataCell(Text(className, style: rowTextStyle)),
-                      DataCell(
-                        Text(
-                          course,
-                          style: rowTextStyle.copyWith(fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ],
-                  );
-                }),
+                      ],
+                    );
+                  }),
+                ),
               ),
             ),
           ),

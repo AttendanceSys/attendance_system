@@ -438,14 +438,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                                                 alpha: 0.26,
                                               ),
                                             ),
-                                            _metaPill(
-                                              label: _gender,
-                                              foreground: titleColor,
-                                              background: titleColor.withValues(
-                                                alpha: 0.08,
-                                              ),
-                                              border: border,
-                                            ),
                                             if (_facultyName.trim().isNotEmpty)
                                               _metaPill(
                                                 label: _facultyName,

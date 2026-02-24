@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class EditDepartmentPopup extends StatefulWidget {
   final String code;
@@ -25,7 +26,7 @@ class _EditDepartmentPopupState extends State<EditDepartmentPopup> {
   @override
   void initState() {
     super.initState();
-    _codeController = TextEditingController(text: widget.code);
+    _codeController = TextEditingController(text: widget.code.toUpperCase());
     _nameController = TextEditingController(text: widget.name);
     _headController = TextEditingController(text: widget.head);
   }
@@ -42,6 +43,11 @@ class _EditDepartmentPopupState extends State<EditDepartmentPopup> {
         children: [
           TextField(
             controller: _codeController,
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [
+              FilteringTextInputFormatter.deny(RegExp(r'\s')),
+              _UpperCaseTextFormatter(),
+            ],
             decoration: const InputDecoration(labelText: 'Department Code'),
           ),
           TextField(
@@ -63,7 +69,7 @@ class _EditDepartmentPopupState extends State<EditDepartmentPopup> {
           style: ElevatedButton.styleFrom(backgroundColor: saveButtonBg),
           onPressed: () {
             widget.onEdit(
-              _codeController.text.trim(),
+              _codeController.text.trim().toUpperCase(),
               _nameController.text.trim(),
               _headController.text.trim(),
             );
@@ -72,6 +78,20 @@ class _EditDepartmentPopupState extends State<EditDepartmentPopup> {
           child: const Text('Save'),
         ),
       ],
+    );
+  }
+}
+
+class _UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+      composing: TextRange.empty,
     );
   }
 }

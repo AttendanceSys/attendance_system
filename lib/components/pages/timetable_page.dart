@@ -2451,10 +2451,7 @@ class _TimetablePageState extends State<TimetablePage> {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                'Manage schedules by department, class, and lecturer.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: subtitleColor),
-              ),
+         
               const SizedBox(height: 18),
               TextField(
                 onChanged: (v) => setState(() => searchText = v),
@@ -2633,8 +2630,12 @@ class _TimetablePageState extends State<TimetablePage> {
                                           onPressed: () => Navigator.pop(ctx, false),
                                           child: const Text('Cancel'),
                                         ),
-                                        TextButton(
+                                        ElevatedButton(
                                           onPressed: () => Navigator.pop(ctx, true),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.red,
+                                            foregroundColor: Colors.white,
+                                          ),
                                           child: const Text('Delete'),
                                         ),
                                       ],
