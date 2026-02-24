@@ -1511,7 +1511,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                               ? 'Reconfigure periods'
                               : 'Configure periods',
                           style: TextStyle(
-                            color: isDark ? Colors.white : palette?.textPrimary,
+                            color: isDark
+                                ? (palette?.textPrimary ?? Colors.white)
+                                : palette?.textPrimary,
                           ),
                         ),
                       ),
@@ -1521,7 +1523,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                           child: Text(
                             'Append period / break',
                             style: TextStyle(
-                              color: isDark ? palette?.textPrimary : null,
+                              color: isDark
+                                  ? (palette?.textPrimary ?? Colors.white)
+                                  : palette?.textPrimary,
                             ),
                           ),
                         ),
@@ -1531,7 +1535,9 @@ class _CreateTimetableDialogState extends State<CreateTimetableDialog> {
                           child: Text(
                             'Clear structure',
                             style: TextStyle(
-                              color: isDark ? palette?.textPrimary : null,
+                              color: isDark
+                                  ? (palette?.textPrimary ?? Colors.white)
+                                  : palette?.textPrimary,
                             ),
                           ),
                         ),

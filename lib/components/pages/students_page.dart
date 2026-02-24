@@ -3,11 +3,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/student.dart';
 import '../popup/add_student_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import '../../services/session.dart';
 import '../../theme/teacher_theme.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:typed_data';
+import '../../utils/download_bytes.dart';
 
 class StudentsPage extends StatefulWidget {
   const StudentsPage({super.key});
@@ -30,11 +34,24 @@ class _StudentsPageState extends State<StudentsPage> {
 
   List<Student> _students = [];
   Map<String, String> _departmentNames = {};
+  Map<String, String> _departmentFacultyIds = {};
   Map<String, String> _classNames = {};
+  Map<String, String> _facultyNames = {};
+  String _sessionFacultyName = '';
   bool _loading = true;
 
   String _searchText = '';
   int? _selectedIndex;
+  final math.Random _random = math.Random();
+
+  String _generateDefaultPassword() {
+    const specials = ['#', '&', '@', '!'];
+    final left = 10 + _random.nextInt(90); // 2 digits
+    final middle = 100 + _random.nextInt(900); // 3 digits
+    final s1 = specials[_random.nextInt(specials.length)];
+    final s2 = specials[_random.nextInt(specials.length)];
+    return '$left$s1$middle$s2';
+  }
 
   List<Student> get _filteredStudents => _students.where((s) {
     final dept = _departmentNames[s.departmentRef ?? ''] ?? '';
@@ -102,19 +119,83 @@ class _StudentsPageState extends State<StudentsPage> {
     try {
       Query dq = departmentsCollection;
       Query cq = classesCollection;
+      Query fq = facultiesCollection;
       if (Session.facultyRef != null) {
         // prefer server side filtering when possible
         dq = dq.where('faculty_ref', isEqualTo: Session.facultyRef);
         cq = cq.where('faculty_ref', isEqualTo: Session.facultyRef);
+        fq = fq.where(FieldPath.documentId, isEqualTo: Session.facultyRef!.id);
       }
       final deps = await dq.get();
       final classes = await cq.get();
+      final faculties = await fq.get();
+      String sessionFacultyName = '';
+      if (Session.facultyRef != null) {
+        final sid = Session.facultyRef!.id;
+        final byId = faculties.docs.where((d) => d.id == sid).toList();
+        if (byId.isNotEmpty) {
+          final data = byId.first.data() as Map<String, dynamic>;
+          sessionFacultyName =
+              (data['faculty_name'] ??
+                      data['name'] ??
+                      data['facultyName'] ??
+                      data['displayName'] ??
+                      data['title'] ??
+                      '')
+                  .toString()
+                  .trim();
+        }
+        if (sessionFacultyName.isEmpty) {
+          try {
+            final snap = await Session.facultyRef!.get();
+            if (snap.exists && snap.data() != null) {
+              final data = snap.data() as Map<String, dynamic>;
+              sessionFacultyName =
+                  (data['faculty_name'] ??
+                          data['name'] ??
+                          data['facultyName'] ??
+                          data['displayName'] ??
+                          data['title'] ??
+                          '')
+                      .toString()
+                      .trim();
+            }
+          } catch (_) {}
+        }
+        if (sessionFacultyName.isEmpty) {
+          try {
+            final byFacultyName = await facultiesCollection
+                .where('faculty_name', isEqualTo: sid)
+                .limit(1)
+                .get();
+            if (byFacultyName.docs.isNotEmpty) {
+              final data =
+                  byFacultyName.docs.first.data() as Map<String, dynamic>;
+              sessionFacultyName =
+                  (data['faculty_name'] ?? data['name'] ?? sid)
+                      .toString()
+                      .trim();
+            }
+          } catch (_) {}
+        }
+      }
       setState(() {
         _departmentNames = Map.fromEntries(
           deps.docs.map((d) {
             final data = d.data() as Map<String, dynamic>;
             final name = data['department_name'] ?? data['name'] ?? '';
             return MapEntry(d.id, name as String);
+          }),
+        );
+        _departmentFacultyIds = Map.fromEntries(
+          deps.docs.map((d) {
+            final data = d.data() as Map<String, dynamic>;
+            final facultyCand =
+                data['faculty_ref'] ??
+                data['faculty_id'] ??
+                data['facultyId'] ??
+                data['faculty'];
+            return MapEntry(d.id, _extractId(facultyCand));
           }),
         );
         _classNames = Map.fromEntries(
@@ -124,6 +205,20 @@ class _StudentsPageState extends State<StudentsPage> {
             return MapEntry(d.id, name as String);
           }),
         );
+        _facultyNames = Map.fromEntries(
+          faculties.docs.map((d) {
+            final data = d.data() as Map<String, dynamic>;
+            final name =
+                data['faculty_name'] ??
+                data['name'] ??
+                data['facultyName'] ??
+                data['displayName'] ??
+                data['title'] ??
+                '';
+            return MapEntry(d.id, name as String);
+          }),
+        );
+        _sessionFacultyName = sessionFacultyName;
       });
     } catch (e) {
       print('Error fetching lookups: $e');
@@ -413,7 +508,10 @@ class _StudentsPageState extends State<StudentsPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -422,7 +520,13 @@ class _StudentsPageState extends State<StudentsPage> {
     if (ok == true) await _deleteStudent(s);
   }
 
-  void _handleRowTap(int index) => setState(() => _selectedIndex = index);
+  void _handleRowTap(int index) =>
+      setState(() => _selectedIndex = _selectedIndex == index ? null : index);
+
+  void _clearSelection() {
+    if (_selectedIndex == null) return;
+    setState(() => _selectedIndex = null);
+  }
 
   // Helpers to operate on the currently selected student
   void _showEditSelected() {
@@ -433,6 +537,66 @@ class _StudentsPageState extends State<StudentsPage> {
   Future<void> _confirmDeleteSelected() async {
     if (_selectedIndex == null) return;
     await _confirmDeleteStudent(_filteredStudents[_selectedIndex!]);
+  }
+
+  String _facultyNameForStudent(Student s) {
+    final direct = _facultyNames[s.facultyRef ?? ''];
+    if (direct != null && direct.isNotEmpty) return direct;
+    final deptFacultyId = _departmentFacultyIds[s.departmentRef ?? ''] ?? '';
+    final byDept = _facultyNames[deptFacultyId] ?? '';
+    if (byDept.isNotEmpty) return byDept;
+    if (_sessionFacultyName.isNotEmpty) return _sessionFacultyName;
+    return Session.facultyRef?.id ?? '';
+  }
+
+  Future<void> _handleExportStudentsCsv() async {
+    try {
+      final rows = <List<dynamic>>[
+        ['No', 'Username', 'Full name', 'Gender', 'Department', 'Class', 'Faculty'],
+      ];
+
+      for (int i = 0; i < _students.length; i++) {
+        final s = _students[i];
+        rows.add([
+          i + 1,
+          s.username,
+          s.fullname,
+          s.gender,
+          _departmentNames[s.departmentRef ?? ''] ?? '',
+          _classNames[s.classRef ?? ''] ?? '',
+          _facultyNameForStudent(s),
+        ]);
+      }
+
+      final csv = const ListToCsvConverter().convert(rows);
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+      final now = DateTime.now();
+      final fileName =
+          'students_${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}.csv';
+
+      final downloaded = await downloadBytes(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'text/csv;charset=utf-8',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            downloaded
+                ? 'CSV exported: $fileName'
+                : 'CSV export is currently supported on web only',
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Error exporting students CSV: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to export CSV')),
+      );
+    }
   }
 
   @override
@@ -460,122 +624,173 @@ class _StudentsPageState extends State<StudentsPage> {
             ),
           ),
           const SizedBox(height: 24),
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              if (isDesktop)
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SearchAddBar(
-                            hintText: 'Search student...',
-                            buttonText: 'Add Student',
-                            onAddPressed: _showAddStudentPopup,
-                            onChanged: (v) {
-                              setState(() {
-                                _searchText = v;
-                                _selectedIndex = null;
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          height: 48,
-                          child: ElevatedButton.icon(
-                            onPressed: _handleUploadStudents,
-                            icon: const Icon(Icons.upload_file),
-                            label: const Text('Upload Students'),
-                            style: ElevatedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              backgroundColor: const Color.fromARGB(
-                                255,
-                                0,
-                                150,
-                                80,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    Expanded(
+                      child: SearchAddBar(
+                        hintText: 'Search student...',
+                        buttonText: 'Add Student',
+                        onAddPressed: _showAddStudentPopup,
+                        onChanged: (v) {
+                          setState(() {
+                            _searchText = v;
+                            _selectedIndex = null;
+                          });
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              disabledBackgroundColor: disabledActionBg,
-                              disabledForegroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _showEditSelected,
-                            child: const Text(
-                              'Edit',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleUploadStudents,
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Upload Students'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 80,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              disabledBackgroundColor: disabledActionBg,
-                              disabledForegroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 0,
-                                horizontal: 0,
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _confirmDeleteSelected,
-                            child: const Text(
-                              'Delete',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                            ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleExportStudentsCsv,
+                        icon: const Icon(Icons.download),
+                        label: const Text('Export CSV'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF1F6FEB),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ],
+                )
+              else ...[
+                SearchAddBar(
+                  hintText: 'Search student...',
+                  buttonText: 'Add Student',
+                  onAddPressed: _showAddStudentPopup,
+                  onChanged: (v) {
+                    setState(() {
+                      _searchText = v;
+                      _selectedIndex = null;
+                    });
+                  },
                 ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleUploadStudents,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Upload Students'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleExportStudentsCsv,
+                    icon: const Icon(Icons.download),
+                    label: const Text('Export CSV'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF1F6FEB),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 80,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 0,
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null ? null : _showEditSelected,
+                      child: const Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 80,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 0,
+                          horizontal: 0,
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null
+                          ? null
+                          : _confirmDeleteSelected,
+                      child: const Text(
+                        'Delete',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 12),
             ],
           ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const StudentsPageSkeleton()
                 : Container(
                     width: double.infinity,
                     color: Colors.transparent,
@@ -594,127 +809,153 @@ class _StudentsPageState extends State<StudentsPage> {
   }
 
   Widget _buildDesktopTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<TeacherThemeColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-    return Table(
+    return _buildSaasTable(
       columnWidths: const {
-        0: FixedColumnWidth(48),
-        1: FixedColumnWidth(220),
-        2: FixedColumnWidth(140),
-        3: FixedColumnWidth(100),
-        4: IntrinsicColumnWidth(),
-        5: FixedColumnWidth(160),
+        0: FixedColumnWidth(60),
+        1: FlexColumnWidth(1.25),
+        2: FlexColumnWidth(1.45),
+        3: FlexColumnWidth(0.85),
+        4: FlexColumnWidth(1.65),
+        5: FlexColumnWidth(1.05),
       },
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell('No'),
-            _tableHeaderCell('Username'),
-            _tableHeaderCell('Full name'),
-            _tableHeaderCell('Gender'),
-            _tableHeaderCell('Department'),
-            _tableHeaderCell('Class'),
-          ],
-        ),
-        for (int i = 0; i < _filteredStudents.length; i++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == i ? highlight : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${i + 1}', onTap: () => _handleRowTap(i)),
-              _tableBodyCell(
-                _filteredStudents[i].username,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredStudents[i].fullname,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredStudents[i].gender,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _departmentNames[_filteredStudents[i].departmentRef ?? ''] ??
-                    '',
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _classNames[_filteredStudents[i].classRef ?? ''] ?? '',
-                onTap: () => _handleRowTap(i),
-              ),
-            ],
-          ),
-      ],
     );
   }
 
   Widget _buildMobileTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<TeacherThemeColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-    return Table(
-      defaultColumnWidth: const IntrinsicColumnWidth(),
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell('No'),
-            _tableHeaderCell('Username'),
-            _tableHeaderCell('Full name'),
-            _tableHeaderCell('Gender'),
-            _tableHeaderCell('Department'),
-            _tableHeaderCell('Class'),
-          ],
-        ),
-        for (int i = 0; i < _filteredStudents.length; i++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == i ? highlight : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${i + 1}', onTap: () => _handleRowTap(i)),
-              _tableBodyCell(
-                _filteredStudents[i].username,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredStudents[i].fullname,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredStudents[i].gender,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _departmentNames[_filteredStudents[i].departmentRef ?? ''] ??
-                    '',
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _classNames[_filteredStudents[i].classRef ?? ''] ?? '',
-                onTap: () => _handleRowTap(i),
-              ),
-            ],
-          ),
-      ],
+    return _buildSaasTable(
+      columnWidths: const {
+        0: FixedColumnWidth(60),
+        1: FixedColumnWidth(220),
+        2: FixedColumnWidth(180),
+        3: FixedColumnWidth(110),
+        4: FixedColumnWidth(200),
+        5: FixedColumnWidth(170),
+      },
     );
   }
 
-  Widget _tableHeaderCell(String text) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-    child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
+  Widget _buildSaasTable({required Map<int, TableColumnWidth> columnWidths}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<TeacherThemeColors>();
+    final scheme = Theme.of(context).colorScheme;
+    final surface = palette?.surface ?? scheme.surface;
+    final border =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : const Color(0xFFD7DCEA));
+    final headerBg = palette?.surfaceHigh ?? scheme.surfaceContainerHighest;
+    final textPrimary = palette?.textPrimary ?? scheme.onSurface;
+    final selectedBg =
+        palette?.selectedBg ??
+        Color.alphaBlend(
+          (palette?.accent ?? const Color(0xFF6A46FF)).withValues(alpha: 0.12),
+          surface,
+        );
+    final divider = border.withValues(alpha: isDark ? 0.7 : 0.85);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: divider),
+        boxShadow: [
+          BoxShadow(
+            color: (palette?.accent ?? const Color(0xFF6A46FF)).withValues(
+              alpha: isDark ? 0.06 : 0.08,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            Table(
+              columnWidths: columnWidths,
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: headerBg),
+                  children: [
+                    _tableHeaderCell('No', textPrimary),
+                    _tableHeaderCell('Username', textPrimary),
+                    _tableHeaderCell('Full name', textPrimary),
+                    _tableHeaderCell('Gender', textPrimary),
+                    _tableHeaderCell('Department', textPrimary),
+                    _tableHeaderCell('Class', textPrimary),
+                  ],
+                ),
+              ],
+            ),
+            Container(height: 1, color: divider),
+            Expanded(
+              child: SingleChildScrollView(
+                primary: false,
+                child: Table(
+                  columnWidths: columnWidths,
+                  border: TableBorder(horizontalInside: BorderSide(color: divider)),
+                  children: [
+                    for (int i = 0; i < _filteredStudents.length; i++)
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: _selectedIndex == i ? selectedBg : surface,
+                        ),
+                        children: [
+                          _tableBodyCell(
+                            '${i + 1}',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredStudents[i].username,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredStudents[i].fullname,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredStudents[i].gender,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _departmentNames[_filteredStudents[i].departmentRef ?? ''] ??
+                                '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _classNames[_filteredStudents[i].classRef ?? ''] ?? '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tableHeaderCell(String text, Color textColor) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 14),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: 14,
+        color: textColor,
+        letterSpacing: 0.1,
+      ),
+      overflow: TextOverflow.ellipsis,
+    ),
   );
 
   String? _findIdByName(Map<String, String> map, String name) {
@@ -797,7 +1038,10 @@ class _StudentsPageState extends State<StudentsPage> {
                 .toString()
                 .trim();
         final username = (row['username'] ?? '').toString().trim();
-        final password = (row['password'] ?? username).toString();
+        final rawPassword = (row['password'] ?? '').toString().trim();
+        final password = rawPassword.isEmpty
+            ? _generateDefaultPassword()
+            : rawPassword;
         if (fullname.isEmpty || username.isEmpty) {
           skipped.add(username.isEmpty ? fullname : username);
           continue;
@@ -868,6 +1112,9 @@ class _StudentsPageState extends State<StudentsPage> {
 
   Future<bool> _addStudentFromUpload(Student s) async {
     try {
+      final effectivePassword = s.password.trim().isEmpty
+          ? _generateDefaultPassword()
+          : s.password;
       final q = await studentsCollection
           .where('username', isEqualTo: s.username)
           .get();
@@ -900,7 +1147,7 @@ class _StudentsPageState extends State<StudentsPage> {
       final Map<String, dynamic> studentDoc = {
         'fullname': s.fullname,
         'username': s.username,
-        'password': s.password,
+        'password': effectivePassword,
         'gender': s.gender,
         'department_ref': s.departmentRef ?? '',
         'class_ref': s.classRef ?? '',
@@ -918,7 +1165,7 @@ class _StudentsPageState extends State<StudentsPage> {
       await usersCollection.add({
         'username': s.username,
         'role': 'student',
-        'password': s.password,
+        'password': effectivePassword,
         'faculty_id': userFacultyValue ?? '',
         'created_at': FieldValue.serverTimestamp(),
         'updated_at': FieldValue.serverTimestamp(),
@@ -931,11 +1178,24 @@ class _StudentsPageState extends State<StudentsPage> {
     }
   }
 
-  Widget _tableBodyCell(String text, {VoidCallback? onTap}) => InkWell(
+  Widget _tableBodyCell(String text, Color textColor, {VoidCallback? onTap}) =>
+      InkWell(
     onTap: onTap,
+    hoverColor: Colors.transparent,
+    splashColor: Colors.transparent,
+    highlightColor: Colors.transparent,
     child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      child: Text(text, overflow: TextOverflow.visible, softWrap: true),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+      child: Text(
+        text,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+        style: TextStyle(
+          fontSize: 14.5,
+          color: textColor,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     ),
   );
 }

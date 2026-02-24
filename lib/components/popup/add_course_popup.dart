@@ -294,14 +294,21 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
     final fieldRadius = BorderRadius.circular(10);
+    const double fieldFontSize = 16;
 
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      hintStyle: TextStyle(color: textPrimary.withOpacity(0.65)),
-      labelStyle: TextStyle(color: textPrimary.withOpacity(0.85)),
+      hintStyle: TextStyle(
+        color: textPrimary.withOpacity(0.65),
+        fontSize: fieldFontSize,
+      ),
+      labelStyle: TextStyle(
+        color: textPrimary.withOpacity(0.85),
+        fontSize: fieldFontSize,
+      ),
       border: OutlineInputBorder(
         borderRadius: fieldRadius,
         borderSide: BorderSide(color: border),
@@ -397,14 +404,23 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   // Department dropdown (replaces faculty)
                   DropdownButtonFormField<String>(
                     value: _departmentId,
-                    decoration: input('Department'),
+                    decoration: input('').copyWith(labelText: 'Department'),
                     dropdownColor: surface,
-                    style: TextStyle(color: textPrimary),
+                    style: TextStyle(
+                      color: textPrimary,
+                      fontSize: fieldFontSize,
+                    ),
                     items: _departments
                         .map(
                           (d) => DropdownMenuItem(
                             value: d['id'],
-                            child: Text(d['name'] ?? ''),
+                            child: Text(
+                              d['name'] ?? '',
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: fieldFontSize,
+                              ),
+                            ),
                           ),
                         )
                         .toList(),
@@ -421,9 +437,12 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   _teachers.isEmpty
                       ? DropdownButtonFormField<String>(
                           value: null,
-                          decoration: input('Lecturer'),
+                          decoration: input('').copyWith(labelText: 'Lecturer'),
                           dropdownColor: surface,
-                          style: TextStyle(color: textPrimary),
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: fieldFontSize,
+                          ),
                           items: [
                             DropdownMenuItem(
                               value: '',
@@ -432,6 +451,10 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                                 Session.facultyRef == null
                                     ? 'No teachers available'
                                     : 'No lecturers found for your faculty',
+                                style: TextStyle(
+                                  color: textPrimary,
+                                  fontSize: fieldFontSize,
+                                ),
                               ),
                             ),
                           ],
@@ -439,14 +462,23 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                         )
                       : DropdownButtonFormField<String>(
                           value: _lecturerId,
-                          decoration: input('Lecturer'),
+                          decoration: input('').copyWith(labelText: 'Lecturer'),
                           dropdownColor: surface,
-                          style: TextStyle(color: textPrimary),
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: fieldFontSize,
+                          ),
                           items: _teachers
                               .map(
                                 (t) => DropdownMenuItem(
                                   value: t['id'],
-                                  child: Text(t['name'] ?? ''),
+                                  child: Text(
+                                    t['name'] ?? '',
+                                    style: TextStyle(
+                                      color: textPrimary,
+                                      fontSize: fieldFontSize,
+                                    ),
+                                  ),
                                 ),
                               )
                               .toList(),
@@ -456,9 +488,12 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   // Class dropdown - filtered by selected department
                   DropdownButtonFormField<String>(
                     value: _classId,
-                    decoration: input('Class'),
+                    decoration: input('').copyWith(labelText: 'Class'),
                     dropdownColor: surface,
-                    style: TextStyle(color: textPrimary),
+                    style: TextStyle(
+                      color: textPrimary,
+                      fontSize: fieldFontSize,
+                    ),
                     items: _classes
                         .where(
                           (c) =>
@@ -468,7 +503,13 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                         .map(
                           (c) => DropdownMenuItem(
                             value: c['id'],
-                            child: Text(c['name'] ?? ''),
+                            child: Text(
+                              c['name'] ?? '',
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: fieldFontSize,
+                              ),
+                            ),
                           ),
                         )
                         .toList(),
@@ -477,15 +518,38 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: _semester,
-                    decoration: input('Semester'),
+                    decoration: input('').copyWith(labelText: 'Semester'),
                     dropdownColor: surface,
-                    style: TextStyle(color: textPrimary),
+                    style: TextStyle(
+                      color: textPrimary,
+                      fontSize: fieldFontSize,
+                    ),
                     items: [
                       ...List.generate(
                         14,
                         (i) => (i + 1).toString(),
-                      ).map((s) => DropdownMenuItem(value: s, child: Text(s))),
-                      DropdownMenuItem(value: 'Custom', child: Text('Custom')),
+                      ).map(
+                        (s) => DropdownMenuItem(
+                          value: s,
+                          child: Text(
+                            s,
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: fieldFontSize,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Custom',
+                        child: Text(
+                          'Custom',
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: fieldFontSize,
+                          ),
+                        ),
+                      ),
                     ],
                     onChanged: (v) => setState(() {
                       _semester = v;

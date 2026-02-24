@@ -3,11 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/course.dart';
 import '../popup/add_course_popup.dart';
 import '../cards/searchBar.dart';
+import '../admin_page_skeleton.dart';
 import '../../services/session.dart';
 import '../../theme/super_admin_theme.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:convert';
+import 'dart:typed_data';
+import '../../utils/download_bytes.dart';
 
 class CoursesPage extends StatefulWidget {
   const CoursesPage({super.key});
@@ -426,7 +429,96 @@ class _CoursesPageState extends State<CoursesPage> {
   }
 
   void _handleRowTap(int index) {
-    setState(() => _selectedIndex = index);
+    setState(() => _selectedIndex = _selectedIndex == index ? null : index);
+  }
+
+  void _clearSelection() {
+    if (_selectedIndex == null) return;
+    setState(() => _selectedIndex = null);
+  }
+
+  String _facultyDisplay(String? facultyRef) {
+    final raw = (facultyRef ?? '').trim();
+    if (raw.isEmpty) {
+      if (Session.facultyRef == null) return '';
+      return _facultyNames[Session.facultyRef!.id] ?? Session.facultyRef!.id;
+    }
+    if (_facultyNames.containsKey(raw)) return _facultyNames[raw]!;
+    if (raw.contains('/')) {
+      final parts = raw.split('/').where((p) => p.isNotEmpty).toList();
+      if (parts.isNotEmpty && _facultyNames.containsKey(parts.last)) {
+        return _facultyNames[parts.last]!;
+      }
+    }
+    return raw;
+  }
+
+  String _departmentDisplayForClass(String? classRef) {
+    final classId = (classRef ?? '').trim();
+    if (classId.isEmpty) return '';
+    final deptId = _classDeptId[classId] ?? '';
+    if (deptId.isEmpty) return '';
+    return _departmentNames[deptId] ?? deptId;
+  }
+
+  Future<void> _handleExportCoursesCsv() async {
+    try {
+      final rows = <List<dynamic>>[
+        [
+          'No',
+          'Course code',
+          'Course name',
+          'Lecturer',
+          'Department',
+          'Class',
+          'Faculty',
+          'Semester',
+        ],
+      ];
+
+      for (int i = 0; i < _courses.length; i++) {
+        final c = _courses[i];
+        rows.add([
+          i + 1,
+          c.courseCode,
+          c.courseName,
+          _teacherDisplay(c.teacherRef),
+          _departmentDisplayForClass(c.classRef),
+          _classNames[c.classRef] ?? '',
+          _facultyDisplay(c.facultyRef),
+          c.semester ?? '',
+        ]);
+      }
+
+      final csv = const ListToCsvConverter().convert(rows);
+      final bytes = Uint8List.fromList(utf8.encode(csv));
+      final now = DateTime.now();
+      final fileName =
+          'courses_${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}.csv';
+
+      final downloaded = await downloadBytes(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'text/csv;charset=utf-8',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            downloaded
+                ? 'CSV exported: $fileName'
+                : 'CSV export is currently supported on web only',
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Error exporting courses CSV: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to export CSV')),
+      );
+    }
   }
 
   @override
@@ -455,130 +547,174 @@ class _CoursesPageState extends State<CoursesPage> {
             ),
           ),
           const SizedBox(height: 24),
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              if (isDesktop)
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SearchAddBar(
-                            hintText: 'Search Course...',
-                            buttonText: 'Add Course',
-                            onAddPressed: _showAddCoursePopup,
-                            onChanged: (val) {
-                              setState(() {
-                                _searchText = val;
-                                _selectedIndex = null;
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          height: 48,
-                          child: ElevatedButton.icon(
-                            onPressed: _handleUploadCourses,
-                            icon: const Icon(Icons.upload_file),
-                            label: const Text('Upload Courses'),
-                            style: ElevatedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              backgroundColor: const Color.fromARGB(
-                                255,
-                                0,
-                                150,
-                                80,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    Expanded(
+                      child: SearchAddBar(
+                        hintText: 'Search Course...',
+                        buttonText: 'Add Course',
+                        onAddPressed: _showAddCoursePopup,
+                        onChanged: (val) {
+                          setState(() {
+                            _searchText = val;
+                            _selectedIndex = null;
+                          });
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        SizedBox(
-                          width: 90,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              disabledBackgroundColor: disabledActionBg,
-                              disabledForegroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _showEditCoursePopup,
-                            child: const Text(
-                              'Edit',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.white,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleUploadCourses,
+                        icon: const Icon(Icons.upload_file),
+                        label: const Text('Upload Courses'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            0,
+                            150,
+                            80,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 90,
-                          height: 36,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              disabledBackgroundColor: disabledActionBg,
-                              disabledForegroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            onPressed: _selectedIndex == null
-                                ? null
-                                : _confirmDeleteCourse,
-                            child: const Text(
-                              'Delete',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.white,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleExportCoursesCsv,
+                        icon: const Icon(Icons.download),
+                        label: const Text('Export CSV'),
+                        style: ElevatedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          backgroundColor: const Color(0xFF1F6FEB),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ],
+                )
+              else ...[
+                SearchAddBar(
+                  hintText: 'Search Course...',
+                  buttonText: 'Add Course',
+                  onAddPressed: _showAddCoursePopup,
+                  onChanged: (val) {
+                    setState(() {
+                      _searchText = val;
+                      _selectedIndex = null;
+                    });
+                  },
                 ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleUploadCourses,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Upload Courses'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleExportCoursesCsv,
+                    icon: const Icon(Icons.download),
+                    label: const Text('Export CSV'),
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF1F6FEB),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 90,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null ? null : _showEditCoursePopup,
+                      child: const Text(
+                        'Edit',
+                        style: TextStyle(fontSize: 15, color: Colors.white),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 90,
+                    height: 36,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        disabledBackgroundColor: disabledActionBg,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: _selectedIndex == null ? null : _confirmDeleteCourse,
+                      child: const Text(
+                        'Delete',
+                        style: TextStyle(fontSize: 14, color: Colors.white),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 8),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const CoursesPageSkeleton()
                 : Container(
                     width: double.infinity,
                     color: Colors.transparent,
                     child: isDesktop
                         ? _buildDesktopTable()
                         : SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: _buildMobileTable(),
-                            ),
+                            scrollDirection: Axis.horizontal,
+                            child: _buildMobileTable(),
                           ),
                   ),
           ),
@@ -685,153 +821,183 @@ class _CoursesPageState extends State<CoursesPage> {
   }
 
   Widget _buildDesktopTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-    return Table(
+    return _buildSaasTable(
       columnWidths: const {
-        0: FixedColumnWidth(64),
-        1: FixedColumnWidth(120),
-        2: FixedColumnWidth(180),
-        3: FixedColumnWidth(160),
-        4: FixedColumnWidth(160),
-        5: FixedColumnWidth(120),
+        0: FixedColumnWidth(72),
+        1: FlexColumnWidth(1.1),
+        2: FlexColumnWidth(1.7),
+        3: FlexColumnWidth(1.5),
+        4: FlexColumnWidth(1.5),
+        5: FlexColumnWidth(1.1),
         6: FixedColumnWidth(120),
       },
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell('No'),
-            _tableHeaderCell('Course code'),
-            _tableHeaderCell('Course name'),
-            _tableHeaderCell('Lecturer'),
-            _tableHeaderCell('Department'),
-            _tableHeaderCell('Class'),
-            _tableHeaderCell('Semester'),
-          ],
-        ),
-        for (int i = 0; i < _filteredCourses.length; i++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == i ? highlight : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${i + 1}', onTap: () => _handleRowTap(i)),
-              _tableBodyCell(
-                _filteredCourses[i].courseCode,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredCourses[i].courseName,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _teacherDisplay(_filteredCourses[i].teacherRef),
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _departmentNames[_classDeptId[_filteredCourses[i].classRef]] ??
-                    '',
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _classNames[_filteredCourses[i].classRef] ?? '',
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredCourses[i].semester ?? '',
-                onTap: () => _handleRowTap(i),
-              ),
-            ],
-          ),
-      ],
     );
   }
 
   Widget _buildMobileTable() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final palette = Theme.of(context).extension<SuperAdminColors>();
-    final highlight =
-        palette?.highlight ??
-        (isDark ? const Color(0xFF2E3545) : Colors.blue.shade50);
-    return Table(
-      defaultColumnWidth: const IntrinsicColumnWidth(),
-      border: TableBorder(
-        horizontalInside: BorderSide(color: Colors.grey.shade300),
-      ),
-      children: [
-        TableRow(
-          children: [
-            _tableHeaderCell('No'),
-            _tableHeaderCell('Course code'),
-            _tableHeaderCell('Course name'),
-            _tableHeaderCell('Lecturer'),
-            _tableHeaderCell('Department'),
-            _tableHeaderCell('Class'),
-            _tableHeaderCell('Semester'),
-          ],
-        ),
-        for (int i = 0; i < _filteredCourses.length; i++)
-          TableRow(
-            decoration: BoxDecoration(
-              color: _selectedIndex == i ? highlight : Colors.transparent,
-            ),
-            children: [
-              _tableBodyCell('${i + 1}', onTap: () => _handleRowTap(i)),
-              _tableBodyCell(
-                _filteredCourses[i].courseCode,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredCourses[i].courseName,
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _teacherDisplay(_filteredCourses[i].teacherRef),
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _departmentNames[_classDeptId[_filteredCourses[i].classRef]] ??
-                    '',
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _classNames[_filteredCourses[i].classRef] ?? '',
-                onTap: () => _handleRowTap(i),
-              ),
-              _tableBodyCell(
-                _filteredCourses[i].semester ?? '',
-                onTap: () => _handleRowTap(i),
-              ),
-            ],
-          ),
-      ],
+    return _buildSaasTable(
+      columnWidths: const {
+        0: FixedColumnWidth(72),
+        1: FixedColumnWidth(130),
+        2: FixedColumnWidth(220),
+        3: FixedColumnWidth(170),
+        4: FixedColumnWidth(170),
+        5: FixedColumnWidth(130),
+        6: FixedColumnWidth(120),
+      },
     );
   }
 
-  Widget _tableHeaderCell(String text) {
+  Widget _buildSaasTable({required Map<int, TableColumnWidth> columnWidths}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<SuperAdminColors>();
+    final scheme = Theme.of(context).colorScheme;
+    final surface = palette?.surface ?? scheme.surface;
+    final border =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : const Color(0xFFD7DCEA));
+    final headerBg = palette?.surfaceHigh ?? scheme.surfaceContainerHighest;
+    final textPrimary = palette?.textPrimary ?? scheme.onSurface;
+    final selectedBg =
+        palette?.selectedBg ??
+        Color.alphaBlend(
+          (palette?.accent ?? const Color(0xFF6A46FF)).withValues(alpha: 0.12),
+          surface,
+        );
+    final divider = border.withValues(alpha: isDark ? 0.7 : 0.85);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: divider),
+        boxShadow: [
+          BoxShadow(
+            color: (palette?.accent ?? const Color(0xFF6A46FF)).withValues(
+              alpha: isDark ? 0.06 : 0.08,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: [
+            Table(
+              columnWidths: columnWidths,
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: headerBg),
+                  children: [
+                    _tableHeaderCell('No', textPrimary),
+                    _tableHeaderCell('Course code', textPrimary),
+                    _tableHeaderCell('Course name', textPrimary),
+                    _tableHeaderCell('Lecturer', textPrimary),
+                    _tableHeaderCell('Department', textPrimary),
+                    _tableHeaderCell('Class', textPrimary),
+                    _tableHeaderCell('Semester', textPrimary),
+                  ],
+                ),
+              ],
+            ),
+            Container(height: 1, color: divider),
+            Expanded(
+              child: SingleChildScrollView(
+                primary: false,
+                child: Table(
+                  columnWidths: columnWidths,
+                  border: TableBorder(horizontalInside: BorderSide(color: divider)),
+                  children: [
+                    for (int i = 0; i < _filteredCourses.length; i++)
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: _selectedIndex == i ? selectedBg : surface,
+                        ),
+                        children: [
+                          _tableBodyCell(
+                            '${i + 1}',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredCourses[i].courseCode,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredCourses[i].courseName,
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _teacherDisplay(_filteredCourses[i].teacherRef),
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _departmentNames[_classDeptId[_filteredCourses[i].classRef]] ??
+                                '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _classNames[_filteredCourses[i].classRef] ?? '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                          _tableBodyCell(
+                            _filteredCourses[i].semester ?? '',
+                            textPrimary,
+                            onTap: () => _handleRowTap(i),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tableHeaderCell(String text, Color textColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 16),
       child: Text(
         text,
-        style: const TextStyle(fontWeight: FontWeight.bold),
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          color: textColor,
+          letterSpacing: 0.1,
+        ),
         textAlign: TextAlign.left,
         overflow: TextOverflow.ellipsis,
       ),
     );
   }
 
-  Widget _tableBodyCell(String text, {VoidCallback? onTap}) {
+  Widget _tableBodyCell(String text, Color textColor, {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap,
+      hoverColor: Colors.transparent,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        child: Text(text, overflow: TextOverflow.ellipsis),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        child: Text(
+          text,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14.5,
+            color: textColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }

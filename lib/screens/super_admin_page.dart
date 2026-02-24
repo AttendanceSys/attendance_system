@@ -8,6 +8,7 @@ import 'login_screen.dart';
 import 'package:attendance_system/components/pages/faculties_page.dart';
 import 'package:attendance_system/components/pages/lecturer_page.dart';
 import 'package:attendance_system/components/pages/Admin_user_handling_page.dart';
+import 'package:attendance_system/components/pages/admin_profile_page.dart';
 import 'package:attendance_system/components/popup/logout_confirmation_popup.dart';
 import '../services/theme_controller.dart';
 import '../services/session.dart';
@@ -154,11 +155,11 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
 
   final List<Widget> _pages = [
     Padding(
-      padding: const EdgeInsets.all(32.0),
+      // Keep dashboard clear of the floating top-right controls.
+      padding: const EdgeInsets.fromLTRB(32.0, 44.0, 32.0, 32.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
           Text(
             "Dashboard",
             style: TextStyle(
@@ -176,6 +177,10 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
     TeachersPage(),
     AdminsPage(),
     UserHandlingPage(),
+    const AdminProfilePage(
+      roleFilter: 'Super admin',
+      roleLabel: 'Super Admin',
+    ),
   ];
 
   // --- This method now shows the confirmation popup before logging out ---
@@ -247,43 +252,50 @@ class _SuperAdminPageState extends State<SuperAdminPage> {
       final initial = displayName.isNotEmpty
           ? displayName[0].toUpperCase()
           : 'A';
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 14,
-            backgroundColor: avatarBg,
-            child: Text(
-              initial,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
+      return InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => setState(() => _selectedIndex = 5),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: avatarBg,
+                child: Text(
+                  initial,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              displayName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.playfairDisplay(
-                color: textColor,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.playfairDisplay(
+                    color: textColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       );
     }
 
     final scaffold = Scaffold(
       appBar: isMobile
           ? AppBar(
-              title: const Text('Admin Panel'),
               backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+              titleSpacing: 0,
               leading: Builder(
                 builder: (context) => IconButton(
                   icon: const Icon(Icons.chevron_right),

@@ -989,6 +989,20 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
   @override
   Widget build(BuildContext context) {
     final palette = Theme.of(context).extension<TeacherThemeColors>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor =
+        palette?.surface ?? Theme.of(context).colorScheme.surface;
+    final borderColor =
+        palette?.border ??
+        (isDark ? const Color(0xFF3A404E) : const Color(0xFFD7DCEA));
+    final headerBg = isDark
+        ? const Color(0xFF2B3140)
+        : const Color(0xFFF6F8FC);
+    final textPrimary = palette?.textPrimary ?? Theme.of(context).colorScheme.onSurface;
+    final selectedBg = Color.alphaBlend(
+      (palette?.accent ?? const Color(0xFF6A46FF)).withValues(alpha: 0.08),
+      surfaceColor,
+    );
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -1006,188 +1020,240 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
           ),
           const SizedBox(height: 18),
 
-          Wrap(
-            spacing: 14,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _styledDropdown(
-                value: department,
-                items: departments,
-                hint: 'Select Department',
-                onChanged: (v) {
-                  setState(() {
-                    department = v;
-                    classes = [];
-                    className = null;
-                    subjects = [];
-                    subject = null;
-                    students = [];
-                    _prefillAppliedForCurrentSelection = false;
-                    currentSessionId = null;
-                    currentSessionCode = null;
-                    _noActiveSessionMessage = null;
-                  });
-                  if (v != null) _loadClassesForDepartment(v);
-                },
-              ),
-              _styledDropdown(
-                value: className,
-                items: classes,
-                hint: 'Select Class',
-                onChanged: (v) {
-                  setState(() {
-                    className = v;
-                    subjects = [];
-                    subject = null;
-                    students = [];
-                    _prefillAppliedForCurrentSelection = false;
-                    currentSessionId = null;
-                    currentSessionCode = null;
-                    _noActiveSessionMessage = null;
-                  });
-                  if (v != null) _loadSubjectsForClass(v);
-                },
-              ),
-              _styledDropdown(
-                value: subject,
-                items: subjects,
-                hint: 'Select Subject',
-                onChanged: (v) {
-                  setState(() {
-                    subject = v;
-                    students = [];
-                    _prefillAppliedForCurrentSelection = false;
-                    currentSessionId = null;
-                    currentSessionCode = null;
-                    _noActiveSessionMessage = null;
-                  });
-                  if (v != null) _fetchStudentsForSelection(forceRefresh: true);
-                },
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          // Header
           Container(
-            color: Theme.of(context).colorScheme.surface,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            child: Row(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor.withOpacity(0.35)),
+            ),
+            child: Wrap(
+              spacing: 14,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    'No',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
+                _styledDropdown(
+                  value: department,
+                  items: departments,
+                  hint: 'Select Department',
+                  onChanged: (v) {
+                    setState(() {
+                      department = v;
+                      classes = [];
+                      className = null;
+                      subjects = [];
+                      subject = null;
+                      students = [];
+                      _prefillAppliedForCurrentSelection = false;
+                      currentSessionId = null;
+                      currentSessionCode = null;
+                      _noActiveSessionMessage = null;
+                    });
+                    if (v != null) _loadClassesForDepartment(v);
+                  },
                 ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'username',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
+                _styledDropdown(
+                  value: className,
+                  items: classes,
+                  hint: 'Select Class',
+                  onChanged: (v) {
+                    setState(() {
+                      className = v;
+                      subjects = [];
+                      subject = null;
+                      students = [];
+                      _prefillAppliedForCurrentSelection = false;
+                      currentSessionId = null;
+                      currentSessionCode = null;
+                      _noActiveSessionMessage = null;
+                    });
+                    if (v != null) _loadSubjectsForClass(v);
+                  },
                 ),
-                Expanded(
-                  flex: 4,
-                  child: Text(
-                    'full Name',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Status',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
+                _styledDropdown(
+                  value: subject,
+                  items: subjects,
+                  hint: 'Select Subject',
+                  onChanged: (v) {
+                    setState(() {
+                      subject = v;
+                      students = [];
+                      _prefillAppliedForCurrentSelection = false;
+                      currentSessionId = null;
+                      currentSessionCode = null;
+                      _noActiveSessionMessage = null;
+                    });
+                    if (v != null) {
+                      _fetchStudentsForSelection(forceRefresh: true);
+                    }
+                  },
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
 
-          // Body: either message (no session) or roster
           Expanded(
-            child: loadingStudents
-                ? const Center(child: CircularProgressIndicator())
-                : (_noActiveSessionMessage != null)
-                ? Center(
-                    child: Text(
-                      _noActiveSessionMessage!,
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  )
-                : students.isEmpty
-                ? Center(
-                    child: Text(
-                      'No students found.',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                  )
-                : ListView.separated(
-                    itemCount: students.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final s = students[index];
-                      // Render only the student row here, not the header or theme toggle
-                      // ...existing student row rendering code...
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 16,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(flex: 1, child: Text('${index + 1}')),
-                            Expanded(flex: 2, child: Text(s.username)),
-                            Expanded(flex: 4, child: Text(s.name)),
-                            Expanded(
-                              flex: 2,
-                              child: Switch(
-                                value: s.present,
-                                onChanged: (val) {
-                                  setState(() => s.present = val);
-                                },
-                                activeColor: Colors.green,
-                                inactiveTrackColor: Colors.red[200],
-                                // Always use a visible thumb color
-                                thumbColor:
-                                    WidgetStateProperty.resolveWith<Color>((
-                                      states,
-                                    ) {
-                                      if (states.contains(
-                                        WidgetState.selected,
-                                      )) {
-                                        return Colors.white;
-                                      }
-                                      return Colors.white;
-                                    }),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+            child: Container(
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor.withValues(alpha: 0.85)),
+                boxShadow: [
+                  BoxShadow(
+                    color: (palette?.accent ?? const Color(0xFF6A46FF))
+                        .withValues(alpha: isDark ? 0.05 : 0.07),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
                   ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    color: headerBg,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: Text(
+                            'No',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: textPrimary,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            'Username',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: textPrimary,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 4,
+                          child: Text(
+                            'Full Name',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: textPrimary,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            'Status',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: textPrimary,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: loadingStudents
+                        ? const Center(child: CircularProgressIndicator())
+                        : (_noActiveSessionMessage != null)
+                        ? Center(
+                            child: Text(
+                              _noActiveSessionMessage!,
+                              style: TextStyle(fontSize: 16, color: textPrimary),
+                            ),
+                          )
+                        : students.isEmpty
+                        ? Center(
+                            child: Text(
+                              '',
+                              style: TextStyle(color: textPrimary),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: students.length,
+                            separatorBuilder: (_, __) =>
+                                Divider(height: 1, color: borderColor),
+                            itemBuilder: (context, index) {
+                              final s = students[index];
+                              final bg = index.isEven ? surfaceColor : selectedBg;
+                              return Container(
+                                color: bg,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                  horizontal: 16,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 1,
+                                      child: Text(
+                                        '${index + 1}',
+                                        style: TextStyle(color: textPrimary),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        s.username,
+                                        style: TextStyle(color: textPrimary),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 4,
+                                      child: Text(
+                                        s.name,
+                                        style: TextStyle(
+                                          color: textPrimary,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Align(
+                                        alignment: Alignment.center,
+                                        child: Transform.scale(
+                                          scale: 0.92,
+                                          child: Switch.adaptive(
+                                            value: s.present,
+                                            onChanged: (val) {
+                                              setState(() => s.present = val);
+                                            },
+                                            activeColor: const Color(0xFF1DBA73),
+                                            inactiveThumbColor: const Color(
+                                              0xFFD33D57,
+                                            ),
+                                            inactiveTrackColor: const Color(
+                                              0xFFD33D57,
+                                            ).withValues(alpha: 0.35),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
           ),
 
           const SizedBox(height: 12),
@@ -1234,6 +1300,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                   : const Text(
                       'Submit',
                       style: TextStyle(
+                        color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),

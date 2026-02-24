@@ -4,6 +4,65 @@ import 'package:fl_chart/fl_chart.dart';
 import '../services/session.dart';
 import 'dart:math' as math;
 
+String? _extractRefId(dynamic raw, {String? expectedCollection}) {
+  if (raw == null) return null;
+  if (raw is DocumentReference) return raw.id;
+  if (raw is! String) return null;
+
+  var s = raw.trim();
+  if (s.isEmpty) return null;
+  if (s.startsWith('/')) s = s.substring(1);
+  final parts = s.split('/').where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return null;
+
+  if (expectedCollection != null) {
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (parts[i] == expectedCollection) return parts[i + 1];
+    }
+  }
+
+  return parts.length > 1 ? parts.last : s;
+}
+
+bool _belongsToSessionFaculty(Map<String, dynamic>? data) {
+  final facultyRef = Session.facultyRef;
+  if (facultyRef == null) return true;
+  if (data == null) return false;
+
+  final sessionId = facultyRef.id;
+  final sessionPath = facultyRef.path;
+  final sessionSlashPath = '/$sessionPath';
+
+  final candidates = [
+    data['faculty_ref'],
+    data['facultyRef'],
+    data['faculty_id'],
+    data['facultyId'],
+    data['faculty'],
+  ];
+
+  for (final raw in candidates) {
+    if (raw == null) continue;
+    if (raw is DocumentReference) {
+      if (raw.id == sessionId || raw.path == sessionPath) return true;
+      continue;
+    }
+
+    if (raw is String) {
+      final text = raw.trim();
+      if (text.isEmpty) continue;
+      if (text == sessionId || text == sessionPath || text == sessionSlashPath) {
+        return true;
+      }
+    }
+
+    final extracted = _extractRefId(raw, expectedCollection: 'faculties');
+    if (extracted == sessionId) return true;
+  }
+
+  return false;
+}
+
 /// Dashboard grid with four focused charts:
 /// - Attendance (this week)
 /// - Top attended classes
@@ -14,12 +73,19 @@ class DashboardStatsGrid extends StatelessWidget {
 
   Future<int> _fetchCount(String collectionName) async {
     try {
-      Query q = FirebaseFirestore.instance.collection(collectionName);
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
+      final snap = await FirebaseFirestore.instance
+          .collection(collectionName)
+          .get();
+      if (Session.facultyRef == null) {
+        return snap.size;
       }
-      final snapshot = await q.get();
-      return snapshot.size;
+
+      var count = 0;
+      for (final doc in snap.docs) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (_belongsToSessionFaculty(data)) count++;
+      }
+      return count;
     } catch (e) {
       debugPrint('Error fetching $collectionName count: $e');
       return 0;
@@ -36,6 +102,9 @@ class DashboardStatsGrid extends StatelessWidget {
         _fetchCount('students'),
       ]),
       builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const _FacultyDashboardGridSkeleton(cardCount: 4);
+        }
         final counts = snapshot.data ?? const [0, 0, 0, 0];
 
         return LayoutBuilder(
@@ -119,7 +188,7 @@ class DashboardStatsGrid extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             _ChartCard(
-                              title: 'Top Attended Classes',
+                              title: 'Top Attended Classes (this week)',
                               height: 200,
                               child: TopAttendedClassesChart(days: 7, topN: 6),
                             ),
@@ -157,7 +226,7 @@ class DashboardStatsGrid extends StatelessWidget {
                                 Expanded(
                                   flex: 2,
                                   child: _ChartCard(
-                                    title: 'Top Attended Classes',
+                                    title: 'Top Attended Classes (this week)',
                                     height: 260,
                                     child: TopAttendedClassesChart(
                                       days: 7,
@@ -225,13 +294,13 @@ class _ChartCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(isDark ? 0.30 : 0.12),
+            color: theme.shadowColor.withValues(alpha: isDark ? 0.30 : 0.12),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
         border: Border.all(
-          color: theme.dividerColor.withOpacity(isDark ? 0.30 : 0.15),
+          color: theme.dividerColor.withValues(alpha: isDark ? 0.30 : 0.15),
         ),
       ),
       child: Column(
@@ -256,15 +325,178 @@ class _ChartLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator.adaptive(
-          strokeWidth: 2.5,
-          valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-        ),
+    return const SizedBox.shrink();
+  }
+}
+
+class _FacultyDashboardGridSkeleton extends StatelessWidget {
+  final int cardCount;
+
+  const _FacultyDashboardGridSkeleton({required this.cardCount});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final card = scheme.surfaceContainerHigh.withValues(alpha: 0.5);
+    final line = scheme.surfaceContainerHighest.withValues(alpha: 0.58);
+    final border = scheme.outlineVariant.withValues(alpha: 0.45);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        int crossAxis;
+        if (width < 550) {
+          crossAxis = 1;
+        } else if (width < 900) {
+          crossAxis = 2;
+        } else if (width < 1300) {
+          crossAxis = 3;
+        } else {
+          crossAxis = 4;
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.builder(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              itemCount: cardCount,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxis,
+                crossAxisSpacing: 22,
+                mainAxisSpacing: 16,
+                mainAxisExtent: 90,
+              ),
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemBuilder: (_, __) => Container(
+                decoration: BoxDecoration(
+                  color: card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: border),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: LayoutBuilder(
+                builder: (context, inner) {
+                  final isNarrow = inner.maxWidth < 900;
+                  if (isNarrow) {
+                    return Column(
+                      children: [
+                        _FacultySkeletonChartBlock(line: line, border: border, h: 240),
+                        const SizedBox(height: 12),
+                        _FacultySkeletonChartBlock(line: line, border: border, h: 200),
+                        const SizedBox(height: 12),
+                        _FacultySkeletonChartBlock(line: line, border: border, h: 200),
+                        const SizedBox(height: 12),
+                        _FacultySkeletonChartBlock(line: line, border: border, h: 180),
+                      ],
+                    );
+                  }
+                  return Column(
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: _FacultySkeletonChartBlock(
+                              line: line,
+                              border: border,
+                              h: 260,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: _FacultySkeletonChartBlock(
+                              line: line,
+                              border: border,
+                              h: 220,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: _FacultySkeletonChartBlock(
+                              line: line,
+                              border: border,
+                              h: 220,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: _FacultySkeletonChartBlock(
+                              line: line,
+                              border: border,
+                              h: 200,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FacultySkeletonChartBlock extends StatelessWidget {
+  final Color line;
+  final Color border;
+  final double h;
+
+  const _FacultySkeletonChartBlock({
+    required this.line,
+    required this.border,
+    required this.h,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: h,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 180,
+            height: 16,
+            decoration: BoxDecoration(
+              color: line,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: line.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -298,14 +530,14 @@ class _StatsCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(20 * scale),
               boxShadow: [
                 BoxShadow(
-                  color: theme.shadowColor.withOpacity(isDark ? 0.30 : 0.08),
+                  color: theme.shadowColor.withValues(alpha: isDark ? 0.30 : 0.08),
                   blurRadius: 14,
                   offset: const Offset(0, 4),
                 ),
               ],
               border: Border.all(
-                color: theme.colorScheme.outline.withOpacity(
-                  isDark ? 0.28 : 0.16,
+                color: theme.colorScheme.outline.withValues(
+                  alpha: isDark ? 0.28 : 0.16,
                 ),
               ),
             ),
@@ -361,10 +593,10 @@ class _StatsCard extends StatelessWidget {
                     padding: EdgeInsets.symmetric(horizontal: 6 * scale),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: color.withOpacity(isDark ? 0.25 : 0.12),
+                        color: color.withValues(alpha: isDark ? 0.25 : 0.12),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: color.withOpacity(isDark ? 0.35 : 0.18),
+                          color: color.withValues(alpha: isDark ? 0.35 : 0.18),
                         ),
                       ),
                       padding: EdgeInsets.all(8 * scale),
@@ -372,7 +604,7 @@ class _StatsCard extends StatelessWidget {
                         icon,
                         size: 22 * scale,
                         color: isDark
-                            ? theme.colorScheme.onSurface.withOpacity(0.95)
+                            ? theme.colorScheme.onSurface.withValues(alpha: 0.95)
                             : color,
                       ),
                     ),
@@ -432,9 +664,6 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
       final col = FirebaseFirestore.instance.collection(colName);
 
       Query q = col.where('scannedAt', isGreaterThanOrEqualTo: startTs);
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
-      }
 
       QuerySnapshot? snap;
       try {
@@ -460,6 +689,7 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
+        if (!_belongsToSessionFaculty(data)) continue;
 
         DateTime? dt;
         final scanned = data['scannedAt'];
@@ -627,7 +857,7 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
             dotData: FlDotData(show: true),
             belowBarData: BarAreaData(
               show: true,
-              color: theme.colorScheme.primary.withOpacity(0.12),
+              color: theme.colorScheme.primary.withValues(alpha: 0.12),
             ),
           ),
         ],
@@ -636,9 +866,6 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
   }
 
   Widget _buildBar(ThemeData theme, List<int> counts) {
-    final isLight = theme.brightness == Brightness.light;
-    final tooltipBg = isLight ? theme.colorScheme.primary : Colors.white;
-    final tooltipText = isLight ? Colors.white : Colors.black;
     final bars = counts
         .asMap()
         .entries
@@ -716,9 +943,6 @@ class _DepartmentsByStudentsChartState
     try {
       final studentsRef = FirebaseFirestore.instance.collection('students');
       Query q = studentsRef;
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
-      }
       final snap = await q.get();
 
       // Build raw counts from students
@@ -726,6 +950,7 @@ class _DepartmentsByStudentsChartState
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
+        if (!_belongsToSessionFaculty(data)) continue;
         final raw =
             data['department_ref'] ??
             data['departmentRef'] ??
@@ -750,10 +975,9 @@ class _DepartmentsByStudentsChartState
       final deptRef = FirebaseFirestore.instance.collection('departments');
       final deptSnap = await deptRef.get();
       final Map<String, String> names = {};
-      final List<Map<String, dynamic>> deptDocs = [];
       for (final d in deptSnap.docs) {
         final m = d.data() as Map<String, dynamic>?;
-        deptDocs.add({'id': d.id, 'data': m ?? {}});
+        if (!_belongsToSessionFaculty(m)) continue;
         final disp =
             (m?['department_name'] ??
                     m?['departmentName'] ??
@@ -1010,14 +1234,12 @@ class _StudentsByGenderChartState extends State<StudentsByGenderChart> {
   Future<Map<String, int>> _fetchGenderCounts() async {
     try {
       Query q = FirebaseFirestore.instance.collection('students');
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
-      }
       final snap = await q.get();
       final Map<String, int> map = {};
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
+        if (!_belongsToSessionFaculty(data)) continue;
         final raw = (data['gender'] ?? '').toString().trim();
         final key = raw.isEmpty ? 'Unknown' : raw;
         map[key] = (map[key] ?? 0) + 1;
@@ -1157,9 +1379,6 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
       final col = FirebaseFirestore.instance.collection(colName);
 
       Query q = col.where('scannedAt', isGreaterThanOrEqualTo: startTs);
-      if (Session.facultyRef != null) {
-        q = q.where('faculty_ref', isEqualTo: Session.facultyRef);
-      }
 
       QuerySnapshot snap;
       try {
@@ -1181,6 +1400,7 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
+        if (!_belongsToSessionFaculty(data)) continue;
 
         DateTime? dt;
         final scanned = data['scannedAt'];
@@ -1267,7 +1487,7 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
                             Container(
                               height: 18,
                               decoration: BoxDecoration(
-                                color: theme.dividerColor.withOpacity(0.08),
+                                color: theme.dividerColor.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                             ),
@@ -1305,7 +1525,7 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
                 child: Text(
                   'Top ${data.length} classes — last ${widget.days} days',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                    color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
                   ),
                 ),
               ),

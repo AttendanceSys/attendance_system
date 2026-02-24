@@ -7,9 +7,13 @@ import '../../theme/super_admin_theme.dart';
 
 class AddTeacherPopup extends StatefulWidget {
   final Teacher? teacher;
-  final List<String> facultyNames;
+  final Map<String, String> facultyOptions; // facultyId -> facultyName
 
-  const AddTeacherPopup({super.key, this.teacher, required this.facultyNames});
+  const AddTeacherPopup({
+    super.key,
+    this.teacher,
+    required this.facultyOptions,
+  });
 
   @override
   State<AddTeacherPopup> createState() => _AddTeacherPopupState();
@@ -34,6 +38,19 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
     _username = widget.teacher?.username;
     _password = widget.teacher?.password;
     _facultyId = widget.teacher?.facultyId;
+    // Support legacy records where facultyId stored as faculty name.
+    if (_facultyId != null &&
+        _facultyId!.trim().isNotEmpty &&
+        !widget.facultyOptions.containsKey(_facultyId)) {
+      final match = widget.facultyOptions.entries.where((e) {
+        return e.value.toLowerCase().trim() == _facultyId!.toLowerCase().trim();
+      });
+      if (match.isNotEmpty) {
+        _facultyId = match.first.key;
+      } else {
+        _facultyId = null;
+      }
+    }
   }
 
   @override
@@ -67,14 +84,21 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
     final fieldRadius = BorderRadius.circular(10);
+    const double fieldFontSize = 16;
 
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      hintStyle: TextStyle(color: titleColor.withOpacity(0.65)),
-      labelStyle: TextStyle(color: titleColor.withOpacity(0.85)),
+      hintStyle: TextStyle(
+        color: titleColor.withOpacity(0.65),
+        fontSize: fieldFontSize,
+      ),
+      labelStyle: TextStyle(
+        color: titleColor.withOpacity(0.85),
+        fontSize: fieldFontSize,
+      ),
       border: OutlineInputBorder(
         borderRadius: fieldRadius,
         borderSide: BorderSide(color: borderColor),
@@ -175,13 +199,24 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _facultyId,
-                  decoration: input("Faculty"),
+                  decoration: input('').copyWith(labelText: 'Faculty'),
                   dropdownColor: containerBg,
-                  style: TextStyle(color: titleColor),
-                  items: widget.facultyNames
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: fieldFontSize,
+                  ),
+                  items: widget.facultyOptions.entries
                       .map(
-                        (name) =>
-                            DropdownMenuItem(value: name, child: Text(name)),
+                        (entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(
+                            entry.value,
+                            style: TextStyle(
+                              color: titleColor,
+                              fontSize: fieldFontSize,
+                            ),
+                          ),
+                        ),
                       )
                       .toList(),
                   onChanged: (val) => setState(() => _facultyId = val),

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../screens/login_screen.dart';
 import '../../components/popup/logout_confirmation_popup.dart';
 import 'student_view_attendance_page.dart';
@@ -7,6 +8,7 @@ import 'student_scan_attendance_page.dart';
 import '../../components/animated_bottom_bar.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import '../../services/session.dart';
 // student_theme_controller.dart
 import '../student_theme_controller.dart';
 
@@ -17,21 +19,21 @@ import '../../components/popup/change_password_popup.dart';
 // import 'package:lucide_icons/lucide_icons.dart';
 
 class StudentProfilePage extends StatefulWidget {
-  final String name;
-  final String className;
-  final String semester;
-  final String gender;
-  final String id;
-  final String avatarLetter;
+  final String? name;
+  final String? className;
+  final String? semester;
+  final String? gender;
+  final String? id;
+  final String? avatarLetter;
 
   const StudentProfilePage({
     super.key,
-    required this.name,
-    required this.className,
-    required this.semester,
-    required this.gender,
-    required this.id,
-    required this.avatarLetter,
+    this.name,
+    this.className,
+    this.semester,
+    this.gender,
+    this.id,
+    this.avatarLetter,
   });
 
   @override
@@ -40,6 +42,12 @@ class StudentProfilePage extends StatefulWidget {
 
 class _StudentProfilePageState extends State<StudentProfilePage> {
   File? _avatarImage;
+  bool _loadingProfile = false;
+  String _studentName = '';
+  String _studentClassName = '';
+  String _studentGender = '';
+  String _studentUsername = '';
+  String _avatarLetter = '';
   Future<void> _pickAvatarImage() async {
     try {
       final picker = ImagePicker();
@@ -66,6 +74,16 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   /// Shows the ChangePasswordPopup, verifies the old password against the
   /// students document (username == widget.id) and updates the password field.
   Future<void> _showChangePasswordDialog() async {
+    final lookupUsername = _studentUsername.trim();
+    if (lookupUsername.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Student profile not loaded yet')),
+        );
+      }
+      return;
+    }
+
     final success = await showDialog<bool?>(
       context: context,
       builder: (context) => ChangePasswordPopup(
@@ -83,26 +101,26 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
             DocumentSnapshot? studentDoc;
             try {
               var q = await studentsRef
-                  .where('username', isEqualTo: widget.id)
+                  .where('username', isEqualTo: lookupUsername)
                   .limit(1)
                   .get();
               if (q.docs.isNotEmpty) studentDoc = q.docs.first;
               if (studentDoc == null) {
                 q = await studentsRef
-                    .where('student_id', isEqualTo: widget.id)
+                    .where('student_id', isEqualTo: lookupUsername)
                     .limit(1)
                     .get();
                 if (q.docs.isNotEmpty) studentDoc = q.docs.first;
               }
               if (studentDoc == null) {
                 q = await studentsRef
-                    .where('id', isEqualTo: widget.id)
+                    .where('id', isEqualTo: lookupUsername)
                     .limit(1)
                     .get();
                 if (q.docs.isNotEmpty) studentDoc = q.docs.first;
               }
               if (studentDoc == null) {
-                final docById = await studentsRef.doc(widget.id).get();
+                final docById = await studentsRef.doc(lookupUsername).get();
                 if (docById.exists) studentDoc = docById;
               }
             } catch (e) {
@@ -132,7 +150,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
               try {
                 final usersRef = FirebaseFirestore.instance.collection('users');
                 final uQ = await usersRef
-                    .where('username', isEqualTo: widget.id)
+                    .where('username', isEqualTo: lookupUsername)
                     .limit(1)
                     .get();
                 if (uQ.docs.isNotEmpty) {
@@ -146,7 +164,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                   );
                 } else {
                   debugPrint(
-                    'Password change onSubmit: no matching user doc in users collection for username=${widget.id}',
+                    'Password change onSubmit: no matching user doc in users collection for username=$lookupUsername',
                   );
                 }
               } catch (e) {
@@ -190,9 +208,87 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   @override
   void initState() {
     super.initState();
-    _semester = widget.semester;
-    if (_semester.trim().isEmpty) {
+    _studentName = (widget.name ?? '').trim();
+    _studentClassName = (widget.className ?? '').trim();
+    _studentGender = (widget.gender ?? '').trim();
+    _studentUsername =
+        (widget.id ?? '').trim().isNotEmpty
+        ? (widget.id ?? '').trim()
+        : (Session.username ?? '').trim();
+    _avatarLetter = (widget.avatarLetter ?? '').trim();
+    _semester = (widget.semester ?? '').trim();
+    _loadProfileForCurrentUser();
+    if (_semester.isEmpty && _studentUsername.isNotEmpty) {
       _fetchSemesterFromCourses();
+    }
+  }
+
+  String _firstNonEmpty(List<dynamic> values) {
+    for (final v in values) {
+      final s = (v ?? '').toString().trim();
+      if (s.isNotEmpty) return s;
+    }
+    return '';
+  }
+
+  String _displayValue(String value) {
+    final v = value.trim();
+    if (v.isNotEmpty) return v;
+    return _loadingProfile ? 'Loading...' : '-';
+  }
+
+  Future<void> _loadProfileForCurrentUser() async {
+    final username = _studentUsername.isNotEmpty
+        ? _studentUsername
+        : (Session.username ?? '').trim();
+    if (username.isEmpty) return;
+
+    setState(() => _loadingProfile = true);
+    try {
+      final q = await FirebaseFirestore.instance
+          .collection('students')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+
+      if (q.docs.isNotEmpty) {
+        final data = q.docs.first.data();
+        _studentName = _firstNonEmpty([
+          data['fullname'],
+          data['fullName'],
+          data['name'],
+          data['studentName'],
+          _studentName,
+        ]);
+        _studentClassName = _firstNonEmpty([
+          data['className'],
+          data['class_name'],
+          _studentClassName,
+        ]);
+        _studentGender = _firstNonEmpty([data['gender'], _studentGender]);
+        _studentUsername = _firstNonEmpty([
+          data['username'],
+          data['student_id'],
+          data['id'],
+          _studentUsername,
+          Session.username,
+        ]);
+        if (_semester.trim().isEmpty) {
+          _semester = _firstNonEmpty([data['semester'], data['sem'], _semester]);
+        }
+        if (_avatarLetter.isEmpty && _studentName.isNotEmpty) {
+          _avatarLetter = _studentName[0].toUpperCase();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading student profile in StudentProfilePage: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingProfile = false);
+      }
+      if (_semester.trim().isEmpty && _studentUsername.isNotEmpty) {
+        _fetchSemesterFromCourses();
+      }
     }
   }
 
@@ -200,7 +296,8 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     setState(() => _loadingSemester = true);
     try {
       final firestore = FirebaseFirestore.instance;
-      final username = widget.id;
+      final username = _studentUsername.trim();
+      if (username.isEmpty) return;
 
       String? classRefId;
 
@@ -269,24 +366,38 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
         final Color accentColor = darkMode
             ? const Color.fromARGB(255, 170, 148, 255)
             : const Color(0xFF6A46FF);
+        final overlayStyle = SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: darkMode
+              ? Brightness.light
+              : Brightness.dark,
+          statusBarBrightness: darkMode ? Brightness.dark : Brightness.light,
+        );
 
-        return Theme(
-          data: darkMode ? ThemeData.dark() : ThemeData.light(),
-          child: Scaffold(
-            backgroundColor: bgColor,
+        final backgroundTop = Color.lerp(bgColor, accentColor, 0.08) ?? bgColor;
+        final backgroundBottom = Color.lerp(bgColor, Colors.black, 0.02) ?? bgColor;
 
-            // ================= APP BAR =================
-            appBar: AppBar(
-              backgroundColor: cardColor,
-              elevation: 0.5,
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: overlayStyle,
+          child: Theme(
+            data: darkMode ? ThemeData.dark() : ThemeData.light(),
+            child: Scaffold(
+              backgroundColor: bgColor,
+              appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
               centerTitle: true,
               leading: IconButton(
-                icon: Icon(Icons.arrow_back_ios, color: accentColor),
+                icon: Icon(Icons.arrow_back_ios_new_rounded, color: textColor),
                 onPressed: () => Navigator.pop(context),
               ),
               title: Text(
                 'Profile',
-                style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: textColor,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               actions: [
                 IconButton(
@@ -295,78 +406,146 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                 ),
               ],
             ),
-
-            // ================= BODY =================
-            body: SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  // Avatar
-                  GestureDetector(
-                    onTap: _avatarImage != null
-                        ? () {
-                            showDialog(
-                              context: context,
-                              builder: (context) => Dialog(
-                                backgroundColor: Colors.transparent,
-                                child: InteractiveViewer(
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Image.file(
-                                      _avatarImage!,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-                        : null,
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundColor: cardColor,
-                      backgroundImage: _avatarImage != null
-                          ? FileImage(_avatarImage!)
-                          : null,
-                      child: _avatarImage == null
-                          ? Text(
-                              widget.avatarLetter,
-                              style: TextStyle(
-                                fontSize: 34,
-                                fontWeight: FontWeight.bold,
-                                color: accentColor,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Name
-                  Text(
-                    widget.name,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: textColor,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Student',
-                    style: TextStyle(fontSize: 15, color: subTextColor),
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
+              body: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [backgroundTop, backgroundBottom],
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                bottom: false,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: borderColor),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: _avatarImage != null
+                                      ? () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) => Dialog(
+                                              backgroundColor: Colors.transparent,
+                                              child: InteractiveViewer(
+                                                child: ClipRRect(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                  child: Image.file(
+                                                    _avatarImage!,
+                                                    fit: BoxFit.contain,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      : null,
+                                  child: CircleAvatar(
+                                    radius: 38,
+                                    backgroundColor: darkMode
+                                        ? const Color(0xFF2A2E43)
+                                        : const Color(0xFFF2F5FB),
+                                    backgroundImage: _avatarImage != null
+                                        ? FileImage(_avatarImage!)
+                                        : null,
+                                    child: _avatarImage == null
+                                        ? Text(
+                                            _avatarLetter.isNotEmpty
+                                                ? _avatarLetter
+                                                : (_displayValue(_studentName).isNotEmpty
+                                                      ? _displayValue(_studentName)[0].toUpperCase()
+                                                      : '?'),
+                                            style: TextStyle(
+                                              fontSize: 28,
+                                              fontWeight: FontWeight.bold,
+                                              color: accentColor,
+                                            ),
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _displayValue(_studentName),
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w800,
+                                          color: textColor,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _displayValue(_studentClassName),
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: subTextColor,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: accentColor.withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          'Student',
+                                          style: TextStyle(
+                                            color: accentColor,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Account Details',
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           _profileCard(
                             icon: Icons.person_outline,
                             title: 'Student Name',
-                            value: widget.name,
+                            value: _displayValue(_studentName),
                             darkMode: darkMode,
                             textColor: textColor,
                             subTextColor: subTextColor,
@@ -377,7 +556,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                           _profileCard(
                             icon: Icons.school_outlined,
                             title: 'Class',
-                            value: widget.className,
+                            value: _displayValue(_studentClassName),
                             darkMode: darkMode,
                             textColor: textColor,
                             subTextColor: subTextColor,
@@ -399,7 +578,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                           _profileCard(
                             icon: Icons.person,
                             title: 'Gender',
-                            value: widget.gender,
+                            value: _displayValue(_studentGender),
                             darkMode: darkMode,
                             textColor: textColor,
                             subTextColor: subTextColor,
@@ -410,7 +589,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                           _profileCard(
                             icon: Icons.badge_outlined,
                             title: 'Student Username',
-                            value: widget.id,
+                            value: _displayValue(_studentUsername),
                             darkMode: darkMode,
                             textColor: textColor,
                             subTextColor: subTextColor,
@@ -427,38 +606,35 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             borderColor: borderColor,
                             themeMode: themeMode,
                             onChanged: (mode) {
-                              StudentThemeController.instance.setThemeMode(
-                                mode,
-                              );
+                              StudentThemeController.instance.setThemeMode(mode);
                             },
                           ),
                           const SizedBox(height: 8),
-                          ElevatedButton.icon(
+                          FilledButton.icon(
                             onPressed: _showChangePasswordDialog,
-                            icon: const Icon(Icons.lock_outline),
+                            icon: const Icon(Icons.lock_outline_rounded),
                             label: const Text('Change Password'),
-                            style: ElevatedButton.styleFrom(
+                            style: FilledButton.styleFrom(
                               backgroundColor: accentColor,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                           ),
-                          // Appearance moved to AppBar actions
+                          const SizedBox(height: 8),
                         ],
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-
-            // ================= NAV BAR =================
-            bottomNavigationBar: SafeArea(
+              bottomNavigationBar: SafeArea(
               child: AnimatedBottomBar(
                 currentIndex: 2,
+                reserveLiftSpace: false,
                 onTap: (index) {
                   if (index == 2) return;
                   if (index == 0) {
@@ -477,6 +653,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                     );
                   }
                 },
+              ),
               ),
             ),
           ),
@@ -596,7 +773,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                         boxShadow: selected
                             ? [
                                 BoxShadow(
-                                  color: accentColor.withOpacity(0.28),
+                                  color: accentColor.withValues(alpha: 0.28),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 ),

@@ -42,14 +42,21 @@ class _AddUserPopupState extends State<AddUserPopup> {
         palette?.inputFill ?? (isDark ? const Color(0xFF2B303D) : Colors.white);
 
     final fieldRadius = BorderRadius.circular(10);
+    const double fieldFontSize = 16;
 
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
       filled: true,
       fillColor: inputFill,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      hintStyle: TextStyle(color: textPrimary.withOpacity(0.65)),
-      labelStyle: TextStyle(color: textPrimary.withOpacity(0.85)),
+      hintStyle: TextStyle(
+        color: textPrimary.withOpacity(0.65),
+        fontSize: fieldFontSize,
+      ),
+      labelStyle: TextStyle(
+        color: textPrimary.withOpacity(0.85),
+        fontSize: fieldFontSize,
+      ),
       border: OutlineInputBorder(
         borderRadius: fieldRadius,
         borderSide: BorderSide(color: border),
@@ -114,13 +121,24 @@ class _AddUserPopupState extends State<AddUserPopup> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  decoration: input("Role"),
+                  decoration: input('').copyWith(labelText: 'Role'),
                   dropdownColor: surface,
-                  style: TextStyle(color: textPrimary),
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: fieldFontSize,
+                  ),
                   items: ['teacher', 'admin', 'student', 'super_admin']
                       .map(
-                        (role) =>
-                            DropdownMenuItem(value: role, child: Text(role)),
+                        (role) => DropdownMenuItem(
+                          value: role,
+                          child: Text(
+                            role,
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: fieldFontSize,
+                            ),
+                          ),
+                        ),
                       )
                       .toList(),
                   onChanged: (val) => setState(() => _role = val),
@@ -129,14 +147,23 @@ class _AddUserPopupState extends State<AddUserPopup> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  decoration: input("Status"),
+                  decoration: input('').copyWith(labelText: 'Status'),
                   dropdownColor: surface,
-                  style: TextStyle(color: textPrimary),
+                  style: TextStyle(
+                    color: textPrimary,
+                    fontSize: fieldFontSize,
+                  ),
                   items: ['active', 'inactive', 'disabled']
                       .map(
                         (status) => DropdownMenuItem(
                           value: status,
-                          child: Text(status),
+                          child: Text(
+                            status,
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontSize: fieldFontSize,
+                            ),
+                          ),
                         ),
                       )
                       .toList(),
