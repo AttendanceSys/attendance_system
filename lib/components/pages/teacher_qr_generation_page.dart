@@ -45,7 +45,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   String? qrCodeData;
   String? _lastSavedSessionId;
   // Location capture for allowed session area
-  bool requireLocationVerification = false;
+  bool requireLocationVerification = true;
   double? _allowedLat;
   double? _allowedLng;
   double? _allowedAccuracyMeters;
@@ -980,6 +980,31 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
           return;
         }
 
+        // Mandatory: teacher must use location verification and capture
+        // the allowed session location before generating QR.
+        if (!requireLocationVerification) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Location verification is required.'),
+              ),
+            );
+          }
+          return;
+        }
+        if (_allowedLat == null || _allowedLng == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Capture your location first before generating QR code.',
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
         final teacherUsername = await _fetchTeacherUsername();
 
         final isLecturer = await _isTeacherLecturerOfSubject(
@@ -1159,14 +1184,11 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
             child: InkWell(
               borderRadius: buttonRadius,
               onTap: () {
-                setState(() {
-                  requireLocationVerification = !requireLocationVerification;
-                  if (!requireLocationVerification) {
-                    _allowedLat = null;
-                    _allowedLng = null;
-                    _allowedAccuracyMeters = null;
-                  }
-                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Location verification is mandatory.'),
+                  ),
+                );
               },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1182,21 +1204,12 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                           (palette?.border ?? Theme.of(context).dividerColor)
                               .withOpacity(0.35),
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      onChanged: (v) {
-                        setState(() {
-                          requireLocationVerification = v;
-                          if (!v) {
-                            _allowedLat = null;
-                            _allowedLng = null;
-                            _allowedAccuracyMeters = null;
-                          }
-                        });
-                      },
+                      onChanged: null,
                     ),
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    'Require location verification',
+                    'Require location verification (mandatory)',
                     style: TextStyle(
                       color: titleColor.withOpacity(0.9),
                       fontWeight: FontWeight.w600,
