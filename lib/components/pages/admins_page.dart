@@ -30,7 +30,6 @@ class _AdminsPageState extends State<AdminsPage> {
   List<Admin> _admins = [];
   final Map<String, String> _facultyIdToName = {};
   final Map<String, String> _facultyNameToId = {};
-  List<String> _facultyNames = [];
   String _searchText = '';
   int? _selectedIndex;
   bool _loading = true;
@@ -142,10 +141,9 @@ class _AdminsPageState extends State<AdminsPage> {
               (e) => MapEntry(e.value.toLowerCase().trim(), e.key),
             ),
           );
-        _facultyNames = _facultyIdToName.values.toList();
       });
 
-      print("Fetched ${_facultyNames.length} faculties");
+      print("Fetched ${_facultyIdToName.length} faculties");
     } catch (e) {
       print("Error fetching faculties: $e");
     }
@@ -453,7 +451,8 @@ class _AdminsPageState extends State<AdminsPage> {
   Future<void> _showAddAdminPopup() async {
     final result = await showDialog<Admin>(
       context: context,
-      builder: (context) => AddAdminPopup(facultyNames: _facultyNames),
+      builder: (context) =>
+          AddAdminPopup(facultyIdToName: _facultyIdToName),
     );
     if (result != null) {
       _addAdmin(result);
@@ -462,15 +461,11 @@ class _AdminsPageState extends State<AdminsPage> {
 
   Future<void> _showEditAdminPopup() async {
     if (_selectedIndex == null) return;
-    var admin = _filteredAdmins[_selectedIndex!];
-    final facultyName = _facultyIdToName[admin.facultyId];
-    if (facultyName != null && facultyName.isNotEmpty) {
-      admin = admin.copyWith(facultyId: facultyName);
-    }
+    final admin = _filteredAdmins[_selectedIndex!];
     final result = await showDialog<Admin>(
       context: context,
       builder: (context) =>
-          AddAdminPopup(admin: admin, facultyNames: _facultyNames),
+          AddAdminPopup(admin: admin, facultyIdToName: _facultyIdToName),
     );
     if (result != null) {
       _updateAdmin(result);

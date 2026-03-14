@@ -7,9 +7,9 @@ import '../../theme/super_admin_theme.dart';
 
 class AddAdminPopup extends StatefulWidget {
   final Admin? admin;
-  final List<String> facultyNames;
+  final Map<String, String> facultyIdToName;
 
-  const AddAdminPopup({super.key, this.admin, required this.facultyNames});
+  const AddAdminPopup({super.key, this.admin, required this.facultyIdToName});
 
   @override
   State<AddAdminPopup> createState() => _AddAdminPopupState();
@@ -31,9 +31,23 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
   void initState() {
     super.initState();
     _fullName = widget.admin?.fullName;
-    _facultyId = widget.admin?.facultyId;
+    _facultyId = _resolveInitialFacultyId(widget.admin?.facultyId);
     _password = widget.admin?.password;
     _username = widget.admin?.username;
+  }
+
+  String? _resolveInitialFacultyId(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    if (widget.facultyIdToName.containsKey(trimmed)) return trimmed;
+    final lower = trimmed.toLowerCase();
+    for (final entry in widget.facultyIdToName.entries) {
+      if (entry.value.toLowerCase().trim() == lower) {
+        return entry.key;
+      }
+    }
+    return trimmed;
   }
 
   @override
@@ -68,6 +82,35 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
 
     final fieldRadius = BorderRadius.circular(10);
     const double fieldFontSize = 16;
+    final sortedFacultyEntries =
+        widget.facultyIdToName.entries.toList()
+          ..sort((a, b) => a.value.compareTo(b.value));
+    final facultyItems = [
+      for (final entry in sortedFacultyEntries)
+        DropdownMenuItem(
+          value: entry.key,
+          child: Text(
+            entry.value,
+            style: TextStyle(
+              color: titleColor,
+              fontSize: fieldFontSize,
+            ),
+          ),
+        ),
+      if (_facultyId != null &&
+          _facultyId!.isNotEmpty &&
+          !widget.facultyIdToName.containsKey(_facultyId))
+        DropdownMenuItem(
+          value: _facultyId,
+          child: Text(
+            'Unknown faculty (deleted). Please choose faculty.',
+            style: TextStyle(
+              color: titleColor,
+              fontSize: fieldFontSize,
+            ),
+          ),
+        ),
+    ];
 
     InputDecoration input(String hint) => InputDecoration(
       hintText: hint,
@@ -185,26 +228,28 @@ class _AddAdminPopupState extends State<AddAdminPopup> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   value: _facultyId,
+                  isExpanded: true,
                   decoration: input('').copyWith(labelText: 'Faculty Name'),
                   dropdownColor: containerBg,
                   style: TextStyle(
                     color: titleColor,
                     fontSize: fieldFontSize,
                   ),
-                  items: widget.facultyNames
-                      .map(
-                        (name) => DropdownMenuItem(
-                          value: name,
-                          child: Text(
-                            name,
-                            style: TextStyle(
-                              color: titleColor,
-                              fontSize: fieldFontSize,
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
+                  selectedItemBuilder: (context) => [
+                    for (final entry in sortedFacultyEntries)
+                      Text(
+                        entry.value,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    if (_facultyId != null &&
+                        _facultyId!.isNotEmpty &&
+                        !widget.facultyIdToName.containsKey(_facultyId))
+                      Text(
+                        'Unknown faculty (deleted). Please choose faculty.',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                  items: facultyItems,
                   onChanged: (val) => setState(() => _facultyId = val),
                   validator: (val) =>
                       val == null || val.isEmpty ? "Select faculty name" : null,
