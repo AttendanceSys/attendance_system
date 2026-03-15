@@ -335,7 +335,7 @@ class _StudentViewAttendanceMobileState
     final int present = (item['present'] ?? 0) as int;
     final int absent = (item['absent'] ?? 0) as int;
     final int total = (item['total'] ?? (present + absent)) as int;
-    final double percent = total > 0 ? (present / total) * 100 : 0;
+    final double percent = total > 0 ? (absent / total) * 100 : 0;
 
     Widget statTile(String label, String value) {
       return Expanded(
@@ -425,7 +425,7 @@ class _StudentViewAttendanceMobileState
                     const SizedBox(width: 10),
                     statTile('Total', '$total'),
                     const SizedBox(width: 10),
-                    statTile('Attendance', '${percent.toStringAsFixed(1)}%'),
+                    statTile('Absence', '${percent.toStringAsFixed(1)}%'),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -547,7 +547,7 @@ class _StudentViewAttendanceMobileState
     required int total,
     required bool basedOnSearch,
   }) {
-    final percent = total > 0 ? (present / total) * 100 : 0.0;
+    final percent = total > 0 ? (absent / total) * 100 : 0.0;
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
@@ -659,7 +659,7 @@ class _StudentViewAttendanceMobileState
             ),
             const SizedBox(height: 6),
             Text(
-              'Attendance Rate: ${percent.toStringAsFixed(1)}%',
+              'Absence Rate: ${percent.toStringAsFixed(1)}%',
               style: TextStyle(
                 color: theme.foreground,
                 fontSize: 12,
