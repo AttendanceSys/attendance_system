@@ -478,7 +478,7 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
         : const Color(0xFF8372FE);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 32, 32, 32),
+      padding: const EdgeInsets.all(32.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -495,70 +495,96 @@ class _UserHandlingPageState extends State<UserHandlingPage> {
           ),
           const SizedBox(height: 24),
 
-          SearchAddBar(
-            hintText: "Search users...",
-            buttonText: "",
-            onAddPressed: () {},
-            onChanged: (value) {
-              setState(() {
-                _searchText = value;
-                _selectedIndex = null;
-              });
-            },
-          ),
-
-          const SizedBox(height: 16),
-
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 80,
-                height: 36,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    disabledBackgroundColor: disabledActionBg,
-                    disabledForegroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SearchAddBar(
+                      hintText: "Search users...",
+                      buttonText: "",
+                      onAddPressed: () {},
+                      onChanged: (value) {
+                        setState(() {
+                          _searchText = value;
+                          _selectedIndex = null;
+                        });
+                      },
                     ),
-                  ),
-                  onPressed: _selectedIndex == null ? null : _showEditUserPopup,
-                  child: const Text(
-                    "Edit",
-                    style: TextStyle(fontSize: 15, color: Colors.white),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 100,
-                height: 36,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    disabledBackgroundColor: disabledActionBg,
-                    disabledForegroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  onPressed: _selectedIndex == null
-                      ? null
-                      : () => _confirmToggleStatus(
-                          _filteredUsers[_selectedIndex!],
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          height: 36,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              disabledBackgroundColor: disabledActionBg,
+                              disabledForegroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
+                            ),
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : _showEditUserPopup,
+                            child: const Text(
+                              "Edit",
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
                         ),
-                  child: Text(
-                    _selectedIndex == null
-                        ? 'Disable'
-                        : (_filteredUsers[_selectedIndex!].status
-                                      .toLowerCase() ==
-                                  'disabled'
-                              ? 'Enable'
-                              : 'Disable'),
-                    style: const TextStyle(fontSize: 15, color: Colors.white),
-                  ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 100,
+                          height: 36,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              disabledBackgroundColor: disabledActionBg,
+                              disabledForegroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0,
+                                horizontal: 0,
+                              ),
+                            ),
+                            onPressed: _selectedIndex == null
+                                ? null
+                                : () => _confirmToggleStatus(
+                                      _filteredUsers[_selectedIndex!],
+                                    ),
+                            child: Text(
+                              _selectedIndex == null
+                                  ? 'Disable'
+                                  : (_filteredUsers[_selectedIndex!].status
+                                                .toLowerCase() ==
+                                            'disabled'
+                                        ? 'Enable'
+                                        : 'Disable'),
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],

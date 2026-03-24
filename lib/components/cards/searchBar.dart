@@ -45,7 +45,8 @@ class SearchAddBar extends StatelessWidget {
         label: Text(buttonText, style: const TextStyle(color: Colors.white)),
         style: ElevatedButton.styleFrom(
           backgroundColor: addBgColor,
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
@@ -62,10 +63,10 @@ class SearchAddBar extends StatelessWidget {
             children: [
               searchField(),
               const SizedBox(height: 10),
-              SizedBox(height: 48, child: addButton()),
-            ],
-          );
-        }
+            SizedBox(width: double.infinity, height: 48, child: addButton()),
+          ],
+        );
+      }
 
         return Row(
           children: [

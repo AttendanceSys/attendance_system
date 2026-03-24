@@ -1051,162 +1051,172 @@ class _DepartmentsByStudentsChartState
     final isLight = theme.brightness == Brightness.light;
     final tooltipBg = isLight ? theme.colorScheme.primary : Colors.white;
     final tooltipText = isLight ? Colors.white : Colors.black;
-    return FutureBuilder<Map<String, int>>(
-      future: _futureCounts,
-      builder: (c, s) {
-        if (!s.hasData) return const _ChartLoading();
-        final map = s.data!;
-        if (map.isEmpty) return const Center(child: Text('No department data'));
-        final labels = map.keys.toList();
-        final values = map.values.toList();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 420;
+        final legendRowHeight = isNarrow ? 24.0 : 28.0;
+        final legendMaxRows = isNarrow ? 3 : 4;
+        final labelStyle = theme.textTheme.bodySmall?.copyWith(
+          fontSize: isNarrow ? 10 : null,
+        );
+        final topValueStyle = theme.textTheme.bodySmall?.copyWith(
+          fontWeight: FontWeight.w700,
+          fontSize: isNarrow ? 10 : null,
+        );
 
-        final bars = values
-            .asMap()
-            .entries
-            .map(
-              (e) => BarChartGroupData(
-                x: e.key,
-                barRods: [
-                  BarChartRodData(
-                    toY: e.value.toDouble(),
-                    color: theme.colorScheme.primary,
-                    width: 18,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ],
-              ),
-            )
-            .toList();
+        return FutureBuilder<Map<String, int>>(
+          future: _futureCounts,
+          builder: (c, s) {
+            if (!s.hasData) return const _ChartLoading();
+            final map = s.data!;
+            if (map.isEmpty) {
+              return const Center(child: Text('No department data'));
+            }
+            final labels = map.keys.toList();
+            final values = map.values.toList();
 
-        final int maxVal = values.isEmpty ? 0 : values.reduce(math.max);
-        int step = ((maxVal / 4).ceil());
-        if (step < 1) step = 1;
-        final double maxY = (step * 4).toDouble();
-
-        return Column(
-          children: [
-            Expanded(
-              child: BarChart(
-                BarChartData(
-                  maxY: maxY <= 0 ? 4 : maxY,
-                  barGroups: bars,
-                  barTouchData: BarTouchData(
-                    enabled: true,
-                    touchTooltipData: BarTouchTooltipData(
-                      getTooltipColor: (group) => tooltipBg,
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        final idx = group.x.toInt();
-                        final label = (idx >= 0 && idx < labels.length)
-                            ? labels[idx]
-                            : '';
-                        final value = rod.toY.toInt();
-                        return BarTooltipItem(
-                          '$label\n$value',
-                          TextStyle(
-                            color: tooltipText,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  titlesData: FlTitlesData(
-                    topTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final idx = value.toInt();
-                          if (idx < 0 || idx >= values.length) {
-                            return const SizedBox.shrink();
-                          }
-                          final txt = values[idx].toString();
-                          return SideTitleWidget(
-                            axisSide: meta.axisSide,
-                            space: 6,
-                            child: Text(
-                              txt,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final idx = value.toInt();
-                          if (idx < 0 || idx >= labels.length) {
-                            return const SizedBox.shrink();
-                          }
-                          final txt = labels[idx];
-                          return SideTitleWidget(
-                            axisSide: meta.axisSide,
-                            space: 6,
-                            child: Text(
-                              txt,
-                              style: theme.textTheme.bodySmall,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final v = value.toInt();
-                          if (v % step != 0) return const SizedBox.shrink();
-                          return Text(
-                            v.toString(),
-                            style: theme.textTheme.bodySmall,
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  gridData: FlGridData(show: false),
-                  borderData: FlBorderData(show: false),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: math.min(labels.length, 4) * 28.0,
-              child: ListView.builder(
-                itemCount: labels.length,
-                padding: EdgeInsets.zero,
-                itemBuilder: (ctx, i) {
-                  return Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
+            final bars = values
+                .asMap()
+                .entries
+                .map(
+                  (e) => BarChartGroupData(
+                    x: e.key,
+                    barRods: [
+                      BarChartRodData(
+                        toY: e.value.toDouble(),
                         color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          labels[i],
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        values[i].toString(),
-                        style: theme.textTheme.bodySmall,
+                        width: isNarrow ? 12 : 18,
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ],
-                  );
-                },
-              ),
-            ),
-          ],
+                  ),
+                )
+                .toList();
+
+            final int maxVal = values.isEmpty ? 0 : values.reduce(math.max);
+            int step = ((maxVal / 4).ceil());
+            if (step < 1) step = 1;
+            final double maxY = (step * 4).toDouble();
+
+            return Column(
+              children: [
+                Expanded(
+                  child: BarChart(
+                    BarChartData(
+                      maxY: maxY <= 0 ? 4 : maxY,
+                      barGroups: bars,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (group) => tooltipBg,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            final idx = group.x.toInt();
+                            final label = (idx >= 0 && idx < labels.length)
+                                ? labels[idx]
+                                : '';
+                            final value = rod.toY.toInt();
+                            return BarTooltipItem(
+                              '$label\n$value',
+                              TextStyle(
+                                color: tooltipText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        topTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              final idx = value.toInt();
+                              if (idx < 0 || idx >= values.length) {
+                                return const SizedBox.shrink();
+                              }
+                              final txt = values[idx].toString();
+                              return SideTitleWidget(
+                                axisSide: meta.axisSide,
+                                space: 6,
+                                child: Text(
+                                  txt,
+                                  style: topValueStyle,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: !isNarrow,
+                            getTitlesWidget: (value, meta) {
+                              final idx = value.toInt();
+                              if (idx < 0 || idx >= labels.length) {
+                                return const SizedBox.shrink();
+                              }
+                              final txt = labels[idx];
+                              return SideTitleWidget(
+                                axisSide: meta.axisSide,
+                                space: 6,
+                                child: Text(
+                                  txt,
+                                  style: labelStyle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              final v = value.toInt();
+                              if (v % step != 0) return const SizedBox.shrink();
+                              return Text(
+                                v.toString(),
+                                style: labelStyle,
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: math.min(labels.length, legendMaxRows) *
+                      legendRowHeight,
+                  child: ListView.builder(
+                    itemCount: labels.length,
+                    padding: EdgeInsets.zero,
+                    itemBuilder: (ctx, i) {
+                      return Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(labels[i], style: labelStyle),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(values[i].toString(), style: labelStyle),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -1254,90 +1264,97 @@ class _StudentsByGenderChartState extends State<StudentsByGenderChart> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return FutureBuilder<Map<String, int>>(
-      future: _futureGenderCounts,
-      builder: (c, s) {
-        if (s.hasError) return Center(child: Text('Error loading gender data'));
-        if (!s.hasData) return const _ChartLoading();
-        final map = s.data!;
-        if (map.isEmpty) return const Center(child: Text('No student data'));
-        final total = map.values.fold<int>(0, (a, b) => a + b);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 420;
+        final legendRowHeight = isNarrow ? 24.0 : 28.0;
+        final legendMaxRows = isNarrow ? 3 : 4;
+        final labelStyle = theme.textTheme.bodySmall?.copyWith(
+          fontSize: isNarrow ? 10 : null,
+        );
 
-        final colors = [
-          Colors.green,
-          Colors.blueGrey,
-          Colors.orange,
-          Colors.purple,
-          Colors.teal,
-          Colors.brown,
-        ];
+        return FutureBuilder<Map<String, int>>(
+          future: _futureGenderCounts,
+          builder: (c, s) {
+            if (s.hasError) {
+              return Center(child: Text('Error loading gender data'));
+            }
+            if (!s.hasData) return const _ChartLoading();
+            final map = s.data!;
+            if (map.isEmpty) return const Center(child: Text('No student data'));
+            final total = map.values.fold<int>(0, (a, b) => a + b);
 
-        final sections = map.entries.toList().asMap().entries.map((entry) {
-          final idx = entry.key;
-          final e = entry.value;
-          final value = e.value.toDouble();
-          final color = colors[idx % colors.length];
-          return PieChartSectionData(
-            value: value,
-            color: color,
-            radius: 40,
-            title:
-                '${((value / (total == 0 ? 1 : total)) * 100).toStringAsFixed(0)}%',
-            titleStyle: TextStyle(
-              color: theme.colorScheme.onSurface,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          );
-        }).toList();
+            final colors = [
+              Colors.green,
+              Colors.blueGrey,
+              Colors.orange,
+              Colors.purple,
+              Colors.teal,
+              Colors.brown,
+            ];
 
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Center(
-                child: PieChart(
-                  PieChartData(
-                    sections: sections,
-                    centerSpaceRadius: 18,
-                    sectionsSpace: 2,
+            final sections = map.entries.toList().asMap().entries.map((entry) {
+              final idx = entry.key;
+              final e = entry.value;
+              final value = e.value.toDouble();
+              final color = colors[idx % colors.length];
+              return PieChartSectionData(
+                value: value,
+                color: color,
+                radius: isNarrow ? 32 : 40,
+                title:
+                    '${((value / (total == 0 ? 1 : total)) * 100).toStringAsFixed(0)}%',
+                titleStyle: TextStyle(
+                  color: theme.colorScheme.onSurface,
+                  fontSize: isNarrow ? 10 : 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              );
+            }).toList();
+
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Center(
+                    child: PieChart(
+                      PieChartData(
+                        sections: sections,
+                        centerSpaceRadius: isNarrow ? 14 : 18,
+                        sectionsSpace: 2,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: math.min(map.length, 4) * 28.0,
-              child: ListView.builder(
-                itemCount: map.length,
-                padding: EdgeInsets.zero,
-                itemBuilder: (ctx, i) {
-                  final entry = map.entries.toList()[i];
-                  return Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        color: colors[i % colors.length],
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          entry.key,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        entry.value.toString(),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: math.min(map.length, legendMaxRows) * legendRowHeight,
+                  child: ListView.builder(
+                    itemCount: map.length,
+                    padding: EdgeInsets.zero,
+                    itemBuilder: (ctx, i) {
+                      final entry = map.entries.toList()[i];
+                      return Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            color: colors[i % colors.length],
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(entry.key, style: labelStyle),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(entry.value.toString(), style: labelStyle),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
