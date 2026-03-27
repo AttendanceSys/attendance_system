@@ -199,12 +199,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: ThemeController.themeMode,
-      builder: (context, themeMode, _) {
-        final systemDark =
-            MediaQuery.of(context).platformBrightness == Brightness.dark;
+      builder: (context, _, __) {
         final isDark =
-            themeMode == ThemeMode.dark ||
-            (themeMode == ThemeMode.system && systemDark);
+            MediaQuery.of(context).platformBrightness == Brightness.dark;
 
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
@@ -343,84 +340,86 @@ class _LoginScreenState extends State<LoginScreen> {
       constraints: const BoxConstraints(maxWidth: 520),
       child: _LoginCard(
         isDark: isDark,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _BrandHeader(isDark: isDark),
-            const SizedBox(height: 6),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _BrandHeader(isDark: isDark),
+              const SizedBox(height: 6),
 
-            Text(
-              "Welcome Back",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
-                color: isDark ? const Color(0xFFE6EAF1) : const Color(0xFF1F2937),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Please enter your details to log in.",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? const Color(0xFF9EA5B5) : const Color(0xFF6B7280),
-              ),
-            ),
-            const SizedBox(height: 22),
-
-            _buildStyledInput(
-              controller: _usernameController,
-              icon: Icons.person_outline_rounded,
-              hint: "Enter your username",
-              isPassword: false,
-              focusNode: _usernameFocus,
-              onSubmitted: (_) =>
-                  FocusScope.of(context).requestFocus(_passwordFocus),
-              autofillHints: const [AutofillHints.username],
-              isDark: isDark,
-            ),
-            const SizedBox(height: 14),
-            _buildStyledInput(
-              controller: _passwordController,
-              icon: Icons.lock_outline_rounded,
-              hint: "Enter your password",
-              isPassword: true,
-              focusNode: _passwordFocus,
-              onSubmitted: (_) => _handleLogin(),
-              autofillHints: const [AutofillHints.password],
-              isDark: isDark,
-            ),
-
-            const SizedBox(height: 18),
-            if (_errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  _errorMessage!,
-                  style: const TextStyle(
-                    color: Colors.redAccent,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+              Text(
+                "Welcome Back",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? const Color(0xFFE6EAF1) : const Color(0xFF1F2937),
                 ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                "Please enter your details to log in.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? const Color(0xFF9EA5B5) : const Color(0xFF6B7280),
+                ),
+              ),
+              const SizedBox(height: 22),
 
-            _isLoggingIn
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: CircularProgressIndicator(),
-                  )
-                : SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: _GradientButton(
-                      text: "LOG IN",
-                      onPressed: _handleLogin,
-                      isDark: isDark,
+              _buildStyledInput(
+                controller: _usernameController,
+                icon: Icons.person_outline_rounded,
+                hint: "Enter your username",
+                isPassword: false,
+                focusNode: _usernameFocus,
+                onSubmitted: (_) =>
+                    FocusScope.of(context).requestFocus(_passwordFocus),
+                autofillHints: const [AutofillHints.username],
+                isDark: isDark,
+              ),
+              const SizedBox(height: 14),
+              _buildStyledInput(
+                controller: _passwordController,
+                icon: Icons.lock_outline_rounded,
+                hint: "Enter your password",
+                isPassword: true,
+                focusNode: _passwordFocus,
+                onSubmitted: (_) => _handleLogin(),
+                autofillHints: const [AutofillHints.password],
+                isDark: isDark,
+              ),
+
+              const SizedBox(height: 18),
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-          ],
+                ),
+
+              _isLoggingIn
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: CircularProgressIndicator(),
+                    )
+                  : SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: _GradientButton(
+                        text: "LOG IN",
+                        onPressed: _handleLogin,
+                        isDark: isDark,
+                      ),
+                    ),
+            ],
+          ),
         ),
       ),
     );
@@ -592,7 +591,7 @@ class _BrandHeader extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Image.asset(
-        "assets/first.png",
+        "assets/first2.png",
         fit: BoxFit.fitWidth,
         alignment: Alignment.center,
       ),

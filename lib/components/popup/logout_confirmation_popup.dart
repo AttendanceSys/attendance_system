@@ -57,7 +57,7 @@ Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     SizedBox(
-                      height: 40,
+                      height: 44,
                       width: 100,
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(false),
@@ -75,13 +75,14 @@ Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
                             color: isDark ? Colors.white : textPrimary,
                             fontWeight: FontWeight.w500,
                             fontSize: 16,
+                            height: 1.2,
                           ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 18),
                     SizedBox(
-                      height: 40,
+                      height: 44,
                       width: 100,
                       child: ElevatedButton(
                         onPressed: () => Navigator.of(context).pop(true),
@@ -91,15 +92,14 @@ Future<bool?> showLogoutConfirmationPopup(BuildContext context) {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: const Center(
-                          child: Text(
-                            "Log out",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            ),
+                        child: const Text(
+                          "Log out",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            height: 1.2,
                           ),
                         ),
                       ),

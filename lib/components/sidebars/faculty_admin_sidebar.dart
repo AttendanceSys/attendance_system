@@ -73,15 +73,15 @@ class _FacultyAdminSidebarState extends State<FacultyAdminSidebar> {
                             text: 'QScan',
                             style: GoogleFonts.playfairDisplay(
                               fontWeight: FontWeight.w600,
-                              fontSize: 25,
+                              fontSize: 19,
                               color: const Color.fromARGB(255, 255, 255, 255),
                             ),
                           ),
                           TextSpan(
-                            text: ' Smart',
+                            text: ' Attendance',
                             style: GoogleFonts.playfairDisplay(
                               fontWeight: FontWeight.w600,
-                              fontSize: 25,
+                              fontSize: 19,
                               color: const Color.fromARGB(255, 255, 255, 255),
                             ),
                           ),

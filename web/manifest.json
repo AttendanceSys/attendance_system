@@ -1,6 +1,6 @@
 {
-    "name": "QScan Smart",
-    "short_name": "QScan Smart",
+    "name": "QScan Attendance",
+    "short_name": "QScan Attendance",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/department.dart';
 import '../../services/session.dart';
@@ -220,11 +221,16 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: _code,
+                  initialValue: (_code ?? '').toUpperCase(),
                   decoration: input('').copyWith(labelText: 'Department Code'),
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                    _UpperCaseTextFormatter(),
+                  ],
                   onChanged: (val) {
                     setState(() => _codeError = null);
-                    _code = val;
+                    _code = val.toUpperCase();
                   },
                   validator: (val) {
                     final raw = val?.trim() ?? '';
@@ -498,6 +504,20 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return TextEditingValue(
+      text: newValue.text.toUpperCase(),
+      selection: newValue.selection,
+      composing: TextRange.empty,
     );
   }
 }

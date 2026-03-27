@@ -41,7 +41,7 @@ class MyApp extends StatelessWidget {
       valueListenable: ThemeController.themeMode,
       builder: (context, mode, _) {
         return MaterialApp(
-          title: 'QScan Smart',
+          title: 'QScan Attendance',
           debugShowCheckedModeBanner: false,
           scrollBehavior: const _SaasScrollBehavior(),
           themeMode: mode,

@@ -67,7 +67,7 @@ class OnboardingScreen1 extends StatelessWidget {
                             children: [
                               SizedBox(height: isWide ? 16 : 6),
                               Text(
-                                "Smart Attendance System",
+                                "QScan Attendance",
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Colors.white,

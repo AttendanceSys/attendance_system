@@ -139,7 +139,7 @@ class _AddTeacherPopupState extends State<AddTeacherPopup> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.teacher == null ? "Add Teacher" : "Edit Teacher",
+                  widget.teacher == null ? "Add Lecturer" : "Edit Lecturer",
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
