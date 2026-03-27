@@ -261,6 +261,11 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
       courseCode: normalizedCode,
       courseName: _courseName!.trim(),
       teacherRef: _lecturerId,
+      teacherName: _teachers
+          .firstWhere(
+            (t) => t['id'] == _lecturerId,
+            orElse: () => <String, String>{},
+          )['name'],
       classRef: _classId,
       facultyRef: widget.course?.facultyRef,
       semester: (_semester == 'Custom') ? _customSemester : _semester,
@@ -464,6 +469,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                           value: _lecturerId,
                           decoration: input('').copyWith(labelText: 'Lecturer'),
                           dropdownColor: surface,
+                          isExpanded: true,
                           style: TextStyle(
                             color: textPrimary,
                             fontSize: fieldFontSize,
@@ -474,6 +480,7 @@ class _AddCoursePopupState extends State<AddCoursePopup> {
                                   value: t['id'],
                                   child: Text(
                                     t['name'] ?? '',
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: textPrimary,
                                       fontSize: fieldFontSize,

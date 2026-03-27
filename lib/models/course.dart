@@ -3,6 +3,7 @@ class Course {
   final String courseCode;
   final String courseName;
   final String? teacherRef;
+  final String? teacherName;
   final String? classRef;
   final String? facultyRef;
   final String? semester;
@@ -13,6 +14,7 @@ class Course {
     required this.courseCode,
     required this.courseName,
     this.teacherRef,
+    this.teacherName,
     this.classRef,
     this.facultyRef,
     this.semester,
@@ -24,6 +26,7 @@ class Course {
     String? courseCode,
     String? courseName,
     String? teacherRef,
+    String? teacherName,
     String? classRef,
     String? facultyRef,
     String? semester,
@@ -34,6 +37,7 @@ class Course {
       courseCode: courseCode ?? this.courseCode,
       courseName: courseName ?? this.courseName,
       teacherRef: teacherRef ?? this.teacherRef,
+      teacherName: teacherName ?? this.teacherName,
       classRef: classRef ?? this.classRef,
       facultyRef: facultyRef ?? this.facultyRef,
       semester: semester ?? this.semester,

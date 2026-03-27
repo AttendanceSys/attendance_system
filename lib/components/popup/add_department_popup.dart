@@ -281,6 +281,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                         decoration:
                             input('').copyWith(labelText: 'Head of Department'),
                         dropdownColor: surface,
+                        isExpanded: true,
                         style: TextStyle(
                           color: textPrimary,
                           fontSize: fieldFontSize,
@@ -293,6 +294,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                               Session.facultyRef == null
                                   ? 'No teachers available'
                                   : 'No teachers found for your faculty',
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: textPrimary,
                                 fontSize: fieldFontSize,
@@ -310,6 +312,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                         decoration:
                             input('').copyWith(labelText: 'Head of Department'),
                         dropdownColor: surface,
+                        isExpanded: true,
                         style: TextStyle(
                           color: textPrimary,
                           fontSize: fieldFontSize,
@@ -321,6 +324,7 @@ class _AddDepartmentPopupState extends State<AddDepartmentPopup> {
                             value: id,
                             child: Text(
                               name,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: textPrimary,
                                 fontSize: fieldFontSize,
