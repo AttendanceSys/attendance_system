@@ -2412,6 +2412,7 @@ class _TimetablePageState extends State<TimetablePage> {
       required ValueChanged<String?> onChanged,
     }) {
       return DropdownButtonFormField<String>(
+        isExpanded: true,
         value: value,
         decoration: InputDecoration(
           hintText: loading ? 'Loading...' : hint,
@@ -2670,7 +2671,12 @@ class _TimetablePageState extends State<TimetablePage> {
                                 .map(
                                   (d) => DropdownMenuItem<String>(
                                     value: d['id'] as String,
-                                    child: Text(d['name'] as String),
+                                    child: Text(
+                                      d['name'] as String,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: false,
+                                    ),
                                   ),
                                 )
                                 .toList(),
@@ -2716,7 +2722,12 @@ class _TimetablePageState extends State<TimetablePage> {
                                 .map(
                                   (c) => DropdownMenuItem<String>(
                                     value: c['id'] as String,
-                                    child: Text(c['name'] as String),
+                                    child: Text(
+                                      c['name'] as String,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: false,
+                                    ),
                                   ),
                                 )
                                 .toList(),
@@ -2745,7 +2756,12 @@ class _TimetablePageState extends State<TimetablePage> {
                                 .map(
                                   (t) => DropdownMenuItem<String>(
                                     value: t['name'] as String,
-                                    child: Text(t['name'] as String),
+                                    child: Text(
+                                      t['name'] as String,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      softWrap: false,
+                                    ),
                                   ),
                                 )
                                 .toList(),

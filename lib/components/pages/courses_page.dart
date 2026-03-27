@@ -43,7 +43,7 @@ class _CoursesPageState extends State<CoursesPage> {
   int? _selectedIndex;
 
   List<Course> get _filteredCourses => _courses.where((c) {
-    final teacher = _teacherNames[c.teacherRef] ?? '';
+    final teacher = _teacherNames[c.teacherRef] ?? (c.teacherName ?? '');
     final className = _classNames[c.classRef] ?? '';
     final faculty = _facultyNames[c.facultyRef] ?? '';
     final q = _searchText.toLowerCase();
@@ -205,6 +205,7 @@ class _CoursesPageState extends State<CoursesPage> {
                   (data['course_name'] ?? data['courseName'] ?? '') as String;
               // teacher can be stored under several possible fields; normalize
               String teacherRef = '';
+              String teacherName = '';
               final teacherCandidates = [
                 'teacher_assigned',
                 'teacher_ref',
@@ -231,6 +232,13 @@ class _CoursesPageState extends State<CoursesPage> {
                   break;
                 }
               }
+              teacherName =
+                  (data['teacher_name'] ??
+                          data['lecturer_name'] ??
+                          data['teacherName'] ??
+                          data['lecturerName'] ??
+                          '')
+                      .toString();
               final classRef = data['class'] is DocumentReference
                   ? (data['class'] as DocumentReference).id
                   : (data['class']?.toString() ??
@@ -267,6 +275,7 @@ class _CoursesPageState extends State<CoursesPage> {
                 courseCode: courseCode,
                 courseName: courseName,
                 teacherRef: teacherRef.isNotEmpty ? teacherRef : null,
+                teacherName: teacherName.isNotEmpty ? teacherName : null,
                 classRef: classRef.isNotEmpty ? classRef : null,
                 facultyRef: courseFacultyId.isNotEmpty ? courseFacultyId : null,
                 semester: semester,
@@ -340,6 +349,10 @@ class _CoursesPageState extends State<CoursesPage> {
 
   Future<void> _addCourse(Course course) async {
     try {
+      final resolvedTeacherName = (course.teacherRef != null &&
+              _teacherNames.containsKey(course.teacherRef))
+          ? _teacherNames[course.teacherRef]
+          : course.teacherName;
       final Map<String, dynamic> payload = {
         'course_code': course.courseCode,
         'course_name': course.courseName,
@@ -349,6 +362,8 @@ class _CoursesPageState extends State<CoursesPage> {
             ? Session.facultyRef!.id
             : (course.facultyRef ?? ''),
         'semester': course.semester ?? '',
+        if (resolvedTeacherName != null && resolvedTeacherName.isNotEmpty)
+          'teacher_name': resolvedTeacherName,
         'created_at': FieldValue.serverTimestamp(),
       };
       // If teacherRef is provided, save as a DocumentReference to keep type consistent
@@ -379,6 +394,10 @@ class _CoursesPageState extends State<CoursesPage> {
   Future<void> _updateCourse(Course oldC, Course newC) async {
     if (oldC.id == null) return;
     try {
+      final resolvedTeacherName = (newC.teacherRef != null &&
+              _teacherNames.containsKey(newC.teacherRef))
+          ? _teacherNames[newC.teacherRef]
+          : newC.teacherName;
       final Map<String, dynamic> payload = {
         'course_code': newC.courseCode,
         'course_name': newC.courseName,
@@ -388,6 +407,8 @@ class _CoursesPageState extends State<CoursesPage> {
             ? Session.facultyRef!.id
             : (newC.facultyRef ?? ''),
         'semester': newC.semester ?? '',
+        if (resolvedTeacherName != null && resolvedTeacherName.isNotEmpty)
+          'teacher_name': resolvedTeacherName,
         'updated_at': FieldValue.serverTimestamp(),
       };
       if (newC.teacherRef != null && newC.teacherRef!.isNotEmpty) {
@@ -485,7 +506,7 @@ class _CoursesPageState extends State<CoursesPage> {
           i + 1,
           c.courseCode,
           c.courseName,
-          _teacherDisplay(c.teacherRef),
+          _teacherDisplay(c.teacherRef, c.teacherName),
           _departmentDisplayForClass(c.classRef),
           _classNames[c.classRef] ?? '',
           _facultyDisplay(c.facultyRef),
@@ -728,8 +749,10 @@ class _CoursesPageState extends State<CoursesPage> {
 
   // Try multiple candidate forms for teacherRef and fallback to the raw ref so you can
   // see what was stored (useful when CSV/input used unexpected formats).
-  String _teacherDisplay(String? teacherRef) {
-    if (teacherRef == null || teacherRef.isEmpty) return '';
+  String _teacherDisplay(String? teacherRef, String? teacherName) {
+    if (teacherRef == null || teacherRef.isEmpty) {
+      return (teacherName != null && teacherName.isNotEmpty) ? teacherName : '';
+    }
     // direct id lookup
     if (_teacherNames.containsKey(teacherRef)) {
       return _teacherNames[teacherRef]!;
@@ -755,7 +778,9 @@ class _CoursesPageState extends State<CoursesPage> {
     }
     // fallback: return the raw ref so the UI shows something (helps debug)
     // If you prefer an empty string, change this to return ''.
-    return teacherRef;
+    return (teacherName != null && teacherName.isNotEmpty)
+        ? teacherName
+        : teacherRef;
   }
 
   Future<void> _prefetchMissingTeachersFromCourses() async {
@@ -935,7 +960,10 @@ class _CoursesPageState extends State<CoursesPage> {
                             onTap: () => _handleRowTap(i),
                           ),
                           _tableBodyCell(
-                            _teacherDisplay(_filteredCourses[i].teacherRef),
+                            _teacherDisplay(
+                              _filteredCourses[i].teacherRef,
+                              _filteredCourses[i].teacherName,
+                            ),
                             textPrimary,
                             onTap: () => _handleRowTap(i),
                           ),
@@ -1146,6 +1174,8 @@ class _CoursesPageState extends State<CoursesPage> {
         }
 
         final teacherId = _resolveRef(_teacherNames, rawTeacher);
+        final teacherName = _teacherNames[teacherId] ??
+            (rawTeacher.isNotEmpty ? rawTeacher : null);
         final classId = _resolveRef(_classNames, rawClass);
         final facultyId = rawFaculty.isEmpty ? null : rawFaculty;
 
@@ -1153,6 +1183,7 @@ class _CoursesPageState extends State<CoursesPage> {
           courseCode: courseCode,
           courseName: courseName,
           teacherRef: teacherId,
+          teacherName: teacherName,
           classRef: classId,
           facultyRef: facultyId,
           semester: semester.isEmpty ? null : semester,
@@ -1203,6 +1234,8 @@ class _CoursesPageState extends State<CoursesPage> {
             ? Session.facultyRef!.id
             : (c.facultyRef ?? ''),
         'semester': c.semester ?? '',
+        if (c.teacherName != null && c.teacherName!.isNotEmpty)
+          'teacher_name': c.teacherName,
         'created_at': FieldValue.serverTimestamp(),
       };
       if (c.teacherRef != null && c.teacherRef!.isNotEmpty) {

@@ -67,16 +67,37 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     super.dispose();
   }
 
+  List<String> _teacherKeysLower() {
+    final keys = <String>[];
+    final username = (Session.username ?? '').trim();
+    final displayName = (Session.name ?? '').trim();
+    if (username.isNotEmpty) keys.add(username.toLowerCase());
+    if (displayName.isNotEmpty &&
+        displayName.toLowerCase() != username.toLowerCase()) {
+      keys.add(displayName.toLowerCase());
+    }
+    return keys;
+  }
+
+  bool _matchesTeacher(String lecLower, List<String> teacherKeysLower) {
+    if (lecLower.isEmpty) return false;
+    for (final t in teacherKeysLower) {
+      if (t.isEmpty) continue;
+      if (lecLower == t || lecLower.contains(t)) return true;
+    }
+    return false;
+  }
+
   Future<void> _fetchDepartments() async {
     try {
-      final teacher = await _fetchTeacherUsername();
+      final teacherKeys = _teacherKeysLower();
       final snapshot = await FirebaseFirestore.instance
           .collection('timetables')
           .get();
 
       final filteredDocs = snapshot.docs.where((doc) {
         final data = doc.data();
-        return _docHasTeacher(data, teacher);
+        return _docHasTeacher(data, teacherKeys);
       }).toList();
 
       final fetchedDepartments = filteredDocs
@@ -112,7 +133,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
   Future<void> _fetchClasses(String selectedDepartment) async {
     try {
-      final teacher = await _fetchTeacherUsername();
+      final teacherKeys = _teacherKeysLower();
       final snapshot = await FirebaseFirestore.instance
           .collection('timetables')
           .where('department', isEqualTo: selectedDepartment)
@@ -122,7 +143,6 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
       // timetable cell explicitly lists the teacher (or contains the
       // teacher string). This avoids showing classes where the teacher
       // is mentioned indirectly elsewhere in the doc.
-      final teacherLower = teacher.toLowerCase().trim();
       final filteredDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
       for (final doc in snapshot.docs) {
         final data = doc.data();
@@ -138,14 +158,13 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                       .toString()
                       .toLowerCase()
                       .trim();
-                  if (lec.isNotEmpty &&
-                      (lec == teacherLower || lec.contains(teacherLower))) {
+                  if (_matchesTeacher(lec, teacherKeys)) {
                     hasTeacherInCells = true;
                     break;
                   }
                 } else if (cell is String) {
                   final cellStr = cell.toLowerCase();
-                  if (cellStr.contains(teacherLower)) {
+                  if (_matchesTeacher(cellStr, teacherKeys)) {
                     hasTeacherInCells = true;
                     break;
                   }
@@ -162,25 +181,24 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
             for (final row in grid) {
               if (row is Map && row['cells'] is List) {
                 for (final cell in (row['cells'] as List)) {
-                  if (cell is Map) {
-                    final lec = (cell['lecturer'] ?? '')
-                        .toString()
-                        .toLowerCase()
-                        .trim();
-                    if (lec.isNotEmpty &&
-                        (lec == teacherLower || lec.contains(teacherLower))) {
-                      hasTeacherInCells = true;
-                      break;
-                    }
-                  } else if (cell is String) {
-                    final cellStr = cell.toLowerCase();
-                    if (cellStr.contains(teacherLower)) {
-                      hasTeacherInCells = true;
-                      break;
-                    }
+                if (cell is Map) {
+                  final lec = (cell['lecturer'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
+                  if (_matchesTeacher(lec, teacherKeys)) {
+                    hasTeacherInCells = true;
+                    break;
+                  }
+                } else if (cell is String) {
+                  final cellStr = cell.toLowerCase();
+                  if (_matchesTeacher(cellStr, teacherKeys)) {
+                    hasTeacherInCells = true;
+                    break;
                   }
                 }
               }
+            }
               if (hasTeacherInCells) break;
             }
           }
@@ -220,7 +238,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
   Future<void> _fetchSubjects(String selectedClass) async {
     try {
-      final teacher = await _fetchTeacherUsername();
+      final teacherKeys = _teacherKeysLower();
       final snapshot = await FirebaseFirestore.instance
           .collection('timetables')
           .where('className', isEqualTo: selectedClass)
@@ -228,11 +246,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
       final filteredDocs = snapshot.docs.where((doc) {
         final data = doc.data();
-        return _docHasTeacher(data, teacher);
+        return _docHasTeacher(data, teacherKeys);
       }).toList();
 
       final fetchedSubjectsSet = <String>{};
-      final teacherLower = teacher.toLowerCase().trim();
       for (final doc in filteredDocs) {
         final data = doc.data();
         final gm = data['grid_meta'];
@@ -247,7 +264,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                       .toLowerCase()
                       .trim();
                   if (course.isNotEmpty && lec.isNotEmpty) {
-                    if (lec == teacherLower || lec.contains(teacherLower)) {
+                    if (_matchesTeacher(lec, teacherKeys)) {
                       fetchedSubjectsSet.add(course);
                     }
                   }
@@ -279,16 +296,19 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   Future<String> _fetchTeacherUsername() async {
     try {
       debugPrint('Fetching username from Session.username');
-      return Session.username?.toString() ?? 'example_teacher';
+      final username = Session.username?.toString().trim();
+      if (username != null && username.isNotEmpty) return username;
+      final displayName = Session.name?.toString().trim();
+      if (displayName != null && displayName.isNotEmpty) return displayName;
+      return 'example_teacher';
     } catch (e) {
       debugPrint('Error fetching teacher username: $e');
       return 'example_teacher';
     }
   }
 
-  bool _docHasTeacher(Map<String, dynamic> data, String teacher) {
-    if (teacher.trim().isEmpty) return false;
-    final t = teacher.toLowerCase();
+  bool _docHasTeacher(Map<String, dynamic> data, List<String> teacherKeys) {
+    if (teacherKeys.isEmpty) return false;
 
     final gm = data['grid_meta'];
     if (gm is List) {
@@ -299,11 +319,11 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
               final lec = cell['lecturer'];
               if (lec != null) {
                 final lecStr = lec.toString().toLowerCase();
-                if (lecStr == t || lecStr.contains(t)) return true;
+                if (_matchesTeacher(lecStr, teacherKeys)) return true;
               }
             } else if (cell is String) {
               final cellStr = cell.toLowerCase();
-              if (cellStr.contains(t)) return true;
+              if (_matchesTeacher(cellStr, teacherKeys)) return true;
             }
           }
         }
@@ -317,12 +337,12 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
           for (var cell in (row['cells'] as List)) {
             if (cell is String) {
               final cellStr = cell.toLowerCase();
-              if (cellStr.contains(t)) return true;
+              if (_matchesTeacher(cellStr, teacherKeys)) return true;
             } else if (cell is Map) {
               final lec = cell['lecturer'];
               if (lec != null) {
                 final lecStr = lec.toString().toLowerCase();
-                if (lecStr == t || lecStr.contains(t)) return true;
+                if (_matchesTeacher(lecStr, teacherKeys)) return true;
               }
             }
           }
@@ -338,11 +358,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   Future<bool> _isTeacherLecturerOfSubject(
     String selectedClass,
     String selectedSubject,
-    String teacher,
+    List<String> teacherKeysLower,
   ) async {
     try {
       final lowerSubject = selectedSubject.toLowerCase().trim();
-      final lowerTeacher = teacher.toLowerCase().trim();
 
       final snapshot = await FirebaseFirestore.instance
           .collection('timetables')
@@ -368,15 +387,14 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                       .trim();
                   if (course == lowerSubject) {
                     if (lec.isEmpty ||
-                        lec == lowerTeacher ||
-                        lec.contains(lowerTeacher)) {
+                        _matchesTeacher(lec, teacherKeysLower)) {
                       return true;
                     }
                   }
                 } else if (cell is String) {
                   final cellStr = cell.toLowerCase();
                   if (cellStr.contains(lowerSubject) &&
-                      cellStr.contains(lowerTeacher)) {
+                      _matchesTeacher(cellStr, teacherKeysLower)) {
                     return true;
                   }
                 }
@@ -401,22 +419,21 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                       .trim();
                   if (course == lowerSubject) {
                     if (lec.isEmpty ||
-                        lec == lowerTeacher ||
-                        lec.contains(lowerTeacher)) {
+                        _matchesTeacher(lec, teacherKeysLower)) {
                       return true;
                     }
                   } else {
                     // fallback: sometimes course info is embedded in string fields
                     final cellStr = cell.toString().toLowerCase();
                     if (cellStr.contains(lowerSubject) &&
-                        cellStr.contains(lowerTeacher)) {
+                        _matchesTeacher(cellStr, teacherKeysLower)) {
                       return true;
                     }
                   }
                 } else if (cell is String) {
                   final cellStr = cell.toLowerCase();
                   if (cellStr.contains(lowerSubject) &&
-                      cellStr.contains(lowerTeacher)) {
+                      _matchesTeacher(cellStr, teacherKeysLower)) {
                     return true;
                   }
                 }
@@ -445,7 +462,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   Future<Map<String, dynamic>?> _findTimetableMatchForNow(
     String selectedClass,
     String selectedSubject,
-    String teacher,
+    List<String> teacherKeysLower,
   ) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('timetables')
@@ -453,7 +470,6 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         .get();
 
     final lowerSubject = selectedSubject.toLowerCase();
-    final lowerTeacher = teacher.toLowerCase();
     final todayIndex = _currentTimetableDayIndex();
 
     final now = DateTime.now();
@@ -522,8 +538,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                   if (minutesNow >= spanStart && minutesNow < spanEnd) {
                     // ensure lecturer matches teacher (if present) or allow empty lecturer
                     if (lec.isEmpty ||
-                        lec == lowerTeacher ||
-                        lec.contains(lowerTeacher)) {
+                        _matchesTeacher(lec, teacherKeysLower)) {
                       return {
                         'doc': doc,
                         'dayIndex': rField,
@@ -541,7 +556,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                 // best-effort: if the string contains subject and teacher, accept it
                 final cellStr = cell.toLowerCase();
                 if (cellStr.contains(lowerSubject) &&
-                    cellStr.contains(lowerTeacher)) {
+                    _matchesTeacher(cellStr, teacherKeysLower)) {
                   // try to get span from spans/periods like above
                   final spans = data['spans'];
                   int? spanStart;
@@ -1006,11 +1021,12 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         }
 
         final teacherUsername = await _fetchTeacherUsername();
+        final teacherKeysLower = _teacherKeysLower();
 
         final isLecturer = await _isTeacherLecturerOfSubject(
           className!.trim(),
           subject!.trim(),
-          teacherUsername.trim(),
+          teacherKeysLower,
         );
         if (!isLecturer) {
           if (mounted) {
@@ -1028,7 +1044,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         final match = await _findTimetableMatchForNow(
           className!.trim(),
           subject!.trim(),
-          teacherUsername.trim(),
+          teacherKeysLower,
         );
         if (match == null) {
           if (mounted) {

@@ -129,6 +129,27 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
     return ra == rb || ra.contains(rb) || rb.contains(ra);
   }
 
+  List<String> _teacherKeysLower() {
+    final keys = <String>[];
+    final username = (Session.username ?? '').trim();
+    final displayName = (Session.name ?? '').trim();
+    if (username.isNotEmpty) keys.add(username.toLowerCase());
+    if (displayName.isNotEmpty &&
+        displayName.toLowerCase() != username.toLowerCase()) {
+      keys.add(displayName.toLowerCase());
+    }
+    return keys;
+  }
+
+  bool _matchesTeacher(String valueLower, List<String> teacherKeysLower) {
+    if (valueLower.isEmpty) return false;
+    for (final t in teacherKeysLower) {
+      if (t.isEmpty) continue;
+      if (valueLower == t || valueLower.contains(t)) return true;
+    }
+    return false;
+  }
+
   Future<String> _getCurrentTeacher() async {
     return Session.username?.toString() ?? '';
   }
@@ -141,7 +162,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       loadingDropdowns = true;
     });
     try {
-      final teacher = await _getCurrentTeacher();
+      final teacherKeys = _teacherKeysLower();
       final qs = await _firestore.collection('timetables').get();
       final filtered = qs.docs.where((d) {
         final data = d.data();
@@ -152,9 +173,9 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
               for (final cell in gmItem['cells']) {
                 if (cell is Map) {
                   final lec = (cell['lecturer'] ?? '').toString().toLowerCase();
-                  if (lec.contains(teacher.toLowerCase())) return true;
+                  if (_matchesTeacher(lec, teacherKeys)) return true;
                 } else if (cell is String) {
-                  if (cell.toLowerCase().contains(teacher.toLowerCase())) {
+                  if (_matchesTeacher(cell.toLowerCase(), teacherKeys)) {
                     return true;
                   }
                 }
@@ -168,12 +189,12 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
             if (row is Map && row['cells'] is List) {
               for (final cell in row['cells']) {
                 if (cell is String &&
-                    cell.toLowerCase().contains(teacher.toLowerCase())) {
+                    _matchesTeacher(cell.toLowerCase(), teacherKeys)) {
                   return true;
                 }
                 if (cell is Map) {
                   final lec = (cell['lecturer'] ?? '').toString().toLowerCase();
-                  if (lec.contains(teacher.toLowerCase())) return true;
+                  if (_matchesTeacher(lec, teacherKeys)) return true;
                 }
               }
             }
@@ -233,8 +254,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
 
       // Only include classes where at least one timetable cell explicitly
       // lists the current teacher (or the cell string contains the teacher).
-      final teacher = await _getCurrentTeacher();
-      final teacherLower = teacher.toLowerCase().trim();
+      final teacherKeys = _teacherKeysLower();
       final filteredDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
       for (final doc in qs.docs) {
         final data = doc.data();
@@ -250,14 +270,13 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                       .toString()
                       .toLowerCase()
                       .trim();
-                  if (lec.isNotEmpty &&
-                      (lec == teacherLower || lec.contains(teacherLower))) {
+                  if (_matchesTeacher(lec, teacherKeys)) {
                     hasTeacherInCells = true;
                     break;
                   }
                 } else if (cell is String) {
                   final cellStr = cell.toLowerCase();
-                  if (cellStr.contains(teacherLower)) {
+                  if (_matchesTeacher(cellStr, teacherKeys)) {
                     hasTeacherInCells = true;
                     break;
                   }
@@ -274,25 +293,24 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
             for (final row in grid) {
               if (row is Map && row['cells'] is List) {
                 for (final cell in (row['cells'] as List)) {
-                  if (cell is Map) {
-                    final lec = (cell['lecturer'] ?? '')
-                        .toString()
-                        .toLowerCase()
-                        .trim();
-                    if (lec.isNotEmpty &&
-                        (lec == teacherLower || lec.contains(teacherLower))) {
-                      hasTeacherInCells = true;
-                      break;
-                    }
-                  } else if (cell is String) {
-                    final cellStr = cell.toLowerCase();
-                    if (cellStr.contains(teacherLower)) {
-                      hasTeacherInCells = true;
-                      break;
-                    }
+                if (cell is Map) {
+                  final lec = (cell['lecturer'] ?? '')
+                      .toString()
+                      .toLowerCase()
+                      .trim();
+                  if (_matchesTeacher(lec, teacherKeys)) {
+                    hasTeacherInCells = true;
+                    break;
+                  }
+                } else if (cell is String) {
+                  final cellStr = cell.toLowerCase();
+                  if (_matchesTeacher(cellStr, teacherKeys)) {
+                    hasTeacherInCells = true;
+                    break;
                   }
                 }
               }
+            }
               if (hasTeacherInCells) break;
             }
           }
@@ -332,8 +350,7 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
           .where('className', isEqualTo: cls)
           .get();
 
-      final teacher = await _getCurrentTeacher();
-      final teacherLower = teacher.toLowerCase().trim();
+      final teacherKeys = _teacherKeysLower();
       final set = <String>{};
       for (final doc in qs.docs) {
         final gm = doc.data()['grid_meta'];
@@ -348,14 +365,14 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                       .toLowerCase()
                       .trim();
                   if (c.isNotEmpty && lec.isNotEmpty) {
-                    if (lec == teacherLower || lec.contains(teacherLower)) {
+                    if (_matchesTeacher(lec, teacherKeys)) {
                       set.add(c);
                     }
                   }
                 } else if (cell is String) {
                   final cellStr = cell.toLowerCase();
                   // include course strings only when the cell string also mentions the teacher
-                  if (cellStr.contains(teacherLower)) {
+                  if (_matchesTeacher(cellStr, teacherKeys)) {
                     final c = cell.toString().trim();
                     if (c.isNotEmpty) set.add(c);
                   }
@@ -467,22 +484,21 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
         }
       }
 
-      // If no in-window session found, show message and stop (do NOT fetch students)
+      // If no in-window session found, show message but still fetch roster
       if (pickedSession == null) {
-        setState(() {
-          _noActiveSessionMessage =
-              'No active QR session for the selected class/subject (or session has ended).';
-          students = [];
-          _prefillAppliedForCurrentSelection = false;
-        });
-        return;
+        _noActiveSessionMessage =
+            'No active QR session for the selected class/subject (or session has ended).';
+        currentSessionId = null;
+        currentSessionCode = null;
       }
 
       // We have a valid in-window session
-      final pdata = pickedSession.data();
-      currentSessionId = pickedSession.id;
-      currentSessionCode = _stringFrom(pdata['code']);
-      _noActiveSessionMessage = null;
+      if (pickedSession != null) {
+        final pdata = pickedSession.data();
+        currentSessionId = pickedSession.id;
+        currentSessionCode = _stringFrom(pdata['code']);
+        _noActiveSessionMessage = null;
+      }
 
       // 2) Fetch students (same robust approach as before) ------------------------------------------------
       final candidateVariants = <String>{
@@ -630,34 +646,36 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       // --------------------------
       // Prefill attendance_records for the current session ONLY
       // --------------------------
-      QuerySnapshot<Map<String, dynamic>> attendanceQuery;
-      try {
-        attendanceQuery = await _firestore
-            .collection('attendance_records')
-            .where('session_id', isEqualTo: currentSessionId)
-            .where('subject', isEqualTo: subject)
-            .get();
-      } catch (e) {
-        attendanceQuery = await _firestore
-            .collection('attendance_records')
-            .where('subject', isEqualTo: subject)
-            .limit(2000)
-            .get();
-      }
-
       final attendanceByUser =
           <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
-      for (final doc in attendanceQuery.docs) {
-        final data = doc.data();
-        final uname = _stringFrom(data['username']);
-        if (uname == null || uname.isEmpty) continue;
+      if (currentSessionId != null || currentSessionCode != null) {
+        QuerySnapshot<Map<String, dynamic>> attendanceQuery;
+        try {
+          attendanceQuery = await _firestore
+              .collection('attendance_records')
+              .where('session_id', isEqualTo: currentSessionId)
+              .where('subject', isEqualTo: subject)
+              .get();
+        } catch (e) {
+          attendanceQuery = await _firestore
+              .collection('attendance_records')
+              .where('subject', isEqualTo: subject)
+              .limit(2000)
+              .get();
+        }
 
-        final sid =
-            _stringFrom(data['session_id']) ?? _stringFrom(data['sessionId']);
-        final code = _stringFrom(data['code']);
-        if (sid == currentSessionId ||
-            (currentSessionCode != null && currentSessionCode == code)) {
-          attendanceByUser[uname] = doc;
+        for (final doc in attendanceQuery.docs) {
+          final data = doc.data();
+          final uname = _stringFrom(data['username']);
+          if (uname == null || uname.isEmpty) continue;
+
+          final sid =
+              _stringFrom(data['session_id']) ?? _stringFrom(data['sessionId']);
+          final code = _stringFrom(data['code']);
+          if (sid == currentSessionId ||
+              (currentSessionCode != null && currentSessionCode == code)) {
+            attendanceByUser[uname] = doc;
+          }
         }
       }
 
@@ -703,7 +721,6 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
       setState(() {
         students = roster;
         _prefillAppliedForCurrentSelection = true;
-        _noActiveSessionMessage = null;
       });
     } catch (e) {
       setState(() {
@@ -1170,85 +1187,116 @@ class _TeacherAttendancePageState extends State<TeacherAttendancePage> {
                   Expanded(
                     child: loadingStudents
                         ? const Center(child: CircularProgressIndicator())
-                        : (_noActiveSessionMessage != null)
-                        ? Center(
-                            child: Text(
-                              _noActiveSessionMessage!,
-                              style: TextStyle(fontSize: 16, color: textPrimary),
-                            ),
-                          )
-                        : students.isEmpty
-                        ? Center(
-                            child: Text(
-                              '',
-                              style: TextStyle(color: textPrimary),
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: students.length,
-                            separatorBuilder: (_, __) =>
-                                Divider(height: 1, color: borderColor),
-                            itemBuilder: (context, index) {
-                              final s = students[index];
-                              final bg = index.isEven ? surfaceColor : selectedBg;
-                              return Container(
-                                color: bg,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                  horizontal: 16,
+                        : Column(
+                            children: [
+                              if (_noActiveSessionMessage != null)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  child: Text(
+                                    _noActiveSessionMessage!,
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      color: textPrimary.withValues(alpha: 0.9),
+                                    ),
+                                  ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 1,
-                                      child: Text(
-                                        '${index + 1}',
-                                        style: TextStyle(color: textPrimary),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(
-                                        s.username,
-                                        style: TextStyle(color: textPrimary),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 4,
-                                      child: Text(
-                                        s.name,
-                                        style: TextStyle(
-                                          color: textPrimary,
-                                          fontWeight: FontWeight.w500,
+                              Expanded(
+                                child: students.isEmpty
+                                    ? Center(
+                                        child: Text(
+                                          'No students found for this selection.',
+                                          style: TextStyle(color: textPrimary),
                                         ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Align(
-                                        alignment: Alignment.center,
-                                        child: Transform.scale(
-                                          scale: 0.92,
-                                          child: Switch.adaptive(
-                                            value: s.present,
-                                            onChanged: (val) {
-                                              setState(() => s.present = val);
-                                            },
-                                            activeColor: const Color(0xFF1DBA73),
-                                            inactiveThumbColor: const Color(
-                                              0xFFD33D57,
+                                      )
+                                    : ListView.separated(
+                                        itemCount: students.length,
+                                        separatorBuilder: (_, __) => Divider(
+                                          height: 1,
+                                          color: borderColor,
+                                        ),
+                                        itemBuilder: (context, index) {
+                                          final s = students[index];
+                                          final bg = index.isEven
+                                              ? surfaceColor
+                                              : selectedBg;
+                                          return Container(
+                                            color: bg,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 8,
+                                              horizontal: 16,
                                             ),
-                                            inactiveTrackColor: const Color(
-                                              0xFFD33D57,
-                                            ).withValues(alpha: 0.35),
-                                          ),
-                                        ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  flex: 1,
+                                                  child: Text(
+                                                    '${index + 1}',
+                                                    style: TextStyle(
+                                                      color: textPrimary,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(
+                                                    s.username,
+                                                    style: TextStyle(
+                                                      color: textPrimary,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  flex: 4,
+                                                  child: Text(
+                                                    s.name,
+                                                    style: TextStyle(
+                                                      color: textPrimary,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Align(
+                                                    alignment: Alignment.center,
+                                                    child: Transform.scale(
+                                                      scale: 0.92,
+                                                      child: Switch.adaptive(
+                                                        value: s.present,
+                                                        onChanged: (val) {
+                                                          setState(
+                                                            () =>
+                                                                s.present = val,
+                                                          );
+                                                        },
+                                                        activeColor: const Color(
+                                                          0xFF1DBA73,
+                                                        ),
+                                                        inactiveThumbColor:
+                                                            const Color(
+                                                          0xFFD33D57,
+                                                        ),
+                                                        inactiveTrackColor:
+                                                            const Color(
+                                                          0xFFD33D57,
+                                                        ).withValues(
+                                                          alpha: 0.35,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
+                              ),
+                            ],
                           ),
                   ),
                 ],
