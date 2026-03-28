@@ -181,24 +181,24 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
             for (final row in grid) {
               if (row is Map && row['cells'] is List) {
                 for (final cell in (row['cells'] as List)) {
-                if (cell is Map) {
-                  final lec = (cell['lecturer'] ?? '')
-                      .toString()
-                      .toLowerCase()
-                      .trim();
-                  if (_matchesTeacher(lec, teacherKeys)) {
-                    hasTeacherInCells = true;
-                    break;
-                  }
-                } else if (cell is String) {
-                  final cellStr = cell.toLowerCase();
-                  if (_matchesTeacher(cellStr, teacherKeys)) {
-                    hasTeacherInCells = true;
-                    break;
+                  if (cell is Map) {
+                    final lec = (cell['lecturer'] ?? '')
+                        .toString()
+                        .toLowerCase()
+                        .trim();
+                    if (_matchesTeacher(lec, teacherKeys)) {
+                      hasTeacherInCells = true;
+                      break;
+                    }
+                  } else if (cell is String) {
+                    final cellStr = cell.toLowerCase();
+                    if (_matchesTeacher(cellStr, teacherKeys)) {
+                      hasTeacherInCells = true;
+                      break;
+                    }
                   }
                 }
               }
-            }
               if (hasTeacherInCells) break;
             }
           }
@@ -307,6 +307,74 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
     }
   }
 
+  Future<void> _loadActiveSessionIfAny() async {
+    try {
+      if (className == null || subject == null) {
+        if (mounted)
+          setState(() {
+            qrCodeData = null;
+            _lastSavedSessionId = null;
+          });
+        return;
+      }
+
+      final teacherUsername = await _fetchTeacherUsername();
+      final now = DateTime.now().toUtc();
+      final collection = FirebaseFirestore.instance.collection('qr_generation');
+
+      final q = await collection
+          .where('teacher', isEqualTo: teacherUsername)
+          .where('subject', isEqualTo: subject)
+          .where('className', isEqualTo: className)
+          .where('active', isEqualTo: true)
+          .get();
+
+      String? foundCode;
+      String? foundId;
+
+      for (final doc in q.docs) {
+        final data = doc.data();
+        final periodStartsAtTs = data['period_starts_at'] as Timestamp?;
+        final periodEndsAtTs = data['period_ends_at'] as Timestamp?;
+        final expiresAtTs = data['expires_at'] as Timestamp?;
+
+        var isOngoing = false;
+        if (periodStartsAtTs != null && periodEndsAtTs != null) {
+          final start = periodStartsAtTs.toDate().toUtc();
+          final end = periodEndsAtTs.toDate().toUtc();
+          if (!now.isBefore(start) && now.isBefore(end)) isOngoing = true;
+        } else if (periodEndsAtTs != null) {
+          final end = periodEndsAtTs.toDate().toUtc();
+          if (end.isAfter(now)) {
+            if (expiresAtTs == null)
+              isOngoing = true;
+            else if (expiresAtTs.toDate().toUtc().isAfter(now))
+              isOngoing = true;
+          }
+        } else if (expiresAtTs != null) {
+          if (expiresAtTs.toDate().toUtc().isAfter(now)) isOngoing = true;
+        }
+
+        if (isOngoing) {
+          foundCode = (data['code'] ?? '').toString();
+          foundId = doc.id;
+          break;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          qrCodeData = (foundCode != null && foundCode.isNotEmpty)
+              ? foundCode
+              : null;
+          _lastSavedSessionId = foundId;
+        });
+      }
+    } catch (e) {
+      print('Error loading existing QR session: $e');
+    }
+  }
+
   bool _docHasTeacher(Map<String, dynamic> data, List<String> teacherKeys) {
     if (teacherKeys.isEmpty) return false;
 
@@ -386,8 +454,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                       .toLowerCase()
                       .trim();
                   if (course == lowerSubject) {
-                    if (lec.isEmpty ||
-                        _matchesTeacher(lec, teacherKeysLower)) {
+                    if (lec.isEmpty || _matchesTeacher(lec, teacherKeysLower)) {
                       return true;
                     }
                   }
@@ -418,8 +485,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                       .toLowerCase()
                       .trim();
                   if (course == lowerSubject) {
-                    if (lec.isEmpty ||
-                        _matchesTeacher(lec, teacherKeysLower)) {
+                    if (lec.isEmpty || _matchesTeacher(lec, teacherKeysLower)) {
                       return true;
                     }
                   } else {
@@ -537,8 +603,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                 if (spanStart != null && spanEnd != null) {
                   if (minutesNow >= spanStart && minutesNow < spanEnd) {
                     // ensure lecturer matches teacher (if present) or allow empty lecturer
-                    if (lec.isEmpty ||
-                        _matchesTeacher(lec, teacherKeysLower)) {
+                    if (lec.isEmpty || _matchesTeacher(lec, teacherKeysLower)) {
                       return {
                         'doc': doc,
                         'dayIndex': rField,
@@ -744,7 +809,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         } else if (periodEndsAtTs != null) {
           // If only end exists, treat as ongoing if end > now and (expiresAt absent or expiresAt > now)
           final end = periodEndsAtTs.toDate();
-          
+
           if (end.isAfter(now)) {
             if (expiresAtTs == null) return true;
             if (expiresAtTs.toDate().isAfter(now)) return true;
@@ -887,10 +952,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
     Widget qrPreviewContent() {
       if (qrCodeData == null) {
-        final emptyBg =
-            isDarkMode ? const Color(0xFF1F2430) : Colors.white;
-        final emptyBorder =
-            isDarkMode ? const Color(0xFF2D3446) : Colors.grey[300]!;
+        final emptyBg = isDarkMode ? const Color(0xFF1F2430) : Colors.white;
+        final emptyBorder = isDarkMode
+            ? const Color(0xFF2D3446)
+            : Colors.grey[300]!;
         final emptyText = isDarkMode ? const Color(0xFFE2E8F0) : Colors.grey;
         return Container(
           height: 260,
@@ -903,10 +968,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
           ),
           child: Text(
             "No QR Code generated yet.",
-            style: TextStyle(
-              color: emptyText,
-              fontSize: 18,
-            ),
+            style: TextStyle(color: emptyText, fontSize: 18),
           ),
         );
       }
@@ -1140,7 +1202,13 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                         maxWidth: double.infinity,
                         onChanged: (value) {
                           setState(() => className = value);
-                          if (value != null) _fetchSubjects(value);
+                          if (value != null) {
+                            _fetchSubjects(
+                              value,
+                            ).then((_) => _loadActiveSessionIfAny());
+                          } else {
+                            _loadActiveSessionIfAny();
+                          }
                         },
                       ),
                     ),
@@ -1151,7 +1219,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                         items: subjects,
                         hint: "Select Subject",
                         maxWidth: double.infinity,
-                        onChanged: (value) => setState(() => subject = value),
+                        onChanged: (value) {
+                          setState(() => subject = value);
+                          _loadActiveSessionIfAny();
+                        },
                       ),
                     ),
                   ],
@@ -1176,7 +1247,13 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                       maxWidth: double.infinity,
                       onChanged: (value) {
                         setState(() => className = value);
-                        if (value != null) _fetchSubjects(value);
+                        if (value != null) {
+                          _fetchSubjects(
+                            value,
+                          ).then((_) => _loadActiveSessionIfAny());
+                        } else {
+                          _loadActiveSessionIfAny();
+                        }
                       },
                     ),
                     SizedBox(height: gap),
@@ -1185,7 +1262,10 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                       items: subjects,
                       hint: "Select Subject",
                       maxWidth: double.infinity,
-                      onChanged: (value) => setState(() => subject = value),
+                      onChanged: (value) {
+                        setState(() => subject = value);
+                        _loadActiveSessionIfAny();
+                      },
                     ),
                   ],
                 );
@@ -1285,8 +1365,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
 
           final generateBtn = ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  isDarkMode ? const Color(0xFF4234A4) : const Color(0xFF8372FE),
+              backgroundColor: isDarkMode
+                  ? const Color(0xFF4234A4)
+                  : const Color(0xFF8372FE),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
               shape: RoundedRectangleBorder(borderRadius: buttonRadius),
@@ -1400,10 +1481,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                     children: [
                       sessionCard,
                       const SizedBox(height: 18),
-                      Align(
-                        alignment: Alignment.center,
-                        child: qrCard,
-                      ),
+                      Align(alignment: Alignment.center, child: qrCard),
                     ],
                   );
                 }
@@ -1413,10 +1491,7 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
                   children: [
                     sessionCard,
                     const SizedBox(height: 18),
-                    Align(
-                      alignment: Alignment.center,
-                      child: qrCard,
-                    ),
+                    Align(alignment: Alignment.center, child: qrCard),
                   ],
                 );
               },

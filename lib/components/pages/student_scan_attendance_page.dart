@@ -411,7 +411,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
           'Blocked attendance: device $deviceId already used by $existingUser for session ${sessionDoc.id}',
         );
         if (mounted) {
-          await AttendanceAlert.showLocationBlocked(
+          await AttendanceAlert.showDeviceBlocked(
             context,
             details:
                 'This device has already been used to record attendance for another student ($existingUser) in this session.',
@@ -592,7 +592,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
       if (anomaly.block) {
         debugPrint('Blocking attendance due to anomaly: ${anomaly.reason}');
         if (mounted) {
-          await AttendanceAlert.showLocationBlocked(
+          await AttendanceAlert.showDeviceBlocked(
             context,
             details: 'Attendance blocked: ${anomaly.reason}',
           );
@@ -659,264 +659,274 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
           child: Scaffold(
             backgroundColor: theme.background,
             appBar: AppBar(
-            title: const Text('Scan QR Code'),
-            backgroundColor: theme.appBar,
-            elevation: 0,
-            iconTheme: IconThemeData(color: theme.appBarForeground),
-            titleTextStyle: TextStyle(
-              color: theme.appBarForeground,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
+              title: const Text('Scan QR Code'),
+              backgroundColor: theme.appBar,
+              elevation: 0,
+              iconTheme: IconThemeData(color: theme.appBarForeground),
+              titleTextStyle: TextStyle(
+                color: theme.appBarForeground,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
             body: SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final cutOutSize = constraints.maxWidth < 360
-                          ? 250.0
-                          : 285.0;
-                      final cutOutRect = Rect.fromCenter(
-                        center: Offset(
-                          constraints.maxWidth / 2,
-                          constraints.maxHeight / 2 - 20,
-                        ),
-                        width: cutOutSize,
-                        height: cutOutSize,
-                      );
+              child: Column(
+                children: [
+                  Expanded(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final cutOutSize = constraints.maxWidth < 360
+                            ? 250.0
+                            : 285.0;
+                        final cutOutRect = Rect.fromCenter(
+                          center: Offset(
+                            constraints.maxWidth / 2,
+                            constraints.maxHeight / 2 - 20,
+                          ),
+                          width: cutOutSize,
+                          height: cutOutSize,
+                        );
 
-                      return GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onScaleStart: (_) {
-                          _baseZoomScale = _zoomScale;
-                        },
-                        onScaleUpdate: (details) {
-                          _setZoomScale(
-                            _baseZoomScale + (details.scale - 1) * 0.5,
-                          );
-                        },
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            MobileScanner(
-                              controller: _controller,
-                              fit: BoxFit.cover,
-                              scanWindow: cutOutRect,
-                              onDetect: _onDetect,
-                            ),
-                            IgnorePointer(
-                              child: CustomPaint(
-                                painter: _ScanWindowOverlayPainter(
-                                  cutOutRect: cutOutRect,
-                                  borderRadius: 18,
-                                  overlayColor: theme.background,
-                                  cornerColor: theme.foreground,
-                                ),
-                                child: const SizedBox.expand(),
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onScaleStart: (_) {
+                            _baseZoomScale = _zoomScale;
+                          },
+                          onScaleUpdate: (details) {
+                            _setZoomScale(
+                              _baseZoomScale + (details.scale - 1) * 0.5,
+                            );
+                          },
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              MobileScanner(
+                                controller: _controller,
+                                fit: BoxFit.cover,
+                                scanWindow: cutOutRect,
+                                onDetect: _onDetect,
                               ),
-                            ),
-                            IgnorePointer(
-                              child: AnimatedBuilder(
-                                animation: _pulseController,
-                                builder: (context, _) {
-                                  final lineY =
-                                      cutOutRect.top +
-                                      (cutOutRect.height *
-                                          _pulseController.value);
-                                  return CustomPaint(
-                                    painter: _ScanLinePainter(
-                                      cutOutRect: cutOutRect,
-                                      lineY: lineY,
-                                      lineColor: scanLineColor,
-                                    ),
-                                    child: const SizedBox.expand(),
-                                  );
-                                },
-                              ),
-                            ),
-                            Positioned(
-                              left: 24,
-                              right: 24,
-                              bottom: 94,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: panelColor,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: theme.border.withValues(alpha: 0.65),
+                              IgnorePointer(
+                                child: CustomPaint(
+                                  painter: _ScanWindowOverlayPainter(
+                                    cutOutRect: cutOutRect,
+                                    borderRadius: 18,
+                                    overlayColor: theme.background,
+                                    cornerColor: theme.foreground,
                                   ),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Align the QR inside the frame',
-                                      style: TextStyle(
-                                        color: panelText,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        IconButton(
-                                          onPressed: () =>
-                                              _setZoomScale(_zoomScale - 0.1),
-                                          icon: Icon(
-                                            Icons.remove_circle_outline,
-                                            color: panelText,
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: SliderTheme(
-                                            data: SliderTheme.of(context)
-                                                .copyWith(
-                                                  activeTrackColor: scanLineColor,
-                                                  inactiveTrackColor: panelMuted
-                                                      .withValues(alpha: 0.3),
-                                                  thumbColor: scanLineColor,
-                                                  overlayColor: scanLineColor
-                                                      .withValues(alpha: 0.2),
-                                                ),
-                                            child: Slider(
-                                              min: 0,
-                                              max: 1,
-                                              value: _zoomScale
-                                                  .clamp(0.0, 1.0)
-                                                  .toDouble(),
-                                              onChanged: (value) =>
-                                                  _setZoomScale(value),
-                                            ),
-                                          ),
-                                        ),
-                                        IconButton(
-                                          onPressed: () =>
-                                              _setZoomScale(_zoomScale + 0.1),
-                                          icon: Icon(
-                                            Icons.add_circle_outline,
-                                            color: panelText,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                  child: const SizedBox.expand(),
                                 ),
                               ),
-                            ),
-                            if (scanResult != null)
+                              IgnorePointer(
+                                child: AnimatedBuilder(
+                                  animation: _pulseController,
+                                  builder: (context, _) {
+                                    final lineY =
+                                        cutOutRect.top +
+                                        (cutOutRect.height *
+                                            _pulseController.value);
+                                    return CustomPaint(
+                                      painter: _ScanLinePainter(
+                                        cutOutRect: cutOutRect,
+                                        lineY: lineY,
+                                        lineColor: scanLineColor,
+                                      ),
+                                      child: const SizedBox.expand(),
+                                    );
+                                  },
+                                ),
+                              ),
                               Positioned(
                                 left: 24,
                                 right: 24,
-                                top: 24,
+                                bottom: 94,
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: panelColor,
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
-                                      color: theme.border.withValues(alpha: 0.65),
+                                      color: theme.border.withValues(
+                                        alpha: 0.65,
+                                      ),
                                     ),
                                   ),
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
+                                    horizontal: 14,
                                     vertical: 10,
                                   ),
-                                  child: Row(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Expanded(
-                                        child: Text(
-                                          _isProcessingScan
-                                          ? 'Processing attendance...'
-                                              : 'Scanned: $scanResult',
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: panelText,
-                                            fontWeight: FontWeight.w500,
-                                          ),
+                                      Text(
+                                        'Align the QR inside the frame',
+                                        style: TextStyle(
+                                          color: panelText,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      if (_isProcessingScan)
-                                        SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(
-                                              scanLineColor,
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            onPressed: () =>
+                                                _setZoomScale(_zoomScale - 0.1),
+                                            icon: Icon(
+                                              Icons.remove_circle_outline,
+                                              color: panelText,
                                             ),
                                           ),
-                                        )
-                                      else
-                                        TextButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              scanResult = null;
-                                              _isProcessingScan = false;
-                                            });
-                                            _controller.start();
-                                          },
-                                          child: Text(
-                                            'Scan again',
-                                            style: TextStyle(
-                                              color: scanLineColor,
+                                          Expanded(
+                                            child: SliderTheme(
+                                              data: SliderTheme.of(context)
+                                                  .copyWith(
+                                                    activeTrackColor:
+                                                        scanLineColor,
+                                                    inactiveTrackColor:
+                                                        panelMuted.withValues(
+                                                          alpha: 0.3,
+                                                        ),
+                                                    thumbColor: scanLineColor,
+                                                    overlayColor: scanLineColor
+                                                        .withValues(alpha: 0.2),
+                                                  ),
+                                              child: Slider(
+                                                min: 0,
+                                                max: 1,
+                                                value: _zoomScale
+                                                    .clamp(0.0, 1.0)
+                                                    .toDouble(),
+                                                onChanged: (value) =>
+                                                    _setZoomScale(value),
+                                              ),
                                             ),
                                           ),
-                                        ),
+                                          IconButton(
+                                            onPressed: () =>
+                                                _setZoomScale(_zoomScale + 0.1),
+                                            icon: Icon(
+                                              Icons.add_circle_outline,
+                                              color: panelText,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ],
                                   ),
                                 ),
                               ),
-                          ],
-                        ),
-                      );
+                              if (scanResult != null)
+                                Positioned(
+                                  left: 24,
+                                  right: 24,
+                                  top: 24,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: panelColor,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: theme.border.withValues(
+                                          alpha: 0.65,
+                                        ),
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _isProcessingScan
+                                                ? 'Processing attendance...'
+                                                : 'Scanned: $scanResult',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: panelText,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                        if (_isProcessingScan)
+                                          SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    scanLineColor,
+                                                  ),
+                                            ),
+                                          )
+                                        else
+                                          TextButton(
+                                            onPressed: () {
+                                              setState(() {
+                                                scanResult = null;
+                                                _isProcessingScan = false;
+                                              });
+                                              _controller.start();
+                                            },
+                                            child: Text(
+                                              'Scan again',
+                                              style: TextStyle(
+                                                color: scanLineColor,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  AnimatedBottomBar(
+                    currentIndex: 1,
+                    reserveLiftSpace: false,
+                    onTap: (index) async {
+                      if (index == 0) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const StudentViewAttendanceMobile(),
+                          ),
+                        );
+                      } else if (index == 1) {
+                        // already on scan page
+                      } else if (index == 2) {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const StudentProfilePage(),
+                          ),
+                        );
+                        if (!mounted) return;
+                        try {
+                          try {
+                            await _controller.stop();
+                          } catch (_) {}
+                          await Future.delayed(
+                            const Duration(milliseconds: 300),
+                          );
+                          await _controller.start();
+                        } catch (e) {
+                          debugPrint(
+                            'Error restarting camera after returning from profile: $e',
+                          );
+                        }
+                      }
                     },
                   ),
-                ),
-                AnimatedBottomBar(
-                  currentIndex: 1,
-                  reserveLiftSpace: false,
-                  onTap: (index) async {
-                    if (index == 0) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const StudentViewAttendanceMobile(),
-                        ),
-                      );
-                    } else if (index == 1) {
-                      // already on scan page
-                    } else if (index == 2) {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const StudentProfilePage(),
-                        ),
-                      );
-                      if (!mounted) return;
-                      try {
-                        try {
-                          await _controller.stop();
-                        } catch (_) {}
-                        await Future.delayed(const Duration(milliseconds: 300));
-                        await _controller.start();
-                      } catch (e) {
-                        debugPrint(
-                          'Error restarting camera after returning from profile: $e',
-                        );
-                      }
-                    }
-                  },
-                ),
-              ],
-            ),
+                ],
+              ),
             ),
           ),
         );
@@ -1048,11 +1058,7 @@ class _PromptRow extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 14,
-              height: 1.35,
-            ),
+            style: TextStyle(color: textColor, fontSize: 14, height: 1.35),
           ),
         ),
       ],

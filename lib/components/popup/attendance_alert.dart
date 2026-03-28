@@ -7,6 +7,7 @@ enum AttendanceAlertType {
   qrExpired,
   success,
   info,
+  deviceBlocked,
 }
 
 class AttendanceAlert {
@@ -108,6 +109,20 @@ class AttendanceAlert {
     onClose: onClose,
   );
 
+  static Future<void> showDeviceBlocked(
+    BuildContext context, {
+    String? details,
+    VoidCallback? onClose,
+  }) => _show(
+    context,
+    type: AttendanceAlertType.deviceBlocked,
+    title: 'Attendance Restricted on This Device',
+    message:
+        details ??
+        'This device has already been used to record attendance for another student in this session.',
+    onClose: onClose,
+  );
+
   static Future<void> showAnomalyFlagged(
     BuildContext context, {
     String? details,
@@ -182,6 +197,7 @@ class _AttendanceAlertDialog extends StatelessWidget {
       case AttendanceAlertType.qrExpired:
         return const Color(0xFFE24646);
       case AttendanceAlertType.info:
+      case AttendanceAlertType.deviceBlocked:
         return const Color(0xFFE68A00);
     }
   }
@@ -198,6 +214,8 @@ class _AttendanceAlertDialog extends StatelessWidget {
         return Icons.timer_off_rounded;
       case AttendanceAlertType.info:
         return Icons.info_rounded;
+      case AttendanceAlertType.deviceBlocked:
+        return Icons.warning_rounded;
     }
   }
 
@@ -211,6 +229,8 @@ class _AttendanceAlertDialog extends StatelessWidget {
         return 'Not Your Class';
       case AttendanceAlertType.qrExpired:
         return 'Session Ended';
+      case AttendanceAlertType.deviceBlocked:
+        return 'Device Verification Failed';
       case AttendanceAlertType.info:
         return 'Notice';
     }
@@ -226,6 +246,8 @@ class _AttendanceAlertDialog extends StatelessWidget {
         return 'This QR/session does not belong to your assigned class.';
       case AttendanceAlertType.qrExpired:
         return 'This QR/session has expired. Please request a new active session.';
+      case AttendanceAlertType.deviceBlocked:
+        return 'This device has already been used to record attendance for another student in this session.';
       case AttendanceAlertType.info:
         return '';
     }
@@ -275,7 +297,9 @@ class _AttendanceAlertDialog extends StatelessWidget {
     final studentTheme = StudentThemeController.instance.theme;
     final isDark = StudentThemeController.instance.isDarkMode;
     final tone = _toneColor(studentTheme);
-    final titleText = title?.trim().isNotEmpty == true ? title!.trim() : _defaultTitle();
+    final titleText = title?.trim().isNotEmpty == true
+        ? title!.trim()
+        : _defaultTitle();
     final messageText = message?.trim().isNotEmpty == true
         ? message!.trim()
         : _defaultMessage();

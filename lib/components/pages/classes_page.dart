@@ -26,6 +26,8 @@ class _ClassesPageState extends State<ClassesPage> {
       .collection('departments');
   final CollectionReference facultiesCollection = FirebaseFirestore.instance
       .collection('faculties');
+  final CollectionReference studentsCollection = FirebaseFirestore.instance
+      .collection('students');
 
   List<SchoolClass> _classes = [];
   Map<String, String> _departmentNames = {}; // id -> name
@@ -405,6 +407,45 @@ class _ClassesPageState extends State<ClassesPage> {
         toUpdate['faculty_ref'] = Session.facultyRef;
       }
       await classesCollection.doc(oldSc.id).update(toUpdate);
+
+      // Keep students in sync: update stored `className` on student docs
+      // that reference this class via `class_ref`.
+      try {
+        final classId = oldSc.id!;
+        final classPath = classesCollection.doc(classId).path; // 'classes/<id>'
+        final candidates = <String>{
+          classId,
+          'classes/$classId',
+          '/classes/$classId',
+          classPath,
+          '/$classPath',
+        };
+
+        final batch = FirebaseFirestore.instance.batch();
+        int updates = 0;
+        for (final cand in candidates) {
+          try {
+            final q = await studentsCollection
+                .where('class_ref', isEqualTo: cand)
+                .get();
+            for (final sd in q.docs) {
+              batch.update(sd.reference, {'className': newSc.className});
+              updates += 1;
+            }
+          } catch (err) {
+            print('Error querying students by class_ref=$cand: $err');
+          }
+        }
+        if (updates > 0) {
+          await batch.commit();
+          print(
+            'Updated $updates student(s) className -> "${newSc.className}"',
+          );
+        }
+      } catch (err) {
+        print('Error updating students className after class update: $err');
+      }
+
       await _fetchClasses();
       setState(() => _selectedIndex = null);
       if (mounted) {
@@ -568,8 +609,7 @@ class _ClassesPageState extends State<ClassesPage> {
                     '')
                 .toString()
                 .trim();
-        final section =
-            (row['section'] ?? '').toString().trim().isEmpty
+        final section = (row['section'] ?? '').toString().trim().isEmpty
             ? 'NONE'
             : row['section']!.toString().trim();
         final statusRaw = (row['status'] ?? 'true').toString().trim();
@@ -584,7 +624,8 @@ class _ClassesPageState extends State<ClassesPage> {
           continue;
         }
 
-        final departmentRef = _resolveRef(_departmentNames, departmentRaw) ?? '';
+        final departmentRef =
+            _resolveRef(_departmentNames, departmentRaw) ?? '';
         final facultyRef = _extractId(
           _resolveRef(_facultyNames, facultyRaw) ??
               Session.facultyRef?.id ??
@@ -615,9 +656,9 @@ class _ClassesPageState extends State<ClassesPage> {
     } catch (e) {
       print('Error importing classes: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to import classes')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to import classes')));
     }
   }
 
@@ -633,7 +674,9 @@ class _ClassesPageState extends State<ClassesPage> {
       String facultyToWrite = sc.facultyRef ?? '';
       if (facultyToWrite.isEmpty && sc.departmentRef.isNotEmpty) {
         try {
-          final depDoc = await departmentsCollection.doc(sc.departmentRef).get();
+          final depDoc = await departmentsCollection
+              .doc(sc.departmentRef)
+              .get();
           if (depDoc.exists) {
             final depData = depDoc.data() as Map<String, dynamic>?;
             final candidate = depData == null
@@ -722,7 +765,12 @@ class _ClassesPageState extends State<ClassesPage> {
                         label: const Text('Upload Classes'),
                         style: ElevatedButton.styleFrom(
                           foregroundColor: Colors.white,
-                          backgroundColor: const Color.fromARGB(255, 0, 150, 80),
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            0,
+                            150,
+                            80,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -814,7 +862,9 @@ class _ClassesPageState extends State<ClassesPage> {
                           horizontal: 0,
                         ),
                       ),
-                      onPressed: _selectedIndex == null ? null : _showEditClassPopup,
+                      onPressed: _selectedIndex == null
+                          ? null
+                          : _showEditClassPopup,
                       child: const Text(
                         "Edit",
                         style: TextStyle(fontSize: 15, color: Colors.white),
@@ -838,7 +888,9 @@ class _ClassesPageState extends State<ClassesPage> {
                           horizontal: 0,
                         ),
                       ),
-                      onPressed: _selectedIndex == null ? null : _confirmDeleteClass,
+                      onPressed: _selectedIndex == null
+                          ? null
+                          : _confirmDeleteClass,
                       child: const Text(
                         "Delete",
                         style: TextStyle(fontSize: 15, color: Colors.white),
@@ -948,9 +1000,15 @@ class _ClassesPageState extends State<ClassesPage> {
                 primary: false,
                 child: Table(
                   columnWidths: columnWidths,
-                  border: TableBorder(horizontalInside: BorderSide(color: divider)),
+                  border: TableBorder(
+                    horizontalInside: BorderSide(color: divider),
+                  ),
                   children: [
-                    for (int index = 0; index < _filteredClasses.length; index++)
+                    for (
+                      int index = 0;
+                      index < _filteredClasses.length;
+                      index++
+                    )
                       TableRow(
                         decoration: BoxDecoration(
                           color: _selectedIndex == index ? selectedBg : surface,
@@ -967,7 +1025,8 @@ class _ClassesPageState extends State<ClassesPage> {
                             onTap: () => _handleRowTap(index),
                           ),
                           _tableBodyCell(
-                            _departmentNames[_filteredClasses[index].departmentRef] ??
+                            _departmentNames[_filteredClasses[index]
+                                    .departmentRef] ??
                                 _filteredClasses[index].departmentRef,
                             textPrimary,
                             onTap: () => _handleRowTap(index),
@@ -983,7 +1042,8 @@ class _ClassesPageState extends State<ClassesPage> {
                                 scale: 0.94,
                                 child: Switch.adaptive(
                                   value: _filteredClasses[index].status,
-                                  onChanged: (value) => _toggleActive(index, value),
+                                  onChanged: (value) =>
+                                      _toggleActive(index, value),
                                   activeColor: const Color(0xFF1DBA73),
                                   inactiveThumbColor: const Color(0xFFD33D57),
                                   inactiveTrackColor: const Color(

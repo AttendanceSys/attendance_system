@@ -89,22 +89,24 @@ class _LoginScreenState extends State<LoginScreen> {
           final adminData = adminSnap.docs.first.data();
           displayName =
               (adminData['full_name'] ??
-                  adminData['name'] ??
-                  adminData['display_name']) as String?;
+                      adminData['name'] ??
+                      adminData['display_name'])
+                  as String?;
 
           final facCandidate =
               adminData['faculty_ref'] ??
-                  adminData['faculty_id'] ??
-                  adminData['faculty'];
+              adminData['faculty_id'] ??
+              adminData['faculty'];
           Session.setFacultyFromField(facCandidate);
         }
       } catch (_) {}
 
       displayName ??=
-      (userData['name'] ??
-          userData['full_name'] ??
-          userData['display_name'] ??
-          username) as String;
+          (userData['name'] ??
+                  userData['full_name'] ??
+                  userData['display_name'] ??
+                  username)
+              as String;
 
       if (role == 'teacher') {
         try {
@@ -116,11 +118,35 @@ class _LoginScreenState extends State<LoginScreen> {
           if (lecSnap.docs.isNotEmpty) {
             final lecData = lecSnap.docs.first.data();
             final teacherName =
-            (lecData['teacher_name'] ??
-                lecData['name'] ??
-                lecData['display_name']) as String?;
+                (lecData['teacher_name'] ??
+                        lecData['name'] ??
+                        lecData['display_name'])
+                    as String?;
             if (teacherName != null && teacherName.isNotEmpty) {
               displayName = teacherName;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Prefer student full name when available
+      if (role == 'student') {
+        try {
+          final sSnap = await FirebaseFirestore.instance
+              .collection('students')
+              .where('username', isEqualTo: username)
+              .limit(1)
+              .get();
+          if (sSnap.docs.isNotEmpty) {
+            final sData = sSnap.docs.first.data();
+            final studentFullName =
+                (sData['fullname'] ??
+                        sData['full_name'] ??
+                        sData['name'] ??
+                        sData['studentName'])
+                    as String?;
+            if (studentFullName != null && studentFullName.trim().isNotEmpty) {
+              displayName = studentFullName;
             }
           }
         } catch (_) {}
@@ -129,15 +155,16 @@ class _LoginScreenState extends State<LoginScreen> {
       if (Session.facultyRef == null) {
         final userFac =
             userData['faculty_ref'] ??
-                userData['faculty_id'] ??
-                userData['faculty'];
+            userData['faculty_id'] ??
+            userData['faculty'];
         Session.setFacultyFromField(userFac);
       }
 
       Session.name = displayName;
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Welcome $displayName')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Welcome $displayName')));
       await Future.delayed(const Duration(milliseconds: 350));
 
       if (!mounted) return;
@@ -168,7 +195,9 @@ class _LoginScreenState extends State<LoginScreen> {
         }
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const StudentViewAttendanceMobile()),
+          MaterialPageRoute(
+            builder: (_) => const StudentViewAttendanceMobile(),
+          ),
         );
       } else {
         setState(() {
@@ -204,7 +233,9 @@ class _LoginScreenState extends State<LoginScreen> {
             MediaQuery.of(context).platformBrightness == Brightness.dark;
 
         return AnnotatedRegion<SystemUiOverlayStyle>(
-          value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+          value: isDark
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark,
           child: Scaffold(
             body: Container(
               decoration: BoxDecoration(
@@ -264,7 +295,9 @@ class _LoginScreenState extends State<LoginScreen> {
               style: TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w800,
-                color: isDark ? const Color(0xFFE6EAF1) : const Color(0xFF1F2937),
+                color: isDark
+                    ? const Color(0xFFE6EAF1)
+                    : const Color(0xFF1F2937),
               ),
             ),
             const SizedBox(height: 8),
@@ -273,7 +306,9 @@ class _LoginScreenState extends State<LoginScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
-                color: isDark ? const Color(0xFF9EA5B5) : const Color(0xFF6B7280),
+                color: isDark
+                    ? const Color(0xFF9EA5B5)
+                    : const Color(0xFF6B7280),
               ),
             ),
             const SizedBox(height: 22),
@@ -353,7 +388,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(
                   fontSize: 34,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? const Color(0xFFE6EAF1) : const Color(0xFF1F2937),
+                  color: isDark
+                      ? const Color(0xFFE6EAF1)
+                      : const Color(0xFF1F2937),
                 ),
               ),
               const SizedBox(height: 8),
@@ -362,7 +399,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
-                  color: isDark ? const Color(0xFF9EA5B5) : const Color(0xFF6B7280),
+                  color: isDark
+                      ? const Color(0xFF9EA5B5)
+                      : const Color(0xFF6B7280),
                 ),
               ),
               const SizedBox(height: 22),
@@ -438,8 +477,12 @@ class _LoginScreenState extends State<LoginScreen> {
     final fill = isDark
         ? const Color(0xFF0F172A).withOpacity(0.55)
         : Colors.white.withOpacity(0.75);
-    final textColor = isDark ? const Color(0xFFE6EAF1) : const Color(0xFF111827);
-    final hintColor = isDark ? const Color(0xFF9EA5B5) : const Color(0xFF6B7280);
+    final textColor = isDark
+        ? const Color(0xFFE6EAF1)
+        : const Color(0xFF111827);
+    final hintColor = isDark
+        ? const Color(0xFF9EA5B5)
+        : const Color(0xFF6B7280);
 
     return TextField(
       controller: controller,
@@ -470,7 +513,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     setState(() => _obscurePassword = !_obscurePassword),
               )
             : null,
-        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 14,
+          horizontal: 14,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
