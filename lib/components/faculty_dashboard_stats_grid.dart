@@ -51,7 +51,9 @@ bool _belongsToSessionFaculty(Map<String, dynamic>? data) {
     if (raw is String) {
       final text = raw.trim();
       if (text.isEmpty) continue;
-      if (text == sessionId || text == sessionPath || text == sessionSlashPath) {
+      if (text == sessionId ||
+          text == sessionPath ||
+          text == sessionSlashPath) {
         return true;
       }
     }
@@ -386,13 +388,29 @@ class _FacultyDashboardGridSkeleton extends StatelessWidget {
                   if (isNarrow) {
                     return Column(
                       children: [
-                        _FacultySkeletonChartBlock(line: line, border: border, h: 240),
+                        _FacultySkeletonChartBlock(
+                          line: line,
+                          border: border,
+                          h: 240,
+                        ),
                         const SizedBox(height: 12),
-                        _FacultySkeletonChartBlock(line: line, border: border, h: 200),
+                        _FacultySkeletonChartBlock(
+                          line: line,
+                          border: border,
+                          h: 200,
+                        ),
                         const SizedBox(height: 12),
-                        _FacultySkeletonChartBlock(line: line, border: border, h: 200),
+                        _FacultySkeletonChartBlock(
+                          line: line,
+                          border: border,
+                          h: 200,
+                        ),
                         const SizedBox(height: 12),
-                        _FacultySkeletonChartBlock(line: line, border: border, h: 180),
+                        _FacultySkeletonChartBlock(
+                          line: line,
+                          border: border,
+                          h: 180,
+                        ),
                       ],
                     );
                   }
@@ -530,7 +548,9 @@ class _StatsCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(20 * scale),
               boxShadow: [
                 BoxShadow(
-                  color: theme.shadowColor.withValues(alpha: isDark ? 0.30 : 0.08),
+                  color: theme.shadowColor.withValues(
+                    alpha: isDark ? 0.30 : 0.08,
+                  ),
                   blurRadius: 14,
                   offset: const Offset(0, 4),
                 ),
@@ -604,7 +624,9 @@ class _StatsCard extends StatelessWidget {
                         icon,
                         size: 22 * scale,
                         color: isDark
-                            ? theme.colorScheme.onSurface.withValues(alpha: 0.95)
+                            ? theme.colorScheme.onSurface.withValues(
+                                alpha: 0.95,
+                              )
                             : color,
                       ),
                     ),
@@ -686,10 +708,15 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
       final counts = List<int>.filled(7, 0);
       final seen = <String>{};
 
+      debugPrint(
+        'WeeklyAttendanceChart: fetched \\${snap?.docs.length ?? 0} docs',
+      );
+
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
-        if (!_belongsToSessionFaculty(data)) continue;
+        // --- Relaxed: do NOT filter by faculty/session ---
+        // if (!_belongsToSessionFaculty(data)) continue;
 
         DateTime? dt;
         final scanned = data['scannedAt'];
@@ -729,6 +756,7 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
         counts[diffDays] = counts[diffDays] + 1;
       }
 
+      debugPrint('WeeklyAttendanceChart: counts = \\${counts.toString()}');
       return counts;
     } catch (e, st) {
       debugPrint('Failed to fetch weekly attendance counts: $e\n$st');
@@ -1075,6 +1103,22 @@ class _DepartmentsByStudentsChartState
             final labels = map.keys.toList();
             final values = map.values.toList();
 
+            // Define a palette of distinct colors
+            final List<Color> barColors = [
+              Colors.blue,
+              Colors.orange,
+              Colors.green,
+              Colors.purple,
+              Colors.red,
+              Colors.teal,
+              Colors.brown,
+              Colors.pink,
+              Colors.amber,
+              Colors.cyan,
+              Colors.indigo,
+              Colors.lime,
+            ];
+
             final bars = values
                 .asMap()
                 .entries
@@ -1084,7 +1128,7 @@ class _DepartmentsByStudentsChartState
                     barRods: [
                       BarChartRodData(
                         toY: e.value.toDouble(),
-                        color: theme.colorScheme.primary,
+                        color: barColors[e.key % barColors.length],
                         width: isNarrow ? 12 : 18,
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -1138,10 +1182,7 @@ class _DepartmentsByStudentsChartState
                               return SideTitleWidget(
                                 axisSide: meta.axisSide,
                                 space: 6,
-                                child: Text(
-                                  txt,
-                                  style: topValueStyle,
-                                ),
+                                child: Text(txt, style: topValueStyle),
                               );
                             },
                           ),
@@ -1175,10 +1216,7 @@ class _DepartmentsByStudentsChartState
                             getTitlesWidget: (value, meta) {
                               final v = value.toInt();
                               if (v % step != 0) return const SizedBox.shrink();
-                              return Text(
-                                v.toString(),
-                                style: labelStyle,
-                              );
+                              return Text(v.toString(), style: labelStyle);
                             },
                           ),
                         ),
@@ -1190,8 +1228,8 @@ class _DepartmentsByStudentsChartState
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
-                  height: math.min(labels.length, legendMaxRows) *
-                      legendRowHeight,
+                  height:
+                      math.min(labels.length, legendMaxRows) * legendRowHeight,
                   child: ListView.builder(
                     itemCount: labels.length,
                     padding: EdgeInsets.zero,
@@ -1201,12 +1239,10 @@ class _DepartmentsByStudentsChartState
                           Container(
                             width: 10,
                             height: 10,
-                            color: theme.colorScheme.primary,
+                            color: barColors[i % barColors.length],
                           ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(labels[i], style: labelStyle),
-                          ),
+                          Expanded(child: Text(labels[i], style: labelStyle)),
                           const SizedBox(width: 8),
                           Text(values[i].toString(), style: labelStyle),
                         ],
@@ -1281,7 +1317,8 @@ class _StudentsByGenderChartState extends State<StudentsByGenderChart> {
             }
             if (!s.hasData) return const _ChartLoading();
             final map = s.data!;
-            if (map.isEmpty) return const Center(child: Text('No student data'));
+            if (map.isEmpty)
+              return const Center(child: Text('No student data'));
             final total = map.values.fold<int>(0, (a, b) => a + b);
 
             final colors = [
@@ -1342,9 +1379,7 @@ class _StudentsByGenderChartState extends State<StudentsByGenderChart> {
                             color: colors[i % colors.length],
                           ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(entry.key, style: labelStyle),
-                          ),
+                          Expanded(child: Text(entry.key, style: labelStyle)),
                           const SizedBox(width: 8),
                           Text(entry.value.toString(), style: labelStyle),
                         ],
@@ -1414,10 +1449,13 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
 
       final Map<String, Set<String>> map = {}; // className -> set of usernames
 
+      debugPrint('TopAttendedClassesChart: fetched \\${snap.docs.length} docs');
+
       for (final doc in snap.docs) {
         final data = doc.data() as Map<String, dynamic>?;
         if (data == null) continue;
-        if (!_belongsToSessionFaculty(data)) continue;
+        // --- Relaxed: do NOT filter by faculty/session ---
+        // if (!_belongsToSessionFaculty(data)) continue;
 
         DateTime? dt;
         final scanned = data['scannedAt'];
@@ -1453,6 +1491,10 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
               .map((e) => _ClassCount(name: e.key, count: e.value.length))
               .toList()
             ..sort((a, b) => b.count.compareTo(a.count));
+
+      debugPrint(
+        'TopAttendedClassesChart: class counts = \\${list.map((e) => "${e.name}:${e.count}").join(", ")}',
+      );
 
       return list.take(topN).toList();
     } catch (e, st) {
@@ -1504,7 +1546,9 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
                             Container(
                               height: 18,
                               decoration: BoxDecoration(
-                                color: theme.dividerColor.withValues(alpha: 0.08),
+                                color: theme.dividerColor.withValues(
+                                  alpha: 0.08,
+                                ),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                             ),
@@ -1542,7 +1586,9 @@ class _TopAttendedClassesChartState extends State<TopAttendedClassesChart> {
                 child: Text(
                   'Top ${data.length} classes — last ${widget.days} days',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                    color: theme.textTheme.bodySmall?.color?.withValues(
+                      alpha: 0.7,
+                    ),
                   ),
                 ),
               ),
