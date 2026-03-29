@@ -508,7 +508,7 @@ class _ClassesPageState extends State<ClassesPage> {
         ]);
       }
 
-      final csv = const ListToCsvConverter().convert(rows);
+      final csv = ListToCsvConverter().convert(rows);
       final bytes = Uint8List.fromList(utf8.encode(csv));
       final now = DateTime.now();
       final fileName =
@@ -549,7 +549,7 @@ class _ClassesPageState extends State<ClassesPage> {
       final file = result.files.first;
       if (file.bytes == null) return;
       final content = utf8.decode(file.bytes!);
-      final rows = const CsvToListConverter(eol: '\n').convert(content);
+      final rows = CsvToListConverter(eol: '\n').convert(content);
       if (rows.isEmpty) return;
 
       final headers = rows.first

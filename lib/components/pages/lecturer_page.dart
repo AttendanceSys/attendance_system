@@ -282,7 +282,7 @@ class _TeachersPageState extends State<TeachersPage> {
       if (file.bytes == null) return;
 
       final content = utf8.decode(file.bytes!);
-      final rows = const CsvToListConverter(eol: '\n').convert(content);
+      final rows = CsvToListConverter(eol: '\n').convert(content);
       if (rows.isEmpty) return;
 
       final headers = rows.first
@@ -392,7 +392,7 @@ class _TeachersPageState extends State<TeachersPage> {
         ]);
       }
 
-      final csv = const ListToCsvConverter().convert(rows);
+      final csv = ListToCsvConverter().convert(rows);
       final bytes = Uint8List.fromList(utf8.encode(csv));
       final now = DateTime.now();
       final fileName =

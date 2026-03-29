@@ -49,7 +49,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
 
   void _onZoomScaleChanged() {
     if (!mounted) return;
-    final next = _controller.zoomScaleState.value.clamp(0.0, 1.0).toDouble();
+    final next = _controller.zoomScaleState.value
+        .clamp(0.0, 1.0)
+        .toDouble();
     if ((next - _zoomScale).abs() < 0.001) return;
     setState(() => _zoomScale = next);
   }
