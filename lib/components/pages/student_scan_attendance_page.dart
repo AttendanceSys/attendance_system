@@ -49,9 +49,7 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
 
   void _onZoomScaleChanged() {
     if (!mounted) return;
-    final next = _controller.zoomScaleState.value
-        .clamp(0.0, 1.0)
-        .toDouble();
+    final next = _controller.zoomScaleState.value.clamp(0.0, 1.0).toDouble();
     if ((next - _zoomScale).abs() < 0.001) return;
     setState(() => _zoomScale = next);
   }
@@ -585,6 +583,65 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
 
       // Obtain current GPS position and evaluate anomalies
       final pos = await LocationService.getCurrentPosition();
+      // Run explicit allowed_location check from session before other anomaly checks
+      try {
+        final al = sessionData['allowed_location'];
+        if (al is Map && pos != null) {
+          final aLat = double.tryParse(al['lat']?.toString() ?? '');
+          final aLng = double.tryParse(al['lng']?.toString() ?? '');
+          final aRad = double.tryParse(al['radius']?.toString() ?? '');
+          final aAcc = double.tryParse(al['accuracy']?.toString() ?? '');
+          if (aLat != null && aLng != null && aRad != null) {
+            final deviceLat = (pos.latitude ?? 0.0) as double;
+            final deviceLng = (pos.longitude ?? 0.0) as double;
+            final deviceAcc = (pos.accuracy ?? 0.0) as double;
+            final effectiveRadius =
+                (aRad) +
+                (aAcc != null && aAcc > 0 ? aAcc : 0) +
+                (deviceAcc.isFinite ? deviceAcc : 0);
+            final distance = LocationService.distanceMeters(
+              deviceLat,
+              deviceLng,
+              aLat,
+              aLng,
+            );
+            if (distance > effectiveRadius) {
+              // Log anomaly record
+              try {
+                final deviceId = await DeviceService.getDeviceId();
+                await firestore.collection('anomalies').add({
+                  'type': 'location_verification_failed',
+                  'status': 'restricted',
+                  'studentId': username,
+                  'sessionId': sessionDoc.id,
+                  'deviceId': deviceId,
+                  'timestamp': FieldValue.serverTimestamp(),
+                  'location': {
+                    'lat': deviceLat,
+                    'lng': deviceLng,
+                    'accuracy': deviceAcc,
+                  },
+                  'distance_m': distance,
+                  'allowed_location': al,
+                });
+              } catch (e) {
+                debugPrint('Failed to log anomaly: $e');
+              }
+
+              if (mounted) {
+                await AttendanceAlert.showLocationBlocked(
+                  context,
+                  details:
+                      'Attendance blocked: off campus (${distance.toStringAsFixed(1)}m from allowed location).',
+                );
+              }
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error during allowed_location check: $e');
+      }
       final anomaly = await AnomalyService.evaluate(
         {...sessionData, 'id': sessionDoc.id},
         username,
