@@ -709,7 +709,7 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
       final seen = <String>{};
 
       debugPrint(
-        'WeeklyAttendanceChart: fetched \\${snap?.docs.length ?? 0} docs',
+        'WeeklyAttendanceChart: fetched \\${snap.docs.length ?? 0} docs',
       );
 
       for (final doc in snap.docs) {
@@ -1317,8 +1317,9 @@ class _StudentsByGenderChartState extends State<StudentsByGenderChart> {
             }
             if (!s.hasData) return const _ChartLoading();
             final map = s.data!;
-            if (map.isEmpty)
+            if (map.isEmpty) {
               return const Center(child: Text('No student data'));
+            }
             final total = map.values.fold<int>(0, (a, b) => a + b);
 
             final colors = [
