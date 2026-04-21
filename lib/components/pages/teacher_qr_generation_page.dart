@@ -310,11 +310,12 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
   Future<void> _loadActiveSessionIfAny() async {
     try {
       if (className == null || subject == null) {
-        if (mounted)
+        if (mounted) {
           setState(() {
             qrCodeData = null;
             _lastSavedSessionId = null;
           });
+        }
         return;
       }
 
@@ -346,9 +347,9 @@ class _TeacherQRGenerationPageState extends State<TeacherQRGenerationPage> {
         } else if (periodEndsAtTs != null) {
           final end = periodEndsAtTs.toDate().toUtc();
           if (end.isAfter(now)) {
-            if (expiresAtTs == null)
+            if (expiresAtTs == null) {
               isOngoing = true;
-            else if (expiresAtTs.toDate().toUtc().isAfter(now))
+            } else if (expiresAtTs.toDate().toUtc().isAfter(now))
               isOngoing = true;
           }
         } else if (expiresAtTs != null) {

@@ -592,9 +592,9 @@ class _StudentScanAttendancePageState extends State<StudentScanAttendancePage>
           final aRad = double.tryParse(al['radius']?.toString() ?? '');
           final aAcc = double.tryParse(al['accuracy']?.toString() ?? '');
           if (aLat != null && aLng != null && aRad != null) {
-            final deviceLat = (pos.latitude ?? 0.0) as double;
-            final deviceLng = (pos.longitude ?? 0.0) as double;
-            final deviceAcc = (pos.accuracy ?? 0.0) as double;
+            final deviceLat = (pos.latitude ?? 0.0);
+            final deviceLng = (pos.longitude ?? 0.0);
+            final deviceAcc = (pos.accuracy ?? 0.0);
             final effectiveRadius =
                 (aRad) +
                 (aAcc != null && aAcc > 0 ? aAcc : 0) +

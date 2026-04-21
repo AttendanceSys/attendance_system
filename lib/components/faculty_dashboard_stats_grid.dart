@@ -868,11 +868,13 @@ class _WeeklyAttendanceChartState extends State<WeeklyAttendanceChart> {
                 // Only render when the tick is close to an integer index to avoid
                 // duplicate labels caused by minor tick positions.
                 final rounded = value.round();
-                if ((value - rounded).abs() > 0.15)
+                if ((value - rounded).abs() > 0.15) {
                   return const SizedBox.shrink();
+                }
                 final idx = rounded;
-                if (idx < 0 || idx >= labels.length)
+                if (idx < 0 || idx >= labels.length) {
                   return const SizedBox.shrink();
+                }
                 return Text(labels[idx], style: theme.textTheme.bodySmall);
               },
             ),
